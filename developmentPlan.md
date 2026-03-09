@@ -17,6 +17,17 @@ Constraint: each new driver must preserve the observable behavior, public functi
 
 Note: the repository contains `NinjaRobotV5_bak`, not `NinjaRobotB5_bak`. This plan audits `NinjaRobotV5_bak` because that is the legacy source present in the workspace.
 
+## Primary Usage Model
+
+The migrated `pi5*` drivers are intended to be used primarily as standalone libraries inside the new NinjaClawBot project.
+
+Primary design rules:
+
+- each `pi5*` package must be usable on its own without requiring `ninja_core`
+- each library must keep its own CLI, config manager, and direct Python API
+- future integration hooks should still be retained where practical, such as compatibility config paths, driver entry modules, and callable class surfaces
+- optional future `ninja_core` integration must not block the standalone migration of any individual library
+
 ## Scope Of Audit
 
 Audited source packages:
@@ -96,7 +107,7 @@ This creates the following Pi 5 risks:
    `pi0disp` and `pi0vl53l0x` bundle stable high-level logic with unstable low-level transport code. A naive port that changes both layers at once will be difficult to validate.
 
 5. Integration contract risk.
-   `ninja_core` imports the old package names directly and also reads package-local config files such as `pi0disp/display.json`. Creating new package folders alone is not enough; the integration layer must either migrate or temporary compatibility bridges must be added.
+   the legacy stack imports the old package names directly and also reads package-local config files such as `pi0disp/display.json`. The new Pi 5 drivers should not depend on `ninja_core`, but they should preserve optional future integration hooks so a later adapter layer can be added without reworking the standalone libraries.
 
 ### Driver-Specific Vulnerabilities
 
@@ -344,7 +355,7 @@ pi5vl53l0x/
 
 ## Phased Migration Plan
 
-Implementation is intentionally separated into phases so each hardware surface can be validated independently before the next riskier step starts.
+Implementation is intentionally separated into phases so each driver library is migrated, tested, and manually validated on Raspberry Pi 5 before the next driver starts.
 
 ### Phase 0: Baseline And Contract Capture
 
@@ -372,56 +383,44 @@ Documentation updates required:
 
 - this plan
 
-### Phase 1: Pi 5 Hardware Abstraction Prototypes
+### Phase 1: `pi5buzzer` Standalone Migration
 
 Objective:
 
-- build and validate tiny backend prototypes before touching driver logic
+- migrate the buzzer driver as a standalone Pi 5 library first because it is the simplest `pigpio` replacement and establishes the backend pattern for the remaining packages
 
 Files or modules likely to change:
 
-- `pi5buzzer/src/pi5buzzer/core/backend.py`
-- `pi5servo/src/pi5servo/core/backend.py`
-- `pi5disp/src/pi5disp/core/backend_*.py`
-- `pi5vl53l0x/src/pi5vl53l0x/core/i2c_backend.py`
-
-Validation and checks:
-
-- `python -m compileall .`
-- `ruff check .`
-- `ruff format --check .`
-- package-local `pytest -q`
-- Pi smoke scripts for GPIO output, PWM, SPI transfer, and I2C transaction
-
-Hardware risk:
-
-- medium
-
-Documentation updates required:
-
-- backend selection notes in package READMEs
-- DevelopmentGuide hardware backend section
-- DevelopmentLog baseline and prototype outcome
-
-### Phase 2: `pi5buzzer`
-
-Objective:
-
-- migrate the buzzer driver first because it is the simplest `pigpio` replacement and establishes the PWM abstraction pattern
-
-Files or modules likely to change:
-
+- `pi5buzzer/pyproject.toml`
 - `pi5buzzer/src/pi5buzzer/core/driver.py`
 - `pi5buzzer/src/pi5buzzer/core/music.py`
 - `pi5buzzer/src/pi5buzzer/config/config_manager.py`
 - `pi5buzzer/src/pi5buzzer/cli/*`
+- `pi5buzzer/src/pi5buzzer/driver.py`
+- `pi5buzzer/src/pi5buzzer/__init__.py`
 - `pi5buzzer/tests/*`
 
 Validation and checks:
 
 - port all legacy tests
 - add parity tests for queue behavior, note lookup, emotion sounds, and volume semantics
-- Pi validation: audible tone generation, multi-note queue ordering, shutdown silence
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- package-local `pytest -q`
+
+Manual Raspberry Pi 5 validation gate:
+
+- wire the passive buzzer to the planned GPIO pin and confirm the new config file is created successfully
+- run CLI `--help`, initialize config, and play a single short beep
+- play at least one note, one emotion sound, and one queued multi-note sequence
+- confirm `off()` or CLI exit leaves the buzzer silent and the GPIO released
+
+Expected result before Phase 2 starts:
+
+- standalone library works on Pi 5
+- audible behavior is stable for short tones and queued playback
+- optional compatibility surfaces such as `driver.py` entry re-exports remain intact
 
 Hardware risk:
 
@@ -430,30 +429,48 @@ Hardware risk:
 Documentation updates required:
 
 - package README
-- root README driver list
-- DevelopmentGuide usage and wiring
+- DevelopmentGuide standalone library usage note
 - DevelopmentLog
 
-### Phase 3: `pi5vl53l0x`
+### Phase 2: `pi5vl53l0x` Standalone Migration
 
 Objective:
 
-- migrate the distance sensor next because the high-level logic is stable and the transport can move cleanly to kernel I2C
+- migrate the distance sensor next as a standalone Pi 5 library because its high-level logic is stable and the transport can move cleanly to kernel I2C
 
 Files or modules likely to change:
 
+- `pi5vl53l0x/pyproject.toml`
 - `pi5vl53l0x/src/pi5vl53l0x/core/i2c.py`
 - `pi5vl53l0x/src/pi5vl53l0x/core/sensor.py`
 - `pi5vl53l0x/src/pi5vl53l0x/config/config_manager.py`
 - `pi5vl53l0x/src/pi5vl53l0x/cli/*`
+- `pi5vl53l0x/src/pi5vl53l0x/driver.py`
+- `pi5vl53l0x/src/pi5vl53l0x/__init__.py`
 - `pi5vl53l0x/tests/*`
 
 Validation and checks:
 
 - port all legacy tests
 - add backend tests for byte, word, and block operations
-- add parity tests for retry behavior and config import/export
-- Pi validation: sensor detect, repeated readings, offset calibration, reinitialize path
+- add parity tests for retry behavior and config import-export
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- package-local `pytest -q`
+
+Manual Raspberry Pi 5 validation gate:
+
+- confirm the VL53L0X is detected on the expected I2C bus
+- run a single read, repeated reads, and a basic health-check command
+- verify offset config load-save behavior on the Pi
+- run `reinitialize()` after a deliberate close or recovery scenario
+
+Expected result before Phase 3 starts:
+
+- standalone library can initialize and read consistently on Pi 5
+- retry and recovery behavior work with the new I2C backend
+- optional compatibility re-export entries remain available for future integration
 
 Hardware risk:
 
@@ -465,19 +482,21 @@ Documentation updates required:
 - DevelopmentGuide sensor section
 - DevelopmentLog
 
-### Phase 4: `pi5disp`
+### Phase 3: `pi5disp` Standalone Migration
 
 Objective:
 
-- migrate the display after SPI and GPIO backend decisions are stable
+- migrate the display as a standalone Pi 5 library after the backend pattern is proven on simpler devices
 
 Files or modules likely to change:
 
+- `pi5disp/pyproject.toml`
 - `pi5disp/src/pi5disp/core/driver.py`
 - `pi5disp/src/pi5disp/core/renderer.py`
 - `pi5disp/src/pi5disp/effects/text_ticker.py`
 - `pi5disp/src/pi5disp/config/config_manager.py`
 - `pi5disp/src/pi5disp/cli/*`
+- `pi5disp/src/pi5disp/__init__.py`
 - `pi5disp/display.json`
 - `pi5disp/tests/*`
 
@@ -485,7 +504,24 @@ Validation and checks:
 
 - port all legacy tests
 - keep full-frame `display()` behavior unless an approved improvement is made
-- add Pi validation for reset sequence, image rendering, brightness, rotation, sleep/wake, text ticker, and health check
+- add transport tests for SPI open-close and GPIO pin control
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- package-local `pytest -q`
+
+Manual Raspberry Pi 5 validation gate:
+
+- run the config wizard and save a working display profile on the Pi
+- clear the display, render a static image, and verify rotation handling
+- validate brightness changes, sleep-wake, and health check behavior
+- run text ticker and repeated image updates long enough to expose SPI or GPIO instability
+
+Expected result before Phase 4 starts:
+
+- standalone display library renders reliably on Pi 5
+- config and CLI workflows work without any `ninja_core` dependency
+- future integration-related config entry points are preserved
 
 Hardware risk:
 
@@ -497,27 +533,47 @@ Documentation updates required:
 - DevelopmentGuide display wiring and setup
 - DevelopmentLog
 
-### Phase 5: `pi5servo`
+### Phase 4: `pi5servo` Standalone Migration
 
 Objective:
 
-- migrate the most timing-sensitive driver last, after the backend pattern is proven
+- migrate the servo driver last as a standalone Pi 5 library because it has the strictest timing requirements and the highest real-world regression risk
 
 Files or modules likely to change:
 
+- `pi5servo/pyproject.toml`
 - `pi5servo/src/pi5servo/core/servo.py`
 - `pi5servo/src/pi5servo/core/multi_servos.py`
 - `pi5servo/src/pi5servo/config/config_manager.py`
 - `pi5servo/src/pi5servo/motion/*`
 - `pi5servo/src/pi5servo/parser/*`
 - `pi5servo/src/pi5servo/cli/*`
+- `pi5servo/src/pi5servo/__init__.py`
 - `pi5servo/tests/*`
 
 Validation and checks:
 
 - port all legacy tests
-- add Pi tests for pulse stability, center/min/max calibration, multi-servo synchronization, abort handling, and limp-signal recovery
-- verify that replacement timing quality is acceptable under CPU load
+- add Pi tests for pulse stability, center-min-max calibration, multi-servo synchronization, abort handling, and limp-signal recovery
+- add standalone API parity tests for `MultiServo`, legacy movement helpers, and config schema
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- package-local `pytest -q`
+
+Manual Raspberry Pi 5 validation gate:
+
+- connect one servo on external power with common ground and validate center, min, and max slowly
+- validate calibration save-load and interactive calibration workflow
+- validate one multi-servo slow synchronized move only after single-servo tests pass
+- test abort, `off()`, and signal recovery behavior
+- confirm the library leaves servos in a safe-off state when the CLI exits or the driver closes
+
+Expected result before any optional integration phase starts:
+
+- standalone servo library behaves safely and predictably on Pi 5
+- timing quality is acceptable under realistic load
+- future integration helper surfaces remain available but are not required for standalone use
 
 Hardware risk:
 
@@ -529,27 +585,28 @@ Documentation updates required:
 - DevelopmentGuide servo calibration and safety section
 - DevelopmentLog
 
-### Phase 6: NinjaClawBot Integration
+### Phase 5: Optional Future Integration Hooks
 
 Objective:
 
-- switch the new project integration layer to the `pi5*` packages or add temporary compatibility bridges
+- retain or add optional integration features for future development without making them a blocker for standalone library completion
 
 Files or modules likely to change:
 
-- future NinjaClawBot HAL or driver registry files
-- future config import/export paths
+- optional adapter modules or compatibility notes inside each `pi5*` package
+- future NinjaClawBot HAL or driver registry files if the project later chooses to use them
+- future config import-export bridge paths
 - future tooling that shells out to CLI entry points
 
 Validation and checks:
 
-- integration tests for driver loading
-- config import/export checks
-- end-to-end boot validation on Raspberry Pi 5
+- import and smoke test any optional driver re-export entries
+- verify optional config path compatibility if implemented
+- confirm standalone packages still work after optional compatibility additions
 
 Hardware risk:
 
-- medium-high
+- low-medium
 
 Documentation updates required:
 
@@ -582,7 +639,7 @@ Implementation approach:
 
 - preserve `Servo`, `ServoCalibration`, `ServoGroup`, parser, motion utilities, config manager, and CLI tools
 - isolate only the pulse I/O operations behind a backend
-- keep legacy compatibility methods because `ninja_core` style controllers rely on them
+- keep legacy compatibility methods for future integration work, but do not make `ninja_core` a runtime requirement of the standalone package
 
 Behavioral parity checks:
 
@@ -625,9 +682,11 @@ Behavioral parity checks:
 - same offset config behavior
 - same CLI features
 
-## Integration Impact On Legacy `ninja_core`
+## Optional Future Integration With `ninja_core`
 
-If the new NinjaClawBot project inherits integration patterns from the legacy stack, these items must be addressed during implementation:
+The new `pi5*` libraries should be considered complete when their standalone APIs, tests, and Raspberry Pi 5 manual validation gates pass.
+
+If future development later chooses to integrate them with `ninja_core` style infrastructure, these items should be addressed in a separate optional phase:
 
 1. Driver registry paths still reference `pi0*` modules in `ninja_core/hal.py`.
 2. `ninja_core.robot_sound` imports `pi0buzzer.notes` directly.
@@ -635,15 +694,12 @@ If the new NinjaClawBot project inherits integration patterns from the legacy st
 4. `ninja_core.movement_cli` shells out to `uv run pi0servo calib`.
 5. Servo config import logic assumes the legacy `servo.json` schema.
 
-Migration decision required:
-
-- either update all consumers to `pi5*`
-- or temporarily provide compatibility shims so the new drivers can be adopted incrementally
-
-Recommended approach:
+Standalone-first policy:
 
 - create the new `pi5*` packages first
-- add explicit integration shims only if the new project still depends on legacy import paths
+- keep optional compatibility entry points where they are cheap to preserve
+- add explicit integration shims only if the new project later chooses to depend on them
+- do not delay any individual driver migration waiting for `ninja_core`
 
 ## Quality Gates For Every Future Implementation Phase
 
@@ -726,7 +782,7 @@ Rollback:
 2. `pi5vl53l0x`
 3. `pi5disp`
 4. `pi5servo`
-5. integration updates in the new NinjaClawBot runtime
+5. optional future integration hooks
 
 Reasoning:
 
