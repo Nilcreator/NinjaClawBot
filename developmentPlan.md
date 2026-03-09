@@ -2,6 +2,28 @@
 
 Date: 2026-03-10
 
+## Table Of Contents
+
+- [Purpose](#purpose)
+- [Primary Usage Model](#primary-usage-model)
+- [Scope Of Audit](#scope-of-audit)
+- [Legacy Validation Snapshot](#legacy-validation-snapshot)
+- [Hardware And Software Evaluation](#hardware-and-software-evaluation)
+- [Code Audit Summary](#code-audit-summary)
+- [Recommended Pi 5 Backend Strategy](#recommended-pi-5-backend-strategy)
+- [Researched Replacement For `pigpio` On Raspberry Pi 5](#researched-replacement-for-pigpio-on-raspberry-pi-5)
+- [GPIO Accuracy Strategy For `pi5servo`](#gpio-accuracy-strategy-for-pi5servo)
+- [Recommended Production Position](#recommended-production-position)
+- [Proposed Target Structure](#proposed-target-structure)
+- [Phased Migration Plan](#phased-migration-plan)
+- [Driver-Specific Migration Notes](#driver-specific-migration-notes)
+- [Optional Future Integration With `ninja_core`](#optional-future-integration-with-ninja_core)
+- [Quality Gates For Every Future Implementation Phase](#quality-gates-for-every-future-implementation-phase)
+- [Raspberry Pi 5 Validation Plan](#raspberry-pi-5-validation-plan)
+- [Recommended Implementation Order](#recommended-implementation-order)
+- [References](#references)
+- [Current Status](#current-status)
+
 ## Purpose
 
 This document records the code audit and migration plan for moving the legacy Raspberry Pi Zero 2 W driver libraries from `NinjaRobotV5_bak` into Raspberry Pi 5 compatible driver packages for the new NinjaClawBot project.
