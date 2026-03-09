@@ -294,6 +294,272 @@ Non-negotiable migration rule:
 
 - backend replacement must be isolated behind small adapter classes so the existing public classes, config managers, motion logic, parsers, and CLI behavior remain almost unchanged.
 
+## Researched Replacement For `pigpio` On Raspberry Pi 5
+
+### Core conclusion
+
+There is no single, fully drop-in `pigpio` replacement on Raspberry Pi 5 that cleanly reproduces all of these at once:
+
+- local GPIO line control
+- edge callbacks
+- SPI and I2C wrappers
+- daemon-based remote access
+- low-jitter PWM and servo pulse generation on arbitrary pins
+
+The reliable replacement for the new `pi5*` libraries is a layered backend strategy.
+
+### Reliable replacement stack by function
+
+#### 1. Digital GPIO, edge callbacks, and general pin ownership
+
+Recommended base:
+
+- `libgpiod` ecosystem through `lgpio` or `rpi-lgpio`
+
+Why:
+
+- Raspberry Pi’s GPIO usage whitepaper says `pigpio` does not yet work on Raspberry Pi 5 and is not recommended for new projects.
+- The same whitepaper says `lgpio` should run on all Raspberry Pi models and notes that `rpi-lgpio` is the `RPi.GPIO`-compatible option expected to function on Pi 5.
+- `gpiozero` documentation shows that `LGPIOFactory` uses `lgpio` against `/dev/gpiochip*`, which is aligned with the Pi 5 GPIO model.
+
+Use in `pi5*` libraries:
+
+- output pins
+- input pins
+- edge detection
+- simple on-off control
+- non-critical PWM use
+
+Important behavior difference:
+
+- `rpi-lgpio` follows Linux gpiochip exclusivity rules, so one process claiming a line prevents another process from using it at the same time.
+- debounce behavior also changes compared with legacy `RPi.GPIO`.
+
+Implication for the new libraries:
+
+- each `pi5*` driver must own and release its GPIO lines explicitly
+- no two drivers should assume they can quietly share the same GPIO pin
+
+#### 2. High-level component control for standalone demos and tools
+
+Recommended base:
+
+- `gpiozero` with explicit `LGPIOFactory`
+
+Why:
+
+- it is well aligned with Raspberry Pi’s current GPIO recommendations
+- it is useful for small standalone CLI tools and smoke tests
+- it should not be the low-level transport for the production driver internals, but it is useful for examples and validation tooling
+
+#### 3. Remote daemon model similar to `pigpiod`
+
+Recommended base:
+
+- `rgpiod` plus `rgpio`
+
+Why:
+
+- the `lg` project provides a daemon and remote client model that is architecturally closer to `pigpiod`
+- it preserves remote GPIO, SPI, I2C, and callback style features for future development if NinjaClawBot later needs network-transparent I/O access
+
+Use in `pi5*` libraries:
+
+- keep optional room for remote backends
+- do not make remote daemon mode the default local runtime path
+
+#### 4. SPI and I2C
+
+Recommended base:
+
+- standard Linux device interfaces first
+- `spidev` for SPI
+- `i2c-dev` via `smbus2` or equivalent for I2C
+
+Reasoning:
+
+- Raspberry Pi 5 still exposes SPI and I2C through stable kernel interfaces
+- these interfaces match the hardware model better than trying to rebuild a `pigpio`-style monolithic abstraction
+- `lgpio` also exposes SPI and I2C wrappers, but the new standalone libraries should prefer standard kernel device interfaces unless a strong reason appears during implementation
+
+Recommended library mapping:
+
+- `pi5disp`: use SPI kernel device access, not a `pigpio` SPI shim
+- `pi5vl53l0x`: use kernel I2C access, not a `pigpio` I2C shim
+
+#### 5. Accurate PWM and servo pulse generation
+
+Recommended base:
+
+- do not use `lgpio` software servo mode for production servo control
+
+Reasoning:
+
+- the `lgpio` documentation explicitly says its servo pulses are software timed, recommended only for testing, and warns that timing jitter will make servos fidget and may cause overheating or premature wear
+
+Production-worthy Pi 5 options:
+
+1. RP1 hardware PWM on PWM-capable header pins for a small number of channels
+2. the official `pwm-pio` driver from Raspberry Pi’s PIOLib work when arbitrary header GPIO choice or higher signal stability is needed
+3. an external PWM controller such as PCA9685 when many servos are needed or when the pulse generator must be fully decoupled from Linux scheduling
+
+### Replacement recommendation by new library
+
+| New library | Recommended replacement for `pigpio` |
+|---|---|
+| `pi5buzzer` | `lgpio` or `rpi-lgpio` for simple pin control or PWM, with room to move to Linux PWM if audible stability needs improve |
+| `pi5servo` | hardware-backed PWM only: RP1 hardware PWM, `pwm-pio`, or external PWM controller; not `lgpio.tx_servo` in production |
+| `pi5disp` | `spidev` plus `lgpio`/`libgpiod` style GPIO control for DC and reset, separate backlight PWM backend |
+| `pi5vl53l0x` | kernel I2C via `smbus2` or equivalent |
+
+## GPIO Accuracy Strategy For `pi5servo`
+
+### Key engineering principle
+
+To keep signal accuracy on Pi 5, Python must not be responsible for generating the 50 Hz servo waveform itself.
+
+Python should do:
+
+- angle planning
+- calibration mapping
+- speed and easing calculations
+- command scheduling
+
+The backend should do:
+
+- continuous pulse generation
+- pulse width updates
+- line ownership
+- safe shutdown
+
+This preserves the current `pi0servo` motion logic while moving the time-critical signal generation into hardware or kernel-managed components.
+
+### Why software-timed servo generation is not sufficient
+
+`pigpio` earned its reputation partly because it used DMA-backed timing, which kept GPIO waveforms accurate even when Linux user-space timing fluctuated.
+
+On Pi 5, replacing that with ordinary user-space sleeps or software-timed GPIO toggling would regress servo behavior in several ways:
+
+- visible jitter
+- inconsistent endpoints
+- multi-servo desynchronization
+- increased heating if the servo hunts around the target angle
+
+Because `lgpio` itself warns that software-timed servo pulses are only appropriate for testing, `pi5servo` should not ship with a software-servo backend as the default production path.
+
+### Recommended backend order for `pi5servo`
+
+This ordering is a design recommendation based on the current research.
+
+#### Preferred for highest reliability and scalability
+
+- external PWM controller backend, for example PCA9685 over I2C
+
+Why:
+
+- the pulse train is generated outside Linux user space
+- the Raspberry Pi only sends target values over I2C
+- this is the most reliable path when the robot needs several servos at once
+
+Inference from sources:
+
+- the PCA9685 is a 16-channel, 12-bit PWM controller accessed over I2C
+- because pulse generation is offloaded into dedicated hardware, it is the best fit when we need many simultaneous servo channels and minimal dependence on Linux scheduling jitter
+
+#### Preferred on-board option for a small number of servos
+
+- `pwm-pio` backend
+
+Why:
+
+- Raspberry Pi’s official PIOLib announcement says `pwm-pio` creates a very stable PWM signal on any GPIO on the 40-pin header
+- it avoids user-space pulse synthesis
+- it preserves more pin flexibility than fixed hardware PWM pins
+
+Constraint:
+
+- the current official implementation exposes up to four PWM interfaces, limited by available PIO state machines
+
+#### Secondary on-board option when the pin map is acceptable
+
+- RP1 hardware PWM backend
+
+Why:
+
+- RP1 has dedicated PWM controllers and an independent PWM clock
+- third-party Python wrappers such as `rpi-hardware-pwm` already document Pi 5 channel mappings for GPIO12, GPIO13, GPIO18, and GPIO19
+
+Constraint:
+
+- channel count and pin placement are limited compared with the old `pigpio` arbitrary-pin model
+
+#### Testing-only fallback
+
+- `lgpio` software-servo backend
+
+Policy:
+
+- keep only for bench testing or bring-up if needed
+- mark as unsupported for production robot movement
+- never make it the default backend
+
+### How to keep pulse accuracy in the new codebase
+
+The new `pi5servo` library should separate motion planning from pulse transport with a backend protocol such as:
+
+- `claim(pin)`
+- `set_pulse_us(pin, pulse_width_us)`
+- `get_pulse_us(pin)`
+- `off(pin)`
+- `close()`
+
+Accuracy-preserving implementation rules:
+
+1. Keep calibration and motion planning in microseconds.
+   The existing `Servo.angle_to_pulse()` logic should remain the single source of truth for target pulse widths.
+
+2. Update a long-lived pulse generator instead of recreating it.
+   The backend should keep PWM active and only change compare or pulse-width values.
+
+3. Use hardware-backed output for the carrier.
+   Linux user space should request a new pulse width, but hardware, kernel PWM, PIO, or an external controller should generate the waveform.
+
+4. Batch multi-servo updates by control tick.
+   `ServoGroup` should compute a full frame of target pulse widths each motion step, then hand them to the backend together or as tightly grouped writes.
+
+5. Preserve exclusive ownership of active lines.
+   Because gpiochip access is exclusive, `pi5servo` must claim pins once and release them once, not open-close them repeatedly during motion.
+
+6. Validate under CPU stress, not just at idle.
+   The backend is acceptable only if pulse quality remains stable while the Pi is also doing display updates, sensor reads, and normal application work.
+
+### Recommended validation method for servo signal accuracy
+
+For the `pi5servo` migration, manual validation should include direct signal measurement on Pi 5.
+
+Required validation steps:
+
+- observe pulse width and frame rate with a logic analyser or oscilloscope
+- test center, min, and max pulse widths
+- test repeated small movements around center to reveal jitter or hunting
+- test at idle and under CPU load
+- test one-servo and multi-servo cases separately
+
+Acceptance criteria to define during implementation:
+
+- pulse width remains stable enough that the connected servo does not visibly hunt
+- commanded pulse changes match expected calibration outputs
+- abort and `off()` stop or detach cleanly without stray pulses
+
+## Recommended Production Position
+
+Based on the researched sources, the most reliable path for the new Pi 5 driver family is:
+
+- `pi5buzzer`: `lgpio`-family GPIO control is acceptable
+- `pi5disp`: kernel SPI plus GPIO line control is the right replacement
+- `pi5vl53l0x`: kernel I2C is the right replacement
+- `pi5servo`: use hardware-backed PWM only, and prefer `pwm-pio` or an external PWM controller over software-timed servo generation
+
 ## Proposed Target Structure
 
 Each new package should be created in the project root with a near-mirror of the legacy package layout:
@@ -639,6 +905,7 @@ Implementation approach:
 
 - preserve `Servo`, `ServoCalibration`, `ServoGroup`, parser, motion utilities, config manager, and CLI tools
 - isolate only the pulse I/O operations behind a backend
+- implement backend candidates in this order: external PWM controller backend, `pwm-pio` backend, RP1 hardware PWM backend, then testing-only `lgpio` software backend
 - keep legacy compatibility methods for future integration work, but do not make `ninja_core` a runtime requirement of the standalone package
 
 Behavioral parity checks:
@@ -793,11 +1060,19 @@ Reasoning:
 ## References
 
 - [Raspberry Pi: GPIO on Raspberry Pi 5 and similar devices](https://www.raspberrypi.com/documentation/computers/raspberry-pi.html#gpio-on-raspberry-pi-5-and-similar-devices)
+- [Raspberry Pi GPIO best-practices whitepaper PDF](https://pip-assets.raspberrypi.com/categories/685-whitepapers-app-notes-compliance-guides/documents/RP-006553-WP/A-history-of-GPIO-usage-on-Raspberry-Pi-devices-and-current-best-practices)
 - [Raspberry Pi RP1 peripherals datasheet](https://datasheets.raspberrypi.com/rp1/rp1-peripherals.pdf)
+- [Raspberry Pi PIOLib announcement with `pwm-pio`](https://www.raspberrypi.com/news/piolib-a-userspace-library-for-pio-control/)
 - [gpiozero pin factory documentation](https://gpiozero.readthedocs.io/en/stable/api_pins.html)
+- [gpiozero `LGPIOFactory` API](https://gpiozero.readthedocs.io/en/stable/api_pins.html#gpiozero.pins.lgpio.LGPIOFactory)
 - [lgpio package index](https://pypi.org/project/lgpio/)
+- [lgpio servo timing warning](https://lg.raspberrybasic.org/rgpio.html#tx_servo)
 - [rpi-lgpio package index](https://pypi.org/project/rpi-lgpio/)
 - [rpi-lgpio changelog](https://rpi-lgpio.readthedocs.io/en/latest/changelog.html)
+- [rpi-lgpio API differences](https://rpi-lgpio.readthedocs.io/en/latest/differences.html)
+- [rgpiod and rgpio overview](https://github.com/joan2937/lg)
+- [NXP PCA9685 product page](https://www.nxp.com/products/power-drivers/lighting-driver-and-controller-ics/led-drivers/16-channel-12-bit-pwm-fm-plus-ic-bus-led-driver:PCA9685)
+- [rpi-hardware-pwm package index](https://pypi.org/project/rpi-hardware-pwm/)
 
 ## Current Status
 
