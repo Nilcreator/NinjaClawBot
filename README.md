@@ -27,7 +27,9 @@ thread-safe `smbus2` backend over the Raspberry Pi 5 kernel I2C interface.
 `pi5disp` preserves the legacy `pi0disp` `ST7789V` driver, CLI command set, and
 `display.json` config format, while replacing the old `pigpio` SPI, GPIO, and
 backlight control path with a Raspberry Pi 5 compatible split backend based on
-`spidev` and an `RPi.GPIO` style interface intended for `rpi-lgpio`.
+`spidev` and an `RPi.GPIO` style interface intended for `rpi-lgpio`. The Pi 5
+runtime now persists saved brightness and keeps `display-tool` on one live
+display session across menu actions.
 
 Pending migration libraries:
 

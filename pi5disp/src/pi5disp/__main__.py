@@ -44,9 +44,12 @@ def clear() -> None:
 def brightness(percent: int) -> None:
     """Set display brightness (0-100%)."""
     try:
+        clamped = max(0, min(100, percent))
+        config_manager = ConfigManager()
+        config_manager.load()
+        config_manager.set("brightness", clamped)
         lcd = create_display()
-        lcd.set_brightness(percent)
-        click.echo(f"Brightness set to {max(0, min(100, percent))}%")
+        click.echo(f"Brightness set to {clamped}%")
         lcd.close()
     except Exception as exc:
         click.echo(f"Error: {exc}")

@@ -198,6 +198,8 @@ Backend rule:
 - default runtime is `spidev` for SPI plus an `RPi.GPIO` compatible backend intended for `rpi-lgpio`
 - keep `display()` as a full-frame write path and `display_region()` as the partial-update path to match the legacy tested behavior
 - keep renderer helpers and text ticker effects independent from the low-level SPI and GPIO transport
+- persist the saved `brightness` value in `display.json` and apply it when `create_display()` opens a new display instance
+- keep `display-tool` on one live display session so demo, brightness, clear, and text/image actions do not churn the Pi 5 backend between menu steps
 
 Quality gate result:
 
@@ -206,15 +208,16 @@ Quality gate result:
 - `uv run ruff format --check .`
 - `uv run pytest -q`
 - `uv run pi5disp --help`
-- current result for [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp): `59 passed`
+- current result for [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp): `63 passed`
 
 Raspberry Pi 5 validation checklist:
 
 - safe smoke tests: run `pi5disp --help`, `pi5disp init --defaults`, `pi5disp config show`, `pi5disp info`, and confirm `ls /dev/spidev0.0` succeeds
-- device communication tests: run `pi5disp clear`, `pi5disp brightness 50`, `pi5disp text "Hello NinjaClawBot"`, and `pi5disp image ./example.png`
+- device communication tests: run `pi5disp clear`, `pi5disp brightness 50`, `pi5disp config show`, `pi5disp text "Hello NinjaClawBot"`, and `pi5disp image ./example.png`
 - display behavior tests: run `pi5disp text "Scrolling text" --scroll --duration 10`, `pi5disp demo --num-balls 3 --duration 10`, and the interactive `pi5disp display-tool`
+- session regression tests: inside `pi5disp display-tool`, run ball demo, change brightness, then run ball demo again without clearing first
 - power-risk tests: power the Pi down before rewiring the display, do not hot-plug the SPI display while the backlight is active, and confirm CLI exit leaves the panel stable with the backlight under control
-- expected outcome: stable clear, text, image, demo, brightness, and scrolling behavior on the ST7789V panel with no stuck GPIO or SPI state after exit
+- expected outcome: stable clear, text, image, demo, brightness, and scrolling behavior on the ST7789V panel, saved brightness applied on new sessions, and no stuck GPIO or SPI state after exit
 - rollback: stop the running process, power down before rewiring, and remove `display.json` if a clean config reset is needed
 
 ## Raspberry Pi 5 Validation Flow

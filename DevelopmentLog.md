@@ -2,6 +2,51 @@
 
 ## 2026-03-10
 
+### pi5disp Runtime Fixes
+
+Summary:
+
+- audited the `pi5disp` runtime after Raspberry Pi 5 issues were reported in `display-tool`
+- identified the first bug as a config/runtime mismatch: the `brightness` command changed a temporary display instance but did not persist the value, and new display sessions did not apply the saved brightness setting
+- identified the second bug as backend churn inside `display-tool`: each menu action recreated and destroyed the display backend, which could leave the next demo run visually stuck until a later clear/reset
+- fixed the tool to keep one live display session during the interactive menu and added regression coverage for the `demo -> brightness -> demo` sequence
+
+Files changed:
+
+- [pi5disp/src/pi5disp/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/__main__.py)
+- [pi5disp/src/pi5disp/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/_common.py)
+- [pi5disp/src/pi5disp/cli/display_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/display_tool.py)
+- [pi5disp/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_cli.py)
+- [pi5disp/tests/test_display_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_display_tool.py)
+- [pi5disp/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- `pi5disp brightness` previously behaved like a throwaway runtime change instead of a saved display setting
+- `create_display()` did not apply the saved `brightness` value when opening a new display instance
+- `display-tool` reused command wrappers that opened and closed fresh Pi 5 backends for each action, which was more fragile than a single live session
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`: passed
+- `uv run ruff check .`: passed
+- `uv run ruff format --check .`: passed
+- `uv run pytest -q`: `63 passed in 27.23s`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- expected validation: run `uv run pi5disp display-tool`, choose ball demo, then brightness, then ball demo again, and confirm the second demo renders without needing `Clear`
+- expected validation: run `uv run pi5disp brightness 50`, then `uv run pi5disp config show`, and confirm the saved brightness is `50`
+
+Follow-up:
+
+- verify the fixed `display-tool` sequence on the target Raspberry Pi 5
+- if it passes, continue with the `pi5servo` migration phase
+
 ### pi5disp Migration
 
 Summary:

@@ -282,7 +282,8 @@ uv run pi5disp brightness 50
 What this command does:
 
 - changes the backlight output level
-- keeps the same saved configuration
+- updates the saved `brightness` value in `display.json`
+- applies that saved brightness when the next display session starts
 
 Use this when:
 
@@ -393,6 +394,7 @@ uv run pi5disp display-tool
 What this tool does:
 
 - shows a menu for setup, image display, text, demo, brightness, info, clear, and config
+- keeps one live display session open until you exit the tool
 - lets you test features without remembering every command
 
 Use this when:
@@ -538,6 +540,7 @@ Expected result:
 
 - the screen clears correctly
 - the backlight changes brightness
+- the saved brightness stays in effect when you start the next display action
 - the image renders
 - text appears clearly on screen
 
@@ -554,6 +557,7 @@ Expected result:
 - scrolling text moves smoothly
 - the demo animation updates without screen corruption
 - the interactive tool can complete several actions in one session
+- a demo, then brightness change, then another demo should work without needing a manual clear in between
 
 ### Power and wiring safety notes
 
