@@ -220,6 +220,56 @@ Raspberry Pi 5 validation checklist:
 - expected outcome: stable clear, text, image, demo, brightness, and scrolling behavior on the ST7789V panel, saved brightness applied on new sessions, and no stuck GPIO or SPI state after exit
 - rollback: stop the running process, power down before rewiring, and remove `display.json` if a clean config reset is needed
 
+## pi5servo Migration Notes
+
+Implemented package:
+
+- [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo)
+
+Legacy source audited for parity:
+
+- [NinjaRobotV5_bak/pi0servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0servo)
+
+Required public compatibility surface:
+
+- `pi5servo.Servo`
+- `pi5servo.ServoCalibration`
+- `pi5servo.ServoGroup`
+- `pi5servo.MultiServo`
+- `pi5servo.ConfigManager`
+- parser and motion exports in [__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__init__.py)
+- compatibility re-export in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/driver.py)
+- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__main__.py): `cmd`, `move`, `calib`, `status`, `servo-tool`, `config`
+- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py) keeping `servo.json` compatibility and adding optional backend metadata
+
+Backend rule:
+
+- use the backend factory in [backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+- default runtime is standalone-first for Raspberry Pi 5 and prefers hardware-backed PWM on header-connected servo pins
+- keep the legacy pigpio path available as a compatibility backend, not as the standalone default
+- keep the high-level motion model, easing, calibration, and command parsing independent from the low-level pulse generator
+- keep optional advanced external controller support through the `pca9685` backend
+- `pwm_pio` remains a planned backend placeholder and is not a production runtime yet
+
+Quality gate result:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q`
+- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `95 passed`
+
+Raspberry Pi 5 validation checklist:
+
+- safe smoke tests: run `uv run pi5servo --help`, `uv run pi5servo status --pins 12,13`, `uv run pi5servo config show`, and confirm the selected backend and `servo.json` values look correct
+- firmware checks: confirm the correct PWM overlay is enabled in `/boot/firmware/config.txt`, reboot the Pi, and verify the intended PWM-capable pins match the selected backend mapping
+- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, and `uv run pi5servo cmd "M_12:45/13:-30" --pins 12,13`
+- actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior
+- signal accuracy tests: measure the servo signal with a logic analyser or oscilloscope at center, min, and max pulse widths before trusting the setup for full robot motion
+- power-risk tests: use an external 5V servo supply with common ground, keep the robot linkage clear during first tests, and power the Pi down before rewiring
+- expected outcome: stable pulse output on the intended GPIO pins, correct calibration save/load, repeatable sync movement, abortable motion, and safe release on `off()` and CLI exit
+- rollback: stop the process, disconnect servo signal lines, remove `servo.json` if a clean config reset is needed, and revert to a single-servo center-only test before reintroducing multi-servo motion
+
 ## Raspberry Pi 5 Validation Flow
 
 After each migrated library, produce and review:

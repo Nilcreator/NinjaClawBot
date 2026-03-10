@@ -2,6 +2,75 @@
 
 ## 2026-03-10
 
+### pi5servo Migration
+
+Summary:
+
+- migrated the final standalone Raspberry Pi 5 driver library as [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo)
+- kept the legacy `pi0servo` motion model, calibration flow, movement-tool command format, CLI command set, and `servo.json` contract
+- replaced direct `pigpio.set_servo_pulsewidth()` usage with a backend layer that supports header-connected Raspberry Pi 5 hardware PWM first, optional PCA9685 support second, and legacy `pigpio` compatibility as a retained future path
+- updated the CLI workflow so standalone Pi 5 usage no longer depends on `pigpiod`, and added optional backend metadata to `servo.json`
+- added backend, config, core, and CLI regression coverage for the new standalone path
+
+Files changed:
+
+- [pi5servo/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/pyproject.toml)
+- [pi5servo/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/.python-version)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__init__.py)
+- [pi5servo/src/pi5servo/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__main__.py)
+- [pi5servo/src/pi5servo/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/driver.py)
+- [pi5servo/src/pi5servo/core/backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+- [pi5servo/src/pi5servo/core/backend_errors.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend_errors.py)
+- [pi5servo/src/pi5servo/core/backends/hardware_pwm.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/hardware_pwm.py)
+- [pi5servo/src/pi5servo/core/backends/pca9685.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/pca9685.py)
+- [pi5servo/src/pi5servo/core/backends/pwm_pio.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/pwm_pio.py)
+- [pi5servo/src/pi5servo/core/servo.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py)
+- [pi5servo/src/pi5servo/core/multi_servos.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py)
+- [pi5servo/src/pi5servo/config/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/__init__.py)
+- [pi5servo/src/pi5servo/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py)
+- [pi5servo/src/pi5servo/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py)
+- [pi5servo/src/pi5servo/cli/cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/cmd.py)
+- [pi5servo/src/pi5servo/cli/move.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/move.py)
+- [pi5servo/src/pi5servo/cli/calib.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/calib.py)
+- [pi5servo/src/pi5servo/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/status.py)
+- [pi5servo/src/pi5servo/cli/config_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/config_cmd.py)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/tests/test_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_backend.py)
+- [pi5servo/tests/test_core.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_core.py)
+- [pi5servo/tests/test_config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_config.py)
+- [pi5servo/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_cli.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- `pi0servo` is the highest-risk migration because servo motion quality depends on accurate, stable pulse generation
+- Raspberry Pi 5 does not support the old `pigpio`-centric standalone path used in the legacy environment
+- the new library needed a backend contract so motion planning, calibration, and CLI behavior could stay stable while the pulse generator changes between header-connected Pi 5 PWM and optional external controller backends
+- standalone usage for NinjaClawBot now works without mandatory `ninja_core` or `pigpiod` integration
+
+Lint and test results:
+
+- Phase 1: `uv run python -m compileall src tests`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest -q` -> `82 passed`
+- Phase 2: same gate after backend layer -> `88 passed`
+- Phase 3: same gate after `Servo` and `ServoGroup` backend port -> `90 passed`
+- Phase 4 and final package state: same gate after config and CLI migration -> `95 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- planned checks: verify PWM overlay configuration, run `uv run pi5servo status --pins 12,13`, run single-servo center/min/max tests, run `uv run pi5servo cmd "M_12:45/13:-30" --pins 12,13`, run `uv run pi5servo servo-tool`, and verify safe exit centering
+- signal-quality requirement: measure the servo output with a logic analyser or oscilloscope before trusting the setup for full robot motion
+- expected hardware result: stable pulse output, correct save/load behavior in `servo.json`, repeatable synchronized motion, and clean backend release on exit
+
+Follow-up:
+
+- run the Raspberry Pi 5 manual validation checklist for `pi5servo`
+- if hardware validation passes, mark the standalone Pi 5 driver migration set as complete
+- if additional channel count or isolation is needed later, extend the optional `pca9685` backend path
+
 ### pi5disp Runtime Fixes
 
 Summary:
