@@ -134,6 +134,46 @@ Phase 1 shutdown regression note:
 - the `pi5buzzer` backend must release PWM objects before `GPIO.cleanup()` closes the chip handle
 - expected result after the fix: `uv run pi5buzzer buzzer-tool`, then `9. Exit`, returns without a cleanup traceback
 
+## pi5vl53l0x Migration Notes
+
+Implemented package:
+
+- [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x)
+
+Legacy source audited for parity:
+
+- [NinjaRobotV5_bak/pi0vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0vl53l0x)
+
+Required public compatibility surface:
+
+- `pi5vl53l0x.VL53L0X`
+- `pi5vl53l0x.driver.VL53L0X`
+- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/__main__.py): `get`, `performance`, `calibrate`, `test`, `status`, `config`, `sensor-tool`
+- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/config/config_manager.py) keeping `vl53l0x.json` compatibility
+
+Backend rule:
+
+- use the retrying I2C wrapper in [i2c.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/core/i2c.py)
+- default runtime is `smbus2` over `/dev/i2c-1` on Raspberry Pi 5
+- keep sensor initialization, timing budget logic, calibration, and health-check behavior independent from the low-level transport
+
+Quality gate result:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q`
+- current result for [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x): `62 passed`
+
+Raspberry Pi 5 validation checklist:
+
+- safe smoke tests: run `pi5vl53l0x --help`, `pi5vl53l0x config show`, check `ls /dev/i2c-1`, and confirm `sudo i2cdetect -y 1` shows `29`
+- device communication tests: run `pi5vl53l0x test`, `pi5vl53l0x get --count 5 --interval 0.5`, and `pi5vl53l0x status`
+- sensor behavior tests: run `pi5vl53l0x performance --count 50`, `pi5vl53l0x calibrate --distance 200 --count 10`, and the interactive `pi5vl53l0x sensor-tool`
+- power-risk tests: do not hot-plug the sensor while commands are reading; power the Pi down before rewiring
+- expected outcome: stable initialization, visible address `0x29`, consistent distance readings, saved offset calibration, and successful reinitialize recovery
+- rollback: stop the running process, power down before rewiring, and remove `src/pi5vl53l0x/config/vl53l0x.json` if a clean config reset is needed
+
 ## Raspberry Pi 5 Validation Flow
 
 After each migrated library, produce and review:

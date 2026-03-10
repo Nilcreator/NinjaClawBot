@@ -2,6 +2,61 @@
 
 ## 2026-03-10
 
+### pi5vl53l0x Migration
+
+Summary:
+
+- migrated the second Raspberry Pi 5 standalone driver library as [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x)
+- kept the legacy `pi0vl53l0x` public API shape, CLI command set, config contract, calibration flow, health check, and reinitialize path
+- replaced the legacy `pigpio` I2C transport with a thread-safe `smbus2` backend over the Raspberry Pi 5 kernel I2C interface
+- ported and adapted the legacy test suite for I2C, sensor logic, config handling, and CLI smoke coverage
+
+Files changed:
+
+- [pi5vl53l0x/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/pyproject.toml)
+- [pi5vl53l0x/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/.python-version)
+- [pi5vl53l0x/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/README.md)
+- [pi5vl53l0x/src/pi5vl53l0x/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/__init__.py)
+- [pi5vl53l0x/src/pi5vl53l0x/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/__main__.py)
+- [pi5vl53l0x/src/pi5vl53l0x/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/driver.py)
+- [pi5vl53l0x/src/pi5vl53l0x/registers.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/registers.py)
+- [pi5vl53l0x/src/pi5vl53l0x/core/i2c.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/core/i2c.py)
+- [pi5vl53l0x/src/pi5vl53l0x/core/sensor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/core/sensor.py)
+- [pi5vl53l0x/src/pi5vl53l0x/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/config/config_manager.py)
+- [pi5vl53l0x/src/pi5vl53l0x/cli/sensor_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/cli/sensor_tool.py)
+- [pi5vl53l0x/tests/test_i2c.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/tests/test_i2c.py)
+- [pi5vl53l0x/tests/test_sensor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/tests/test_sensor.py)
+- [pi5vl53l0x/tests/test_config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/tests/test_config.py)
+- [pi5vl53l0x/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/tests/test_cli.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- Raspberry Pi 5 does not support the legacy `pigpio` I2C path used by `pi0vl53l0x`
+- the migration needed to preserve the known-good VL53L0X register sequencing while only replacing the transport layer
+- the new library had to stay standalone-first for NinjaClawBot while keeping future compatibility hooks such as `driver.py`
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`: passed
+- `uv run ruff check .`: passed
+- `uv run ruff format --check .`: passed
+- `uv run pytest -q`: `62 passed in 2.43s`
+- `uv run pi5vl53l0x --help`: passed
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- planned checks: `ls /dev/i2c-1`, `sudo i2cdetect -y 1`, `uv run pi5vl53l0x test`, `uv run pi5vl53l0x get --count 5 --interval 0.5`, `uv run pi5vl53l0x status`, `uv run pi5vl53l0x performance --count 50`, `uv run pi5vl53l0x calibrate --distance 200 --count 10`, and `uv run pi5vl53l0x sensor-tool`
+- expected hardware result: visible sensor at address `0x29`, stable readings, successful calibration save, and successful reinitialize recovery
+
+Follow-up:
+
+- run the Raspberry Pi 5 manual validation checklist for `pi5vl53l0x`
+- if hardware validation passes, proceed to the `pi5servo` or `pi5disp` migration phase
+
 ### pi5buzzer Migration
 
 Summary:
