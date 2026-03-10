@@ -55,6 +55,44 @@ Follow-up:
 - run the Raspberry Pi 5 manual validation checklist for `pi5buzzer`
 - if hardware validation passes, proceed to the `pi5vl53l0x` migration phase
 
+### pi5buzzer Installation Fix
+
+Summary:
+
+- investigated the standalone Raspberry Pi installation failure reported for `uv sync --extra pi --extra dev`
+- identified the failure as an `lgpio` wheel-availability problem, not a `pi5buzzer` code defect
+- pinned the standalone project to Python 3.11 and documented the manual recovery steps in the package README
+
+Files changed:
+
+- [pi5buzzer/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/pyproject.toml)
+- [pi5buzzer/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/.python-version)
+- [pi5buzzer/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- `rpi-lgpio` depends on `lgpio`
+- `lgpio 0.2.2.0` currently publishes Raspberry Pi Linux ARM wheels for CPython 3.9, 3.10, 3.11, and 3.12, but not 3.13
+- when `uv` selected Python 3.13, it fell back to a source build, which required `swig` and failed on a normal Raspberry Pi setup
+- pinning the package to Python 3.11 gives a reliable install path on Raspberry Pi OS Bookworm
+
+Lint and test results:
+
+- no code tests run
+- packaging and documentation update only
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 installation retry is still required
+- expected recovery path: remove `.venv`, rerun `uv sync --extra pi --extra dev`, then verify with `uv run pi5buzzer --help`
+
+Follow-up:
+
+- confirm the updated install flow works on the target Raspberry Pi 5
+- if it does, keep Python 3.11 as the standalone default for the next Pi-facing driver packages
+
 ### Workflow Refinement
 
 Summary:

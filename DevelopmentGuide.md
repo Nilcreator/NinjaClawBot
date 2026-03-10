@@ -119,6 +119,15 @@ Phase 1 Raspberry Pi 5 validation checklist:
 - expected outcome: short tones and queued playback are audible and stable on Raspberry Pi 5
 - rollback: uninstall `pi5buzzer`, remove the created `buzzer.json`, and disconnect the buzzer from the GPIO pin
 
+Phase 1 installation troubleshooting:
+
+- if `uv sync --extra pi --extra dev` fails while building `lgpio`, check the Python version used by `uv`
+- `lgpio 0.2.2.0` currently ships Linux ARM wheels for CPython 3.9 through 3.12, but not 3.13
+- `uv` prefers managed Python versions, so an unmanaged install can drift to 3.13 and trigger a source build that needs `swig`
+- keep [pi5buzzer/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/.python-version) pinned to `3.11`
+- if a broken `.venv` already exists, remove it and rerun `uv sync --extra pi --extra dev`
+- manual fallback only: install `swig`, `python3-dev`, and `build-essential`, then retry the sync
+
 ## Raspberry Pi 5 Validation Flow
 
 After each migrated library, produce and review:

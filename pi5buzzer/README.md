@@ -84,6 +84,10 @@ cd NinjaClawBot/"Code library"/NinjaClawbot/pi5buzzer
 
 If you already have the repository, just move into the `pi5buzzer` folder.
 
+This folder now includes a `.python-version` file set to `3.11`.
+That helps `uv` choose a Python version that works with the current
+`lgpio` wheels on Raspberry Pi.
+
 ### Step 2: Install uv
 
 `uv` is the tool used in this project to install packages, create the local
@@ -123,6 +127,11 @@ What this command installs:
 - `pytest` for automated tests
 - `ruff` for code style and lint checks
 
+Important note:
+
+- `pi5buzzer` currently uses Python 3.11 by default in this folder
+- this avoids a known `lgpio` build problem on Python 3.13
+
 ### Step 4: Verify that the driver is installed
 
 This checks that the command-line tool is available.
@@ -135,6 +144,54 @@ Expected result:
 
 - a help screen appears
 - you can see commands such as `init`, `beep`, `play`, `info`, `config`, and `buzzer-tool`
+
+### If installation fails with `Failed to build lgpio`
+
+You may see an error like this:
+
+```text
+Failed to build lgpio
+error: command 'swig' failed: No such file or directory
+```
+
+What this usually means:
+
+- `uv` created an environment with Python 3.13
+- `lgpio` currently provides Raspberry Pi Linux wheels for Python 3.9, 3.10,
+  3.11, and 3.12
+- when Python 3.13 is used, `uv` falls back to a source build
+- that source build needs `swig`, so installation stops
+
+Recommended fix:
+
+```bash
+# Check the Python version uv should use in this folder
+cat .python-version
+
+# Remove the failed environment if it already exists
+rm -rf .venv
+
+# Sync again with the pinned project Python
+uv sync --extra pi --extra dev
+```
+
+If you want to force the install with a supported Python directly:
+
+```bash
+rm -rf .venv
+uv sync --python 3.11 --extra pi --extra dev
+```
+
+If you must build `lgpio` from source instead of using a wheel:
+
+```bash
+sudo apt update
+sudo apt install -y swig python3-dev build-essential
+uv sync --extra pi --extra dev
+```
+
+That source-build path is a manual fallback only. The recommended install path
+for Raspberry Pi 5 is still Python 3.11 with the normal wheel install.
 
 ---
 
