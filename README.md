@@ -12,6 +12,7 @@ NinjaClawBot is the Raspberry Pi 5 based evolution of the NinjaRobot driver stac
 The migrated libraries that now exist are:
 
 - [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer)
+- [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp)
 - [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x)
 
 `pi5buzzer` preserves the legacy `pi0buzzer` API shape, note and emotion helpers,
@@ -23,10 +24,14 @@ usage with a Raspberry Pi 5 compatible `RPi.GPIO` style backend intended for
 `vl53l0x.json` config format, while replacing the old `pigpio` I2C path with a
 thread-safe `smbus2` backend over the Raspberry Pi 5 kernel I2C interface.
 
+`pi5disp` preserves the legacy `pi0disp` `ST7789V` driver, CLI command set, and
+`display.json` config format, while replacing the old `pigpio` SPI, GPIO, and
+backlight control path with a Raspberry Pi 5 compatible split backend based on
+`spidev` and an `RPi.GPIO` style interface intended for `rpi-lgpio`.
+
 Pending migration libraries:
 
 - `pi5servo`
-- `pi5disp`
 
 For development workflow and validation guidance:
 

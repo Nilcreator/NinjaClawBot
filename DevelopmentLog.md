@@ -2,6 +2,70 @@
 
 ## 2026-03-10
 
+### pi5disp Migration
+
+Summary:
+
+- migrated the third Raspberry Pi 5 standalone driver library as [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp)
+- kept the legacy `pi0disp` public API shape, CLI command set, renderer helpers, ticker effects, bundled fonts, and `display.json` config contract
+- replaced the legacy `pigpio` SPI, GPIO, and backlight control path with a Raspberry Pi 5 compatible backend split across `spidev` and an `RPi.GPIO` compatible interface intended for `rpi-lgpio`
+- ported and adapted the legacy test coverage for driver behavior, config handling, renderer helpers, text ticker behavior, and CLI smoke checks
+
+Files changed:
+
+- [pi5disp/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/pyproject.toml)
+- [pi5disp/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/.python-version)
+- [pi5disp/display.json](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/display.json)
+- [pi5disp/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/README.md)
+- [pi5disp/src/pi5disp/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/__init__.py)
+- [pi5disp/src/pi5disp/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/__main__.py)
+- [pi5disp/src/pi5disp/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/driver.py)
+- [pi5disp/src/pi5disp/core/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/core/driver.py)
+- [pi5disp/src/pi5disp/core/renderer.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/core/renderer.py)
+- [pi5disp/src/pi5disp/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/config/config_manager.py)
+- [pi5disp/src/pi5disp/effects/text_ticker.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/effects/text_ticker.py)
+- [pi5disp/src/pi5disp/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/_common.py)
+- [pi5disp/src/pi5disp/cli/init_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/init_cmd.py)
+- [pi5disp/src/pi5disp/cli/image_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/image_cmd.py)
+- [pi5disp/src/pi5disp/cli/text_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/text_cmd.py)
+- [pi5disp/src/pi5disp/cli/demo_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/demo_cmd.py)
+- [pi5disp/src/pi5disp/cli/info_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/info_cmd.py)
+- [pi5disp/src/pi5disp/cli/display_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/cli/display_tool.py)
+- [pi5disp/tests/test_config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_config.py)
+- [pi5disp/tests/test_renderer.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_renderer.py)
+- [pi5disp/tests/test_driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_driver.py)
+- [pi5disp/tests/test_text_ticker.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_text_ticker.py)
+- [pi5disp/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/tests/test_cli.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- Raspberry Pi 5 does not support the legacy `pigpio` path used by `pi0disp`
+- the display migration needed to preserve the known-good ST7789V behavior while isolating only the transport layer change
+- the legacy package and tests require `display()` to remain a full-frame path, with `display_region()` as the partial-update path
+- the new library had to remain standalone-first while keeping future compatibility hooks such as `driver.py`
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`: passed
+- `uv run ruff check .`: passed
+- `uv run ruff format --check .`: passed
+- `uv run pytest -q`: `59 passed in 26.78s`
+- `uv run pi5disp --help`: passed
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- planned checks: `ls /dev/spidev0.0`, `uv run pi5disp --help`, `uv run pi5disp init --defaults`, `uv run pi5disp config show`, `uv run pi5disp info`, `uv run pi5disp clear`, `uv run pi5disp brightness 50`, `uv run pi5disp image ./example.png`, `uv run pi5disp text "Hello NinjaClawBot"`, `uv run pi5disp text "Scrolling text" --scroll --duration 10`, `uv run pi5disp demo --num-balls 3 --duration 10`, and `uv run pi5disp display-tool`
+- expected hardware result: stable panel initialization, clear image and text rendering, working brightness control, working scrolling and demo effects, and clean SPI and GPIO release on exit
+
+Follow-up:
+
+- run the Raspberry Pi 5 manual validation checklist for `pi5disp`
+- if hardware validation passes, proceed to the `pi5servo` migration phase
+
 ### pi5vl53l0x Migration
 
 Summary:

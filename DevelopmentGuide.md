@@ -174,6 +174,49 @@ Raspberry Pi 5 validation checklist:
 - expected outcome: stable initialization, visible address `0x29`, consistent distance readings, saved offset calibration, and successful reinitialize recovery
 - rollback: stop the running process, power down before rewiring, and remove `src/pi5vl53l0x/config/vl53l0x.json` if a clean config reset is needed
 
+## pi5disp Migration Notes
+
+Implemented package:
+
+- [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp)
+
+Legacy source audited for parity:
+
+- [NinjaRobotV5_bak/pi0disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0disp)
+
+Required public compatibility surface:
+
+- `pi5disp.ST7789V`
+- `pi5disp.ConfigManager`
+- `pi5disp.driver.ST7789V`
+- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/__main__.py): `init`, `image`, `text`, `demo`, `info`, `clear`, `brightness`, `config`, `display-tool`
+- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/config/config_manager.py) keeping `display.json` compatibility
+
+Backend rule:
+
+- use the Pi 5 adapter in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/core/driver.py)
+- default runtime is `spidev` for SPI plus an `RPi.GPIO` compatible backend intended for `rpi-lgpio`
+- keep `display()` as a full-frame write path and `display_region()` as the partial-update path to match the legacy tested behavior
+- keep renderer helpers and text ticker effects independent from the low-level SPI and GPIO transport
+
+Quality gate result:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q`
+- `uv run pi5disp --help`
+- current result for [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp): `59 passed`
+
+Raspberry Pi 5 validation checklist:
+
+- safe smoke tests: run `pi5disp --help`, `pi5disp init --defaults`, `pi5disp config show`, `pi5disp info`, and confirm `ls /dev/spidev0.0` succeeds
+- device communication tests: run `pi5disp clear`, `pi5disp brightness 50`, `pi5disp text "Hello NinjaClawBot"`, and `pi5disp image ./example.png`
+- display behavior tests: run `pi5disp text "Scrolling text" --scroll --duration 10`, `pi5disp demo --num-balls 3 --duration 10`, and the interactive `pi5disp display-tool`
+- power-risk tests: power the Pi down before rewiring the display, do not hot-plug the SPI display while the backlight is active, and confirm CLI exit leaves the panel stable with the backlight under control
+- expected outcome: stable clear, text, image, demo, brightness, and scrolling behavior on the ST7789V panel with no stuck GPIO or SPI state after exit
+- rollback: stop the running process, power down before rewiring, and remove `display.json` if a clean config reset is needed
+
 ## Raspberry Pi 5 Validation Flow
 
 After each migrated library, produce and review:
