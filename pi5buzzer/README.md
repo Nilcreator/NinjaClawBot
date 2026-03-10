@@ -31,7 +31,7 @@ This driver keeps the same main features as the legacy version:
 | **Keyboard piano** | Lets you press keyboard keys to play notes |
 | **Settings manager** | Saves settings in a JSON (simple text settings file) file |
 | **CLI (command-line) commands** | Includes command-line tools for setup, sound playback, and settings work |
-| **Unit tested** | Includes 63 tests with a mocked Pi 5 backend |
+| **Unit tested** | Includes 65 tests with mocked Pi 5 backend behavior |
 
 ---
 
@@ -70,7 +70,7 @@ Before you start, make sure you have:
 
 1. A **Raspberry Pi 5** with Raspberry Pi OS Bookworm or newer
 2. A **passive buzzer** connected to one GPIO (general-purpose input/output) pin and one GND (ground) pin
-3. **Python 3.9 or newer**
+3. **Python 3.9 to 3.12** with **Python 3.11** recommended on Raspberry Pi OS Bookworm
 4. An internet connection for the first installation
 
 ### Step 1: Clone the repository
@@ -280,6 +280,11 @@ This tool lets you:
 - change volume
 - view or import/export settings
 
+Expected exit result:
+
+- when you choose `9. Exit`, the tool should return to the shell cleanly
+- you should not see a PWM cleanup traceback after `Goodbye!`
+
 ---
 
 ## Configuration Management
@@ -379,7 +384,7 @@ uv run pytest -q
 Expected result:
 
 - all tests pass
-- the command ends with a short summary such as `63 passed`
+- the command ends with a short summary such as `65 passed`
 
 ### Run the lint and format checks
 

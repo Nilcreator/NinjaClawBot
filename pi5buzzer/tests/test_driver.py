@@ -5,6 +5,64 @@ import time
 import pytest
 
 
+class FakePWM:
+    """Simple PWM test double that records destructor behavior."""
+
+    def __init__(self, gpio_module, pin, frequency):
+        self.gpio_module = gpio_module
+        self.pin = pin
+        self.frequency = frequency
+
+    def start(self, duty_cycle):
+        self.gpio_module.events.append(("start", self.pin, duty_cycle))
+
+    def ChangeDutyCycle(self, duty_cycle):
+        self.gpio_module.events.append(("duty", self.pin, duty_cycle))
+
+    def ChangeFrequency(self, frequency):
+        self.frequency = frequency
+        self.gpio_module.events.append(("frequency", self.pin, frequency))
+
+    def stop(self):
+        if not self.gpio_module.active:
+            raise TypeError("chip closed")
+        self.gpio_module.events.append(("stop", self.pin))
+
+    def __del__(self):
+        try:
+            self.stop()
+        except Exception as exc:  # pragma: no cover - destructor path
+            self.gpio_module.events.append(("destructor_error", type(exc).__name__))
+
+
+class FakeGPIOModule:
+    """Minimal GPIO module test double for the Pi 5 backend wrapper."""
+
+    BCM = 11
+    OUT = 0
+
+    def __init__(self):
+        self.active = True
+        self.events = []
+
+    def setwarnings(self, enabled):
+        self.events.append(("setwarnings", enabled))
+
+    def setmode(self, mode):
+        self.events.append(("setmode", mode))
+
+    def setup(self, pin, mode):
+        self.events.append(("setup", pin, mode))
+
+    def PWM(self, pin, frequency):
+        self.events.append(("create_pwm", pin, frequency))
+        return FakePWM(self, pin, frequency)
+
+    def cleanup(self):
+        self.events.append(("cleanup",))
+        self.active = False
+
+
 class TestBuzzerInit:
     """Test Buzzer initialization."""
 
@@ -169,9 +227,9 @@ class TestBuzzerOff:
         assert not buzzer.is_initialized
         assert not buzzer._worker_thread.is_alive()
 
-    def test_off_silences_buzzer(self, buzzer):
+    def test_off_releases_pwm_on_backend(self, buzzer):
         buzzer.off()
-        buzzer.pi.set_PWM_dutycycle.assert_called_with(17, 0)
+        buzzer.pi.release_pwm.assert_called_once_with(17)
 
     def test_off_does_not_stop_external_pi(self, buzzer):
         buzzer.off()
@@ -196,3 +254,36 @@ class TestBuzzerContextManager:
         with Buzzer(pin=17, pi=mock_pi) as buzzer:
             assert buzzer.is_initialized
         assert not buzzer.is_initialized
+
+
+class TestRPiGPIOPWMBackend:
+    """Test the Pi 5 backend wrapper cleanup behavior."""
+
+    def test_stop_releases_pwm_before_cleanup(self):
+        from pi5buzzer.core.driver import RPiGPIOPWMBackend
+
+        gpio_module = FakeGPIOModule()
+        backend = RPiGPIOPWMBackend(gpio_module)
+        backend.set_mode(17, backend.OUTPUT)
+        backend.set_PWM_frequency(17, 440)
+        backend.set_PWM_dutycycle(17, 128)
+
+        backend.stop()
+
+        assert ("destructor_error", "TypeError") not in gpio_module.events
+        assert ("cleanup",) in gpio_module.events
+        assert backend.connected is False
+        assert gpio_module.events.index(("stop", 17)) < gpio_module.events.index(("cleanup",))
+
+    def test_stop_is_idempotent(self):
+        from pi5buzzer.core.driver import RPiGPIOPWMBackend
+
+        gpio_module = FakeGPIOModule()
+        backend = RPiGPIOPWMBackend(gpio_module)
+        backend.set_mode(17, backend.OUTPUT)
+        backend.set_PWM_frequency(17, 440)
+
+        backend.stop()
+        backend.stop()
+
+        assert gpio_module.events.count(("cleanup",)) == 1

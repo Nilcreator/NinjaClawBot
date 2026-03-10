@@ -93,6 +93,48 @@ Follow-up:
 - confirm the updated install flow works on the target Raspberry Pi 5
 - if it does, keep Python 3.11 as the standalone default for the next Pi-facing driver packages
 
+### pi5buzzer Shutdown Fix
+
+Summary:
+
+- audited the `pi5buzzer` backend shutdown path after a Raspberry Pi 5 runtime traceback was reported when leaving `buzzer-tool`
+- identified the bug as a cleanup-order issue between our backend wrapper and `rpi-lgpio` PWM object destruction
+- fixed the backend so PWM objects are released before `GPIO.cleanup()` closes the chip handle
+- added regression tests for destructor-safe cleanup and repeated backend stop calls
+
+Files changed:
+
+- [pi5buzzer/src/pi5buzzer/core/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/core/driver.py)
+- [pi5buzzer/tests/conftest.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/tests/conftest.py)
+- [pi5buzzer/tests/test_driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/tests/test_driver.py)
+- [pi5buzzer/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- upstream `rpi-lgpio` PWM objects call `stop()` from `__del__`
+- our wrapper previously closed the GPIO chip handle before those PWM objects were fully released
+- that left the later destructor path running against a closed chip handle and produced the `NoneType & int` traceback on exit
+- the same centralized backend fix also protects the other CLI paths that call `pi.stop()`
+
+Lint and test results:
+
+- `python -m compileall .`: passed
+- `ruff check .`: passed
+- `ruff format --check .`: passed
+- `pytest -q`: `65 passed in 6.32s`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- expected validation: run `uv run pi5buzzer buzzer-tool`, choose `9. Exit`, and confirm there is no cleanup traceback after `Goodbye!`
+
+Follow-up:
+
+- verify the clean shutdown behavior on the target Raspberry Pi 5
+- if the result is clean, use the same shutdown pattern in future Pi 5 drivers that wrap `rpi-lgpio` resources
+
 ### Workflow Refinement
 
 Summary:

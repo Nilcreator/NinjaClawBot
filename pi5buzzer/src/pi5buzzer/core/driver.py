@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import gc
 import logging
 import queue
 import threading
@@ -104,21 +105,37 @@ class RPiGPIOPWMBackend:
         percent = max(0.0, min(100.0, duty_cycle * 100.0 / 255.0))
         pwm.ChangeDutyCycle(percent)
 
+    def release_pwm(self, pin: int) -> None:
+        """Stop and drop the PWM object for a pin before chip cleanup."""
+        pwm = self._pwm_by_pin.pop(pin, None)
+        if pwm is None:
+            return
+
+        try:
+            pwm.ChangeDutyCycle(0)
+        except Exception:  # pragma: no cover - defensive cleanup only
+            pass
+
+        try:
+            pwm.stop()
+        except Exception:  # pragma: no cover - defensive cleanup only
+            pass
+
+        pwm = None
+        gc.collect()
+
     def stop(self) -> None:
         """Stop all PWM objects and release GPIO resources."""
-        for pwm in list(self._pwm_by_pin.values()):
-            try:
-                pwm.ChangeDutyCycle(0)
-            except Exception:  # pragma: no cover - defensive cleanup only
-                pass
-            pwm.stop()
-
-        self._pwm_by_pin.clear()
+        while self._pwm_by_pin:
+            pin = next(iter(self._pwm_by_pin))
+            self.release_pwm(pin)
 
         if self._mode_configured:
             self._gpio.cleanup()
             self._mode_configured = False
             self._configured_pins.clear()
+
+        self.connected = False
 
     def _ensure_pwm(self, pin: int, frequency: int) -> Any:
         pwm = self._pwm_by_pin.get(pin)
@@ -222,7 +239,11 @@ class Buzzer(Actuator):
             self._worker_thread.join(timeout=2.0)
 
         if self.pi and getattr(self.pi, "connected", True):
-            self.pi.set_PWM_dutycycle(self.pin, 0)
+            release_pwm = getattr(self.pi, "release_pwm", None)
+            if callable(release_pwm):
+                release_pwm(self.pin)
+            else:
+                self.pi.set_PWM_dutycycle(self.pin, 0)
 
         if not self._is_external_pi and self.pi and getattr(self.pi, "connected", True):
             self.pi.stop()

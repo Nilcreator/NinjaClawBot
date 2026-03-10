@@ -108,7 +108,7 @@ Phase 1 quality gate result:
 - `ruff check .`
 - `ruff format --check .`
 - `pytest -q`
-- current result for [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer): `63 passed`
+- current result for [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer): `65 passed`
 
 Phase 1 Raspberry Pi 5 validation checklist:
 
@@ -127,6 +127,12 @@ Phase 1 installation troubleshooting:
 - keep [pi5buzzer/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/.python-version) pinned to `3.11`
 - if a broken `.venv` already exists, remove it and rerun `uv sync --extra pi --extra dev`
 - manual fallback only: install `swig`, `python3-dev`, and `build-essential`, then retry the sync
+
+Phase 1 shutdown regression note:
+
+- `rpi-lgpio` PWM objects call `stop()` again during object destruction
+- the `pi5buzzer` backend must release PWM objects before `GPIO.cleanup()` closes the chip handle
+- expected result after the fix: `uv run pi5buzzer buzzer-tool`, then `9. Exit`, returns without a cleanup traceback
 
 ## Raspberry Pi 5 Validation Flow
 

@@ -14,6 +14,7 @@ def mock_pi():
     pi.set_mode = MagicMock()
     pi.set_PWM_dutycycle = MagicMock()
     pi.set_PWM_frequency = MagicMock()
+    pi.release_pwm = MagicMock()
     pi.stop = MagicMock()
     return pi
 
