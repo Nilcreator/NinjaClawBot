@@ -77,6 +77,48 @@ Preferred practice:
 - run package-local checks while migrating one library
 - run broader repo checks only if shared files changed
 
+## pi5buzzer Migration Notes
+
+Implemented package:
+
+- [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer)
+
+Legacy source audited for parity:
+
+- [NinjaRobotV5_bak/pi0buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0buzzer)
+
+Required public compatibility surface:
+
+- `pi5buzzer.Buzzer`
+- `pi5buzzer.MusicBuzzer`
+- `pi5buzzer.driver.Buzzer`
+- `pi5buzzer.driver.MusicBuzzer`
+- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/__main__.py): `init`, `beep`, `play`, `info`, `config`, `buzzer-tool`
+- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/config/config_manager.py) keeping `buzzer.json` compatibility
+
+Backend rule:
+
+- use the backend factory in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/core/driver.py)
+- default runtime is an `RPi.GPIO` compatible backend intended for `rpi-lgpio` on Raspberry Pi 5
+- keep high-level queueing, frequency clamping, volume semantics, and music helpers independent from the GPIO transport
+
+Phase 1 quality gate result:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+- current result for [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer): `63 passed`
+
+Phase 1 Raspberry Pi 5 validation checklist:
+
+- safe smoke tests: install `rpi-lgpio`, run `pi5buzzer --help`, `pi5buzzer init 17`, and verify `buzzer.json` is created
+- device communication tests: run `pi5buzzer info --health-check` and confirm the backend can claim the configured GPIO pin
+- actuator tests: run `pi5buzzer beep 440 0.3`, `pi5buzzer play happy`, and a short Python `play_song()` sequence
+- power-risk tests: verify `off()` and CLI exit leave the buzzer silent with no stuck PWM output
+- expected outcome: short tones and queued playback are audible and stable on Raspberry Pi 5
+- rollback: uninstall `pi5buzzer`, remove the created `buzzer.json`, and disconnect the buzzer from the GPIO pin
+
 ## Raspberry Pi 5 Validation Flow
 
 After each migrated library, produce and review:
