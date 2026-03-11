@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from importlib import import_module
 from typing import Any
 
@@ -21,6 +22,7 @@ _REG_PWM_DUTY1 = 0x06
 
 _EXPECTED_PID = 0xDF
 _EXPECTED_VID = 0x10
+_COMMAND_SETTLE_SECONDS = 0.01
 
 
 class DFR0566ServoBackend:
@@ -101,11 +103,18 @@ class DFR0566ServoBackend:
     def _write_pwm_enable(self, enabled: bool) -> None:
         self._write_bytes(_REG_PWM_CONTROL, [0x01 if enabled else 0x00])
         self._pwm_enabled = enabled
+        time.sleep(_COMMAND_SETTLE_SECONDS)
 
     def _write_frequency(self, frequency_hz: int) -> None:
         if not 1 <= frequency_hz <= 1000:
             raise BackendConfigurationError("DFR0566 frequency must be in the range 1..1000Hz.")
+        was_enabled = self._pwm_enabled
+        if was_enabled:
+            self._write_pwm_enable(False)
         self._write_bytes(_REG_PWM_FREQ, [(frequency_hz >> 8) & 0xFF, frequency_hz & 0xFF])
+        time.sleep(_COMMAND_SETTLE_SECONDS)
+        if was_enabled:
+            self._write_pwm_enable(True)
 
     def _write_channel_duty(self, channel: int, duty_percent: float) -> None:
         duty_percent = max(0.0, min(100.0, duty_percent))

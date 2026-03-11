@@ -10,11 +10,14 @@ import click
 from ..config import ConfigManager
 from ..core import Servo, ServoCalibration, ServoGroup
 from ._common import (
+    LEGACY_BACKENDS,
     backend_options,
     close_runtime_handle,
     create_group_from_config,
+    create_servo_from_config,
     format_endpoint_label,
     parse_endpoint_value,
+    resolve_backend_settings,
     sort_endpoint_keys,
 )
 from .calib import CalibApp
@@ -57,7 +60,7 @@ def servo_tool(
     manager.load()
     known_pins = sort_endpoint_keys(
         [endpoint.legacy_key for endpoint in manager.get_known_endpoints()]
-    ) or [12, 13]
+    )
 
     persistent_group = None
     runtime = None
@@ -67,27 +70,10 @@ def servo_tool(
     def reload_manager() -> None:
         manager.load()
 
-    def build_temp_group(pins: list[int]) -> ServoGroup:
-        calibrations = {pin: manager.get_calibration(pin) for pin in pins}
-        return ServoGroup(
-            runtime,
-            pins=pins,
-            calibrations=calibrations,
-            backend=persistent_group.backend if persistent_group is not None else None,
-        )
-
-    def build_temp_servo(pin: int) -> Servo:
-        return Servo(
-            runtime,
-            pin,
-            manager.get_calibration(pin),
-            backend=persistent_group.backend if persistent_group is not None else None,
-        )
-
-    try:
-        persistent_group, manager, runtime, resolved_backend, backend_kwargs = (
-            create_group_from_config(
-                pins=known_pins,
+    def _build_backend_group(pins: list[int | str]) -> tuple[ServoGroup, object | None]:
+        if resolved_backend in LEGACY_BACKENDS:
+            group, _, temp_runtime, _, _ = create_group_from_config(
+                pins=pins,
                 config_path=config_path,
                 backend_name=backend_name,
                 chip=chip,
@@ -97,13 +83,100 @@ def servo_tool(
                 pin_channel_map=pin_channel_map,
                 channel_map=channel_map,
             )
+            return group, temp_runtime
+
+        calibrations = {pin: manager.get_calibration(pin) for pin in pins}
+        return (
+            ServoGroup(
+                runtime,
+                pins=pins,
+                calibrations=calibrations,
+                backend=resolved_backend,
+                backend_kwargs=backend_kwargs,
+            ),
+            None,
         )
 
+    def build_temp_group(pins: list[int | str]) -> tuple[ServoGroup, object | None]:
+        if persistent_group is not None and set(pins).issubset(set(persistent_group.pins)):
+            return persistent_group, None
+        return _build_backend_group(pins)
+
+    def build_temp_servo(pin: int | str) -> tuple[Servo, object | None]:
+        if persistent_group is not None and pin in persistent_group.pins:
+            return (
+                Servo(
+                    runtime,
+                    pin,
+                    manager.get_calibration(pin),
+                    backend=persistent_group.backend,
+                    owns_backend=False,
+                ),
+                None,
+            )
+
+        if resolved_backend in LEGACY_BACKENDS:
+            servo, _, temp_runtime, _, _ = create_servo_from_config(
+                pin=pin,
+                config_path=config_path,
+                backend_name=backend_name,
+                chip=chip,
+                bus_id=bus_id,
+                frequency_hz=frequency_hz,
+                address=address,
+                pin_channel_map=pin_channel_map,
+                channel_map=channel_map,
+            )
+            return servo, temp_runtime
+
+        return (
+            Servo(
+                runtime,
+                pin,
+                manager.get_calibration(pin),
+                backend=resolved_backend,
+                backend_kwargs=backend_kwargs,
+            ),
+            None,
+        )
+
+    try:
+        resolved_backend, backend_kwargs = resolve_backend_settings(
+            manager,
+            backend_name=backend_name,
+            chip=chip,
+            bus_id=bus_id,
+            frequency_hz=frequency_hz,
+            address=address,
+            pin_channel_map=pin_channel_map,
+            channel_map=channel_map,
+        )
         if known_pins:
+            persistent_group, manager, runtime, resolved_backend, backend_kwargs = (
+                create_group_from_config(
+                    pins=known_pins,
+                    config_path=config_path,
+                    backend_name=backend_name,
+                    chip=chip,
+                    bus_id=bus_id,
+                    frequency_hz=frequency_hz,
+                    address=address,
+                    pin_channel_map=pin_channel_map,
+                    channel_map=channel_map,
+                )
+            )
+
+        if persistent_group is not None and known_pins:
             persistent_group.center_all()
             time.sleep(0.1)
             labels = ", ".join(format_endpoint_label(pin) for pin in known_pins)
             click.echo(term.green(f"✓ All servos centered (0°): {labels}"))
+        elif not known_pins:
+            click.echo(
+                term.yellow(
+                    "No configured endpoints found. Use explicit endpoints like 'gpio12' or 'hat_pwm1'."
+                )
+            )
 
         def show_menu() -> None:
             click.echo(term.clear())
@@ -169,19 +242,16 @@ def servo_tool(
                 try:
                     parsed = parse_command(cmd_str)
                     pins = sort_endpoint_keys(list({target.pin for target in parsed.targets}))
-                    if set(pins).issubset(set(persistent_group.pins)):
-                        group = persistent_group
-                        owns_group = False
-                    else:
-                        group = build_temp_group(pins)
-                        owns_group = True
+                    group, temp_runtime = build_temp_group(pins)
+                    owns_group = group is not persistent_group
 
                     success = group.execute_command(cmd_str)
                     click.echo(term.green("✓ Done") if success else term.red("✗ Aborted"))
 
                     if owns_group:
                         group.close()
-                except ValueError as exc:
+                        close_runtime_handle(temp_runtime)
+                except Exception as exc:
                     click.echo(term.red(f"✗ Error: {exc}"))
 
         def single_move() -> None:
@@ -198,7 +268,12 @@ def servo_tool(
                 f"Moving {format_endpoint_label(pin)}. "
                 "Enter angle or 'min'/'center'/'max'. Type 'q' to return.\n"
             )
-            servo = build_temp_servo(pin)
+            try:
+                servo, temp_runtime = build_temp_servo(pin)
+            except Exception as exc:
+                click.echo(term.red(f"✗ Error: {exc}"))
+                input("\nPress Enter to continue...")
+                return
 
             try:
                 while True:
@@ -226,6 +301,7 @@ def servo_tool(
                     click.echo(term.green(f"✓ {format_endpoint_label(pin)} → {angle}°"))
             finally:
                 servo.close()
+                close_runtime_handle(temp_runtime)
 
         def calibrate_servo() -> None:
             click.echo("\n" + term.yellow("Enter servo endpoint to calibrate:"))
@@ -236,12 +312,18 @@ def servo_tool(
                 input("\nPress Enter to continue...")
                 return
 
-            servo = build_temp_servo(pin)
-            app = CalibApp(servo, pin, config_path, manager)
             try:
-                app.main()
-            finally:
-                app.end()
+                servo, temp_runtime = build_temp_servo(pin)
+                app = CalibApp(servo, pin, config_path, manager)
+                try:
+                    app.main()
+                finally:
+                    app.end()
+                    close_runtime_handle(temp_runtime)
+            except Exception as exc:
+                click.echo(term.red(f"✗ Error: {exc}"))
+                input("\nPress Enter to continue...")
+                return
             reload_manager()
             click.echo(term.green("✓ Config reloaded"))
 

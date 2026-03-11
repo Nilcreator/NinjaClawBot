@@ -2,6 +2,49 @@
 
 ## 2026-03-11
 
+### pi5servo DFR0566 Calibration Fix
+
+Summary:
+
+- audited the failing `pi5servo calib hat_pwm1` and `servo-tool` calibration paths against the live traceback and the DFRobot DFR0566 vendor driver
+- fixed `servo-tool` so ad hoc `hat_pwmN` calibration no longer reuses a persistent native GPIO backend
+- removed the unsafe empty-config fallback that previously made `servo-tool` assume `GPIO12` and `GPIO13`
+- hardened the DFR0566 backend sequencing with the same short settle delays used by the vendor driver around PWM enable and frequency writes
+- added regression coverage for HAT calibration routing, empty-config startup, and submenu error recovery
+- updated the docs to clarify that current `pi5servo` endpoint names map `hat_pwm1` -> physical HAT `PWM0`, `hat_pwm2` -> `PWM1`, `hat_pwm3` -> `PWM2`, and `hat_pwm4` -> `PWM3`
+
+Files changed:
+
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/src/pi5servo/core/backends/dfr0566.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/dfr0566.py)
+- [pi5servo/tests/test_servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_servo_tool.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the reported traceback showed `servo-tool` was trying to calibrate `hat_pwm1` through the RP1 hardware PWM backend instead of the DFR0566 backend
+- the previous empty-config startup behavior made that failure easier to trigger on a fresh Raspberry Pi setup
+- the DFR0566 I2C backend matched the vendor register map, but it did not yet match the vendor timing behavior around PWM enable/frequency updates
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q` -> `121 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required for the DFR0566 path after this fix
+- verify `sudo i2cdetect -y 1` shows `0x10`
+- connect only one servo per HAT PWM connector
+- for a servo on physical HAT `PWM0`, test `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`
+- then test `uv run pi5servo calib hat_pwm1 --backend dfr0566 --address 0x10 --bus-id 1`
+- then test `uv run pi5servo servo-tool` and calibrate `hat_pwm1` from the menu
+
 ### pi5servo DFR0566 Refinement Implementation
 
 Summary:

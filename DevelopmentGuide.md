@@ -259,6 +259,11 @@ DFR0566 endpoint rule:
 - the implemented explicit endpoint naming model is:
   - native GPIO: `gpio12`, `gpio13`, `gpio18`, `gpio19`
   - DFR0566 PWM: `hat_pwm1`, `hat_pwm2`, `hat_pwm3`, `hat_pwm4`
+- current physical mapping on the HAT is:
+  - physical `PWM0` -> `hat_pwm1`
+  - physical `PWM1` -> `hat_pwm2`
+  - physical `PWM2` -> `hat_pwm3`
+  - physical `PWM3` -> `hat_pwm4`
 - numeric targets such as `12:45` still mean native GPIO shorthand, but explicit endpoint names are now supported for mixed routing
 
 Functions adapted for DFR0566 mixed-endpoint support:
@@ -280,6 +285,7 @@ Functions adapted for DFR0566 mixed-endpoint support:
 - [ConfigManager.get_all_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L158)
 - [ConfigManager.get_all_endpoint_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py)
 - [config_cmd.show](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/config_cmd.py)
+- [calib](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/calib.py)
 - [servo_tool](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
 
 Quality gate result:
@@ -288,15 +294,16 @@ Quality gate result:
 - `uv run ruff check .`
 - `uv run ruff format --check .`
 - `uv run pytest -q`
-- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `118 passed`
+- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `121 passed`
 
 Raspberry Pi 5 validation checklist:
 
 - safe smoke tests: run `uv run pi5servo --help`, `uv run pi5servo status --pins 12,13`, `uv run pi5servo config show`, and confirm the selected backend and `servo.json` values look correct
+- empty-config interactive check: if `servo.json` has no saved endpoints, run `uv run pi5servo servo-tool` and confirm it does not auto-claim `GPIO12` or `GPIO13` before you enter an explicit endpoint
 - DFR0566 smoke tests: run `uv run pi5servo status --backend dfr0566 --pins hat_pwm1 --address 0x10 --bus-id 1` and confirm the board responds cleanly
 - firmware checks: confirm the correct PWM overlay is enabled in `/boot/firmware/config.txt`, reboot the Pi, and verify the intended PWM-capable pins match the selected backend mapping
-- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, and `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`
-- actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior
+- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, `uv run pi5servo calib hat_pwm1 --backend dfr0566 --address 0x10 --bus-id 1`, and `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`
+- actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior for both `gpioNN` and `hat_pwmN`
 - mixed-routing tests: verify `servo-tool` accepts both `gpio12` and `hat_pwm1`, and confirm mixed commands no longer fail on mixed-type endpoint sorting
 - signal accuracy tests: measure the servo signal with a logic analyser or oscilloscope at center, min, and max pulse widths before trusting the setup for full robot motion
 - power-risk tests: use an external 5V servo supply with common ground, keep the robot linkage clear during first tests, and power the Pi down before rewiring

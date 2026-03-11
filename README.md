@@ -30,7 +30,10 @@ legacy `pigpio` compatibility retained for future integration work. The current
 release also supports explicit mixed-endpoint routing so native GPIO servos and
 DFRobot DFR0566 HAT PWM servos can coexist without identifier ambiguity. DFR0566
 digital ports still follow the native GPIO path, while the HAT PWM connectors
-use the dedicated `dfr0566` backend path.
+use the dedicated `dfr0566` backend path. The current HAT naming maps
+`hat_pwm1` to physical `PWM0`, `hat_pwm2` to `PWM1`, `hat_pwm3` to `PWM2`, and
+`hat_pwm4` to `PWM3`. The interactive calibration tool also no longer guesses
+default GPIO pins when `servo.json` is empty.
 
 `pi5vl53l0x` preserves the legacy `pi0vl53l0x` class, CLI command set, and
 `vl53l0x.json` config format, while replacing the old `pigpio` I2C path with a

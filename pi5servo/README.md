@@ -33,6 +33,11 @@ The default target is **header-connected servos on Raspberry Pi 5** using hardwa
 
 Use the explicit form whenever native GPIO servos and DFR0566 PWM servos appear in the same command or config file.
 
+> [!NOTE]
+> The current DFR0566 endpoint names are one-based inside `pi5servo`. That means:
+> `hat_pwm1` = physical HAT connector `PWM0`, `hat_pwm2` = `PWM1`, `hat_pwm3` = `PWM2`, and `hat_pwm4` = `PWM3`.
+> Each servo must use its own PWM connector if you want independent control.
+
 ## ✨ Key Features
 
 - **Velocity-based Motion** – Physics calculations (degrees/sec) instead of arbitrary durations
@@ -158,6 +163,8 @@ If you want to use the DFR0566 or PCA9685 controller paths, install the same `pi
 uv run pi5servo servo-tool
 ```
 
+If `servo.json` is empty, the interactive tool now stays neutral at startup. It does not assume `GPIO12` and `GPIO13` anymore. Enter the real endpoint you want to test, such as `gpio12` or `hat_pwm1`.
+
 ### 2. Main Menu
 
 ```
@@ -182,6 +189,9 @@ uv run pi5servo servo-tool
 1. Select option **3. Calibrate**
 2. Enter the servo endpoint that carries the servo signal
 3. Use the calibration TUI to find the correct pulse widths
+
+For a DFR0566 servo on the HAT's physical `PWM0` connector, enter `hat_pwm1`.
+For a DFR0566 servo on the HAT's physical `PWM1` connector, enter `hat_pwm2`.
 
 | Key | Action |
 |-----|--------|
@@ -264,11 +274,20 @@ uv run pi5servo config export backup.json
 uv run pi5servo config import backup.json
 ```
 
+> [!NOTE]
+> `uv run pi5servo calib ...` only drives the live servo calibration TUI when the optional `blessed` terminal library is installed. If `blessed` is missing, the command falls back to a simple read-only view and the servo will not move.
+
 ### Advanced Backend Examples
 
 ```bash
 # Use the DFR0566 PWM channels directly
 uv run pi5servo move hat_pwm1 45 \
+  --backend dfr0566 \
+  --address 0x10 \
+  --bus-id 1
+
+# Calibrate the HAT servo on physical PWM0
+uv run pi5servo calib hat_pwm1 \
   --backend dfr0566 \
   --address 0x10 \
   --bus-id 1
@@ -406,6 +425,7 @@ Calibration and optional backend settings are stored in `servo.json`:
 
 - native GPIO or DFR0566 digital breakout -> native GPIO endpoint
 - DFR0566 PWM connector -> HAT PWM endpoint
+- physical DFR0566 `PWM0`/`PWM1`/`PWM2`/`PWM3` currently map to `hat_pwm1`/`hat_pwm2`/`hat_pwm3`/`hat_pwm4`
 
 ---
 
