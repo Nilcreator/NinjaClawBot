@@ -26,8 +26,15 @@ class FakeRuntime:
         self.calls.append(("health_check",))
         return {"servo": {"available": True}}
 
-    def move_servos(self, targets, speed_mode="M", easing="ease_in_out_cubic"):
-        self.calls.append(("move_servos", targets, speed_mode, easing))
+    def move_servos(
+        self,
+        targets,
+        speed_mode="M",
+        per_servo_speeds=None,
+        easing="ease_in_out_cubic",
+        force=True,
+    ):
+        self.calls.append(("move_servos", targets, speed_mode, per_servo_speeds, easing, force))
         return True
 
     def display_text(self, text, **kwargs):
@@ -47,13 +54,25 @@ class FakeRuntime:
 def test_executor_runs_movement_asset_from_store(tmp_path) -> None:
     runtime = FakeRuntime()
     store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
-    store.save_movement({"name": "wave", "steps": [{"targets": {"gpio12": 25}, "speed_mode": "F"}]})
+    store.save_movement(
+        {
+            "name": "wave",
+            "steps": [
+                {
+                    "speed": "F",
+                    "moves": {"gpio12": 25},
+                    "per_servo_speeds": {"gpio12": "S"},
+                }
+            ],
+        }
+    )
     executor = ActionExecutor(runtime=runtime, asset_store=store)
 
     result = executor.execute({"action": "perform_movement", "parameters": {"name": "wave"}})
 
     assert result.status.value == "success"
     assert runtime.calls[0][0] == "move_servos"
+    assert runtime.calls[0][3] == {"gpio12": "S"}
     assert result.data["name"] == "wave"
 
 

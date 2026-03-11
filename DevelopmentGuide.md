@@ -2,7 +2,7 @@
 
 ## Scope
 
-This guide records the current developer workflow for the standalone Pi 5 driver libraries and the new integration layer:
+This guide records the current developer workflow for the standalone Pi 5 driver libraries and the rebuilt integration layer:
 
 - `pi5buzzer`
 - `pi5servo`
@@ -11,6 +11,31 @@ This guide records the current developer workflow for the standalone Pi 5 driver
 - `ninjaclawbot`
 
 The detailed migration and backend strategy lives in [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md).
+
+## Root Workspace Workflow
+
+The repository root is now the main install and execution location.
+
+Main rule:
+
+- run `uv sync --extra dev` from the project root
+- run `uv run ...` commands from the project root
+- keep shared runtime files at the project root
+
+Root-managed runtime files:
+
+- `servo.json`
+- `buzzer.json`
+- `display.json`
+- `vl53l0x.json`
+- `ninjaclawbot_data/movements/*.json`
+- `ninjaclawbot_data/expressions/*.json`
+
+Why this matters:
+
+- the standalone `pi5*` packages still work inside their own folders
+- the integrated `ninjaclawbot` environment now uses the same code and the same root-level config files
+- users no longer need to install `ninjaclawbot` first and then manually install each driver package into the same environment
 
 ## Agentic Workflow
 
@@ -34,11 +59,12 @@ The new [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRob
 
 Current responsibilities:
 
-- lazy composition of `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
+- adapter-based composition of `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
 - structured action validation and structured result reporting
 - persistent movement and expression assets under `ninjaclawbot_data/`
 - interactive `movement-tool` and `expression-tool`
 - CLI actions for `health-check`, `list-assets`, `move-servos`, `perform-movement`, `perform-expression`, and JSON `run-action`
+- safe failure reporting when hardware is unavailable or not calibrated yet
 
 Important rule:
 
@@ -53,6 +79,7 @@ Main package layout:
 - `ninjaclawbot/src/ninjaclawbot/errors.py`
 - `ninjaclawbot/src/ninjaclawbot/config.py`
 - `ninjaclawbot/src/ninjaclawbot/locks.py`
+- `ninjaclawbot/src/ninjaclawbot/adapters.py`
 - `ninjaclawbot/src/ninjaclawbot/assets.py`
 - `ninjaclawbot/src/ninjaclawbot/runtime.py`
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
@@ -115,7 +142,29 @@ Preferred practice:
 - run package-local checks while migrating one library
 - run broader repo checks only if shared files changed
 
-For [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot), use:
+For the full project from the root, use:
+
+```bash
+uv sync --extra dev
+uv run python -m compileall ninjaclawbot/src ninjaclawbot/tests src
+uv run ruff check .
+uv run ruff format --check .
+uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
+uv run ninjaclawbot --help
+```
+
+For pytest in the root monorepo, run each package test suite from the root with
+that package's own config:
+
+```bash
+uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml
+uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml
+uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml
+uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml
+uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
+```
+
+For [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot) alone, use:
 
 ```bash
 cd ninjaclawbot
@@ -130,10 +179,9 @@ uv run ninjaclawbot --help
 
 Packaging note:
 
-- `ninjaclawbot/pyproject.toml` now pulls the sibling `pi5*` packages in through
-  `[tool.uv.sources]` local editable path dependencies
-- this keeps the `pi5*` packages standalone while also allowing a single
-  `uv sync --extra dev` inside `ninjaclawbot` to install the whole robot stack
+- the root [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml) is now the canonical project install entry
+- it installs `ninjaclawbot` and all sibling `pi5*` packages through local editable `uv` path sources
+- `ninjaclawbot/pyproject.toml` still keeps the integration package usable on its own
 
 ## ninjaclawbot Raspberry Pi Validation
 
@@ -157,6 +205,14 @@ Power-risk tests:
 - use external servo power where required
 - power down before rewiring SPI and I2C devices
 - keep one-servo-only tests for the first movement validation pass
+
+Recommended calibration order before integrated robot tests:
+
+1. `uv run pi5servo calib <endpoint>` or `uv run pi5servo servo-tool`
+2. `uv run pi5buzzer init <gpio>` if you need a non-default buzzer pin
+3. `uv run pi5disp init --defaults`
+4. `uv run pi5vl53l0x test`
+5. `uv run ninjaclawbot health-check`
 
 ## pi5buzzer Migration Notes
 

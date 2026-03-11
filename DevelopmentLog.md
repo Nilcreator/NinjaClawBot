@@ -1,5 +1,83 @@
 # Development Log
 
+## 2026-03-12
+
+### Root Workspace And ninjaclawbot Rebuild
+
+Summary:
+
+- added a real root `uv` install entry so the whole project now installs from the project root
+- made `uv sync --extra dev` at the project root install `ninjaclawbot` and all four `pi5*` driver packages in one environment
+- rebuilt the `ninjaclawbot` runtime around thin driver adapters instead of directly guessing raw driver behavior
+- replaced the old movement asset format with a validated legacy-compatible schema using `speed`, `moves`, and optional `per_servo_speeds`
+- updated the integrated `move-servos` command and `movement-tool` to use legacy-style movement syntax safely with canonical endpoint names
+- kept the standalone `pi5*` packages unchanged as standalone packages while making them work from the root environment too
+- rewrote the root documentation around the new root-first install, calibration, and testing workflow
+
+Files changed:
+
+- [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml)
+- [.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/.python-version)
+- [src/ninjaclawbot_workspace/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/src/ninjaclawbot_workspace/__init__.py)
+- [uv.lock](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/uv.lock)
+- [ninjaclawbot/src/ninjaclawbot/actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/actions.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/assets.py)
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/common.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/README.md)
+- [ninjaclawbot/tests/test_actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_actions.py)
+- [ninjaclawbot/tests/test_assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_assets.py)
+- [ninjaclawbot/tests/test_cli_tools.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_cli_tools.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [ninjaclawbot/tests/test_runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_runtime.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the previous project state still required the user to think in terms of subpackage installs instead of a root project install
+- the earlier `ninjaclawbot` prototype guessed at several `pi5*` driver behaviors and produced incorrect health-check and movement behavior
+- the integration layer needed a clean adapter boundary so external callers such as OpenClaw can rely on typed results without touching raw drivers directly
+
+Lint and test results:
+
+- Phase 1 root packaging checks:
+  - `uv lock`
+  - `uv sync --extra dev`
+  - `uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5vl53l0x; print('imports-ok')"`
+  - `uv run ninjaclawbot --help`
+  - `uv run pi5servo --help`
+  - `uv run pi5buzzer --help`
+  - `uv run pi5disp --help`
+  - `uv run pi5vl53l0x --help`
+- `ninjaclawbot` rebuild gate:
+  - `uv run python -m compileall ninjaclawbot/src ninjaclawbot/tests src`
+  - `uv run ruff check ninjaclawbot/src ninjaclawbot/tests src pyproject.toml`
+  - `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests src pyproject.toml`
+  - `uv run pytest -q ninjaclawbot/tests` -> `18 passed`
+- root package test runs:
+  - `uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml` -> `65 passed`
+  - `uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml` -> `125 passed`
+  - `uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml` -> `63 passed`
+  - `uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml` -> `62 passed`
+  - `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml` -> `18 passed`
+- root smoke checks:
+  - `uv run ninjaclawbot health-check`
+  - `uv run ninjaclawbot list-assets`
+  - `uv run ninjaclawbot run-action '{"action":"move_servos","parameters":{"targets":{"gpio12":0},"speed_mode":"F"}}'`
+
+Raspberry Pi validation status:
+
+- Raspberry Pi validation is still required for the rebuilt root workflow
+- the rebuilt root commands now return structured hardware-availability errors instead of integration-layer tracebacks on non-Pi environments
+- the next validation pass should be run from the project root on the Raspberry Pi 5
+
 ## 2026-03-11
 
 ### ninjaclawbot Single-Command Install Packaging

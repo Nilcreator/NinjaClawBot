@@ -7,7 +7,7 @@ import json
 import click
 
 from ninjaclawbot.actions import ActionRequest
-from ninjaclawbot.cli.common import create_executor, parse_step_command
+from ninjaclawbot.cli.common import create_executor, extract_movement_data, parse_movement_command
 from ninjaclawbot.cli.expression_tool import expression_tool
 from ninjaclawbot.cli.movement_tool import movement_tool
 
@@ -67,11 +67,16 @@ def run_action(ctx: click.Context, payload: str) -> None:
 def move_servos(ctx: click.Context, command: str) -> None:
     """Move servos using movement-tool syntax like `F_gpio12:30/hat_pwm1:C`."""
 
-    speed_mode, targets = parse_step_command(command)
+    speed_mode, parsed_moves = parse_movement_command(command)
+    targets, per_servo_speeds = extract_movement_data(parsed_moves)
     result = create_executor(ctx.obj["root_dir"]).execute(
         {
             "action": "move_servos",
-            "parameters": {"targets": targets, "speed_mode": speed_mode},
+            "parameters": {
+                "targets": targets,
+                "speed_mode": speed_mode,
+                "per_servo_speeds": per_servo_speeds,
+            },
         }
     )
     click.echo(json.dumps(result.to_dict(), indent=2))

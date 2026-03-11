@@ -1152,12 +1152,18 @@ Target responsibility split inside the rebuilt `ninjaclawbot`:
 - workspace and package boundary
   - project-root installation and execution
   - workspace ownership of local `pi5*` package wiring
+- config and migration layer
+  - root-owned robot config
+  - legacy config import helpers
+  - asset migration helpers for old movement definitions
 - driver adapter layer
   - one adapter per `pi5*` library
   - normalize health checks, lifecycle, and result shapes
 - runtime and lock layer
   - compose and own live devices
   - enforce exclusive robot-action execution
+  - initialize only the devices required for the requested tool or action
+  - define startup, post-action reset, and shutdown policy
 - capability layer
   - movement
   - expression rendering
@@ -1172,10 +1178,30 @@ Target responsibility split inside the rebuilt `ninjaclawbot`:
   - typed action requests
   - typed action results
   - bounded execution and rollback hints
+  - cancellation and `stop_all` handling
+  - optional event/log sink for UI or future transports without exposing raw drivers
 - interactive tooling layer
   - movement authoring
   - expression authoring
   - manual robot control and preview flows
+
+Legacy behaviors that must be preserved in the rebuild:
+
+- movement steps are stored as structured data, not raw free-form command strings
+- movement authoring supports full-step completion using previous servo positions
+- movement editing supports edit, insert, delete, preview, save, and abort
+- servo-centered startup and exit behavior exists where a tool depends on active PWM priming
+- calibration and config-changing actions rebuild live state, not only on-disk files
+- composite actions can perform a deterministic post-action reset, such as center servos or return the face to idle
+
+Legacy behaviors that are explicitly out of scope for the first rebuilt integration pass:
+
+- the old `SafeExecutor` arbitrary Python execution model
+- BLE transport wiring from `ninja_ble`
+- ngrok startup and QR display boot flow
+- the old FastAPI/websocket server transport
+
+Those can be reconsidered later as separate transport layers that call `ninjaclawbot`, but they should not shape the first rebuild.
 
 Required result contract for every robot action:
 
@@ -1233,6 +1259,8 @@ Asset rules:
 - the non-interactive executor and the interactive tools must read the same schema
 - invalid shorthand or malformed endpoints must be rejected at save time, not only at execution time
 - assets must support future AI invocation without needing translation layers outside `ninjaclawbot`
+- movement assets must preserve enough information for edit, insert, preview, and loop execution without lossy conversion
+- a legacy movement import path should exist for old `config.movements` data so users are not forced to recreate every asset by hand
 
 Recommended asset layout:
 
@@ -1263,6 +1291,7 @@ Key requirements to preserve or define:
 - `uv run ...` works from the project root
 - standalone `pi5*` usage remains unchanged
 - current `ninjaclawbot` internals are removed cleanly before new logic is added
+- the root workspace does not force users into the `ninjaclawbot` subfolder for install or execution
 
 Lint, test, and validation gate:
 
@@ -1304,6 +1333,8 @@ Key requirements to preserve or define:
 - typed action result model
 - no raw-driver object exposure
 - explicit room for named movement and named expression actions
+- explicit config model for root-owned robot settings and data-path discovery
+- explicit action-cancellation and `stop_all` result semantics
 
 Lint, test, and validation gate:
 
@@ -1347,6 +1378,8 @@ Key requirements to preserve or define:
 - explicit, driver-correct health reporting
 - exclusive robot-action execution lock
 - no direct external access to live `pi5*` device objects
+- selective device ownership so movement-only tools do not initialize unnecessary hardware
+- deterministic startup and post-action reset hooks modeled after the legacy startup/center/idle flow
 
 Lint, test, and validation gate:
 
@@ -1385,6 +1418,8 @@ Key requirements to preserve or define:
 - expression schema aligned to future combined sound/display behavior
 - save-time validation of endpoint names and command structure
 - asset storage under project-root data directories
+- import path for legacy movement data stored inside old `config.json`
+- migration notes for any incompatible schema introduced by the rebuild
 
 Lint, test, and validation gate:
 
@@ -1423,6 +1458,8 @@ Key requirements to preserve or define:
 - structured steps with `speed`, `moves`, and optional `per_servo_speeds`
 - safe preview and edit workflow
 - config and calibration refresh behavior modeled after the old movement tool
+- edit, insert, delete, preview, save, abort, and reset-to-previous-position flows modeled after the old movement CLI
+- interruption handling for long-running movement previews and executions
 
 Lint, test, and validation gate:
 
@@ -1508,6 +1545,8 @@ Key requirements to preserve or define:
 - structured results returned after every action
 - no arbitrary code execution path
 - OpenClaw consumes `ninjaclawbot` only, not raw drivers
+- optional event/log sink for future UI transports without rebuilding the executor contract
+- clear distinction between one-shot action results and streaming status updates
 
 Lint, test, and validation gate:
 
@@ -1575,6 +1614,8 @@ Expected Raspberry Pi validation coverage for the rebuilt layer:
   - named movement execution
   - named expression preview
   - combined expression plus movement run where mechanically safe
+  - same-session movement editing, preview, and save flow
+  - cancellation and `stop_all` behavior during a long-running motion or preview
 - power-risk tests
   - servo external power and common ground
   - stop-all behavior

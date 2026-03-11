@@ -1,59 +1,88 @@
 from __future__ import annotations
 
-from types import SimpleNamespace
-
+from ninjaclawbot.adapters import DeviceHealth
 from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.runtime import NinjaClawbotRuntime
 
 
-class FakeServoGroup:
-    def __init__(self, _pi, pins, _calibrations, backend, backend_kwargs):
-        self.pins = list(pins)
-        self.backend = backend
-        self.backend_kwargs = backend_kwargs
-        self.moved = []
+class FakeServoAdapter:
+    def __init__(self) -> None:
+        self.calls = []
 
-    def move_all_sync(self, targets, speed_mode="M", easing="ease_in_out_cubic"):
-        self.moved.append((targets, speed_mode, easing))
+    def move(
+        self,
+        targets,
+        *,
+        speed_mode="M",
+        per_servo_speeds=None,
+        easing="ease_in_out_cubic",
+        force=True,
+    ):
+        self.calls.append((targets, speed_mode, per_servo_speeds, easing, force))
         return True
 
-    def off(self):
-        return None
+    def health_check(self) -> DeviceHealth:
+        return DeviceHealth(True, {"configured_endpoints": ["gpio12", "hat_pwm1"]})
 
-    def close(self):
-        return None
+    def stop(self) -> None:
+        self.calls.append(("stop",))
 
-
-class FakeServoConfigManager:
-    def __init__(self, _path):
-        self._loaded = False
-
-    def load(self):
-        self._loaded = True
-
-    def get_known_endpoints(self):
-        return ["gpio12"]
-
-    def get_backend_config(self):
-        return {"name": "hardware_pwm", "kwargs": {}}
-
-    def get_all_endpoint_calibrations(self):
-        return {}
+    def close(self) -> None:
+        self.calls.append(("close",))
 
 
-def test_runtime_composes_servo_group_with_known_and_requested_endpoints() -> None:
+class FakeDeviceAdapter:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.closed = False
+
+    def health_check(self) -> DeviceHealth:
+        return DeviceHealth(True, {"device": self.name})
+
+    def read_data(self) -> dict[str, int]:
+        return {"distance_mm": 123}
+
+    def play(self, **kwargs) -> None:
+        self.last_play = kwargs
+
+    def show_text(self, *args, **kwargs) -> None:
+        self.last_text = (args, kwargs)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_runtime_delegates_servo_moves_and_health_checks() -> None:
     runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
 
-    def fake_import(module_name: str):
-        if module_name == "pi5servo":
-            return SimpleNamespace(ServoGroup=FakeServoGroup)
-        if module_name == "pi5servo.config.config_manager":
-            return SimpleNamespace(ConfigManager=FakeServoConfigManager)
-        raise AssertionError(f"Unexpected import: {module_name}")
+    assert runtime.move_servos({"gpio12": 15.0}, per_servo_speeds={"gpio12": "S"}) is True
+    health = runtime.health_check()
 
-    runtime._import_module = fake_import  # type: ignore[method-assign]
+    assert health["servo"]["configured_endpoints"] == ["gpio12", "hat_pwm1"]
+    assert runtime._servo.calls[0][2] == {"gpio12": "S"}
+    assert runtime.read_distance()["distance_mm"] == 123
 
-    group = runtime.get_servo_group(["hat_pwm1"])
 
-    assert group.pins == ["gpio12", "hat_pwm1"]
-    assert runtime.move_servos({"hat_pwm1": 15.0}) is True
+def test_runtime_health_check_catches_adapter_errors() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+
+    class BrokenAdapter:
+        def health_check(self):
+            raise RuntimeError("boom")
+
+        def close(self):
+            return None
+
+    runtime._buzzer = BrokenAdapter()
+    runtime._display = BrokenAdapter()
+    runtime._distance = BrokenAdapter()
+
+    health = runtime.health_check()
+
+    assert health["buzzer"]["available"] is False
+    assert "boom" in health["buzzer"]["error"]

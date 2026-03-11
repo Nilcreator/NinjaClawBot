@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from pi5servo.core.endpoint import parse_servo_endpoint
+
 from ninjaclawbot.errors import ActionValidationError
 
 
@@ -70,10 +72,24 @@ class ActionRequest:
         if not isinstance(targets, dict) or not targets:
             raise ActionValidationError("The 'targets' parameter must be a non-empty dictionary.")
         for endpoint, angle in targets.items():
-            if not isinstance(endpoint, str) or not endpoint:
-                raise ActionValidationError("Servo target keys must be non-empty strings.")
+            try:
+                parse_servo_endpoint(endpoint)
+            except ValueError as exc:
+                raise ActionValidationError(str(exc)) from exc
             if not isinstance(angle, (int, float)):
                 raise ActionValidationError("Servo target angles must be numeric.")
+        per_servo_speeds = self.parameters.get("per_servo_speeds", {})
+        if per_servo_speeds is None:
+            return
+        if not isinstance(per_servo_speeds, dict):
+            raise ActionValidationError("per_servo_speeds must be a dictionary when provided.")
+        for endpoint, speed in per_servo_speeds.items():
+            try:
+                parse_servo_endpoint(endpoint)
+            except ValueError as exc:
+                raise ActionValidationError(str(exc)) from exc
+            if str(speed).upper() not in {"S", "M", "F"}:
+                raise ActionValidationError("Per-servo speeds must use S, M, or F values.")
 
     def _validate_named_asset(self) -> None:
         name = self.parameters.get("name")

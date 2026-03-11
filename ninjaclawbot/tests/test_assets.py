@@ -12,7 +12,14 @@ def test_asset_store_round_trips_movement_and_expression_assets(tmp_path: Path) 
     store.save_movement(
         {
             "name": "wave",
-            "steps": [{"targets": {"gpio12": 20}, "speed_mode": "S", "pause_after_ms": 100}],
+            "steps": [
+                {
+                    "speed": "S",
+                    "moves": {"gpio12": 20, 13: 0},
+                    "per_servo_speeds": {"gpio12": "F"},
+                    "pause_after_ms": 100,
+                }
+            ],
         }
     )
     store.save_expression(
@@ -24,6 +31,24 @@ def test_asset_store_round_trips_movement_and_expression_assets(tmp_path: Path) 
     )
 
     assert store.list_assets("movements") == ["wave"]
-    assert store.load_movement("wave")["steps"][0]["targets"]["gpio12"] == 20.0
+    movement = store.load_movement("wave")
+    assert movement["steps"][0]["moves"]["gpio12"] == 20.0
+    assert movement["steps"][0]["moves"]["gpio13"] == 0.0
+    assert movement["steps"][0]["per_servo_speeds"]["gpio12"] == "F"
     assert store.list_assets("expressions") == ["happy"]
     assert store.load_expression("happy")["sound"]["emotion"] == "happy"
+
+
+def test_asset_store_migrates_legacy_movement_step_keys(tmp_path: Path) -> None:
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+    path = tmp_path / "ninjaclawbot_data" / "movements" / "legacy.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        ('{"name":"legacy","steps":[{"targets":{"12":30},"speed_mode":"F","pause_after_ms":50}]}'),
+        encoding="utf-8",
+    )
+
+    movement = store.load_movement("legacy")
+
+    assert movement["steps"][0]["speed"] == "F"
+    assert movement["steps"][0]["moves"]["gpio12"] == 30.0

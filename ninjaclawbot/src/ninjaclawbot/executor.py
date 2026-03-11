@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,7 +60,9 @@ class ActionExecutor:
                 action=normalized.action.value,
                 error_code=type(exc).__name__.upper(),
                 error_message=str(exc),
-                rollback_hint="Review configuration, connected hardware, and requested action parameters.",
+                rollback_hint=(
+                    "Review calibration files, connected hardware, and requested action parameters."
+                ),
                 request_id=normalized.request_id,
                 started_at=started_at,
                 ended_at=datetime.now(UTC),
@@ -82,12 +85,23 @@ class ActionExecutor:
         if request.action == ActionType.MOVE_SERVOS:
             completed = self.runtime.move_servos(
                 {key: float(value) for key, value in params["targets"].items()},
-                speed_mode=str(params.get("speed_mode", "M")),
+                speed_mode=str(params.get("speed_mode", "M")).upper(),
+                per_servo_speeds=params.get("per_servo_speeds"),
                 easing=str(params.get("easing", "ease_in_out_cubic")),
+                force=bool(params.get("force", True)),
             )
             if not completed:
                 raise ExecutionError("Servo movement aborted before completion.")
-            return {"targets": params["targets"], "completed": True}, ["servo"], []
+            return (
+                {
+                    "targets": params["targets"],
+                    "speed_mode": str(params.get("speed_mode", "M")).upper(),
+                    "per_servo_speeds": params.get("per_servo_speeds", {}),
+                    "completed": True,
+                },
+                ["servo"],
+                [],
+            )
         if request.action == ActionType.PERFORM_MOVEMENT:
             asset = self.asset_store.load_movement(str(params["name"]))
             return self._execute_movement_asset(asset), ["servo"], []
@@ -107,33 +121,29 @@ class ActionExecutor:
                 duration=float(params.get("duration", 0.3)),
             )
             return (
-                {"emotion": params.get("emotion"), "frequency": params.get("frequency")},
+                {
+                    "emotion": params.get("emotion"),
+                    "frequency": params.get("frequency"),
+                },
                 ["buzzer"],
                 [],
             )
         if request.action == ActionType.SHOW_EXPRESSION:
-            return (
-                self._execute_expression_definition(
-                    {
-                        "display": {
-                            "text": str(params.get("text", "")).strip(),
-                            "scroll": bool(params.get("scroll", False)),
-                            "duration": float(params.get("duration", 3.0)),
-                            "language": str(params.get("language", "en")),
-                            "font_size": int(params.get("font_size", 32)),
-                        },
-                        "sound": {
-                            "emotion": str(params.get("emotion", "")).strip(),
-                            "frequency": params.get("frequency"),
-                            "duration": float(
-                                params.get("sound_duration", params.get("duration", 0.3))
-                            ),
-                        },
-                    }
-                ),
-                ["display", "buzzer"],
-                [],
-            )
+            definition = {
+                "display": {
+                    "text": str(params.get("text", "")).strip(),
+                    "scroll": bool(params.get("scroll", False)),
+                    "duration": float(params.get("duration", 3.0)),
+                    "language": str(params.get("language", "en")),
+                    "font_size": int(params.get("font_size", 32)),
+                },
+                "sound": {
+                    "emotion": str(params.get("emotion", "")).strip(),
+                    "frequency": params.get("frequency"),
+                    "duration": float(params.get("sound_duration", params.get("duration", 0.3))),
+                },
+            }
+            return self._execute_expression_definition(definition), ["display", "buzzer"], []
         if request.action == ActionType.PERFORM_EXPRESSION:
             asset = self.asset_store.load_expression(str(params["name"]))
             return self._execute_expression_definition(asset), ["display", "buzzer"], []
@@ -142,7 +152,10 @@ class ActionExecutor:
         if request.action == ActionType.LIST_ASSETS:
             asset_type = str(params.get("asset_type", "all"))
             return (
-                {"asset_type": asset_type, "assets": self.asset_store.list_assets(asset_type)},
+                {
+                    "asset_type": asset_type,
+                    "assets": self.asset_store.list_assets(asset_type),
+                },
                 [],
                 [],
             )
@@ -152,20 +165,32 @@ class ActionExecutor:
         raise ActionValidationError(f"Unsupported action '{request.action.value}'.")
 
     def _execute_movement_asset(self, asset: dict[str, Any]) -> dict[str, Any]:
-        for step in asset["steps"]:
+        sequence = asset["steps"]
+        total_steps = len(sequence)
+        for index, step in enumerate(sequence):
+            if total_steps == 1:
+                easing = "ease_in_out_cubic"
+            elif index == 0:
+                easing = "ease_in_cubic"
+            elif index == total_steps - 1:
+                easing = "ease_out_cubic"
+            else:
+                easing = "linear"
+
             completed = self.runtime.move_servos(
-                step["targets"],
-                speed_mode=step.get("speed_mode", "M"),
-                easing=step.get("easing", "ease_in_out_cubic"),
+                step["moves"],
+                speed_mode=step["speed"],
+                per_servo_speeds=step.get("per_servo_speeds"),
+                easing=easing,
+                force=True,
             )
             if not completed:
                 raise ExecutionError(f"Movement '{asset['name']}' was aborted.")
+
             pause_after_ms = int(step.get("pause_after_ms", 0))
             if pause_after_ms > 0:
-                import time
-
                 time.sleep(pause_after_ms / 1000)
-        return {"name": asset["name"], "steps_executed": len(asset["steps"])}
+        return {"name": asset["name"], "steps_executed": len(sequence)}
 
     def _execute_expression_definition(self, asset: dict[str, Any]) -> dict[str, Any]:
         display = dict(asset.get("display", {}))
