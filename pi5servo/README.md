@@ -150,6 +150,149 @@ uv run pi5servo status --pins 12,13
 
 If you want to use the DFR0566 or PCA9685 controller paths, install the same `pi` extra and select the backend on the CLI or in `servo.json`.
 
+## 🧩 Controller Paths
+
+`pi5servo` can drive servos through three practical standalone paths:
+
+1. **Native Raspberry Pi 5 header PWM**
+   - best when you only need a small number of servos
+   - good when the servo signal wire goes directly to a Pi PWM-capable GPIO pin
+   - no extra controller board is needed
+
+2. **DFRobot IO Expansion HAT (DFR0566)**
+   - best when the servo signal wire goes to the HAT's dedicated `PWM0` to `PWM3` connectors
+   - good when you already use the DFR0566 for I2C sensor expansion
+   - the HAT is controlled over I2C, so `pi5servo` uses the `dfr0566` backend
+
+3. **PCA9685 external PWM controller**
+   - best when you need more servo channels than the Pi header or DFR0566 can provide
+   - good when you want one dedicated PWM controller for multiple servos
+   - the board is controlled over I2C, so `pi5servo` uses the `pca9685` backend
+
+### DFR0566 Use Case
+
+Choose the DFR0566 path when:
+
+- the servo is plugged into the HAT's dedicated `PWM0`, `PWM1`, `PWM2`, or `PWM3` connector
+- you want servo signal generation handled by the HAT instead of the Pi header PWM pins
+- you are already using the HAT for devices such as the VL53L0X on I2C
+
+Important DFR0566 rules:
+
+- the HAT's **digital** ports are not the same as the HAT's **PWM** ports
+- the HAT PWM ports should be treated as a separate controller path
+- physical `PWM0` currently maps to `hat_pwm1`
+- physical `PWM1` currently maps to `hat_pwm2`
+- physical `PWM2` currently maps to `hat_pwm3`
+- physical `PWM3` currently maps to `hat_pwm4`
+- use external servo power with a common ground to the Pi
+
+Example: one servo on DFR0566 physical `PWM0`
+
+```bash
+uv run pi5servo move hat_pwm1 center \
+  --backend dfr0566 \
+  --address 0x10 \
+  --bus-id 1
+```
+
+Example: save DFR0566 as the default backend in `servo.json`
+
+```json
+{
+  "__backend__": {
+    "name": "dfr0566",
+    "kwargs": {
+      "address": 16,
+      "bus_id": 1
+    }
+  },
+  "hat_pwm1": {
+    "pulse_min": 500,
+    "pulse_center": 1500,
+    "pulse_max": 2500,
+    "speed": 70
+  }
+}
+```
+
+After saving that config, you can use shorter commands:
+
+```bash
+uv run pi5servo move hat_pwm1 center
+uv run pi5servo calib hat_pwm1
+uv run pi5servo servo-tool
+```
+
+### PCA9685 Use Case
+
+Choose the PCA9685 path when:
+
+- you need more channels than the Pi header or DFR0566 provides
+- you want a dedicated multi-channel servo controller over I2C
+- you want to keep the servo signal generation off the Pi itself
+
+With PCA9685, `pi5servo` still uses your normal servo ids in commands, but it needs a channel map to know which servo id belongs to which PCA9685 output.
+
+Example: map logical servo `12` to PCA9685 channel `0`
+
+```bash
+uv run pi5servo move 12 45 \
+  --backend pca9685 \
+  --address 0x40 \
+  --channel-map 12:0
+```
+
+Example: map two logical servos in `servo.json`
+
+```json
+{
+  "__backend__": {
+    "name": "pca9685",
+    "kwargs": {
+      "address": 64,
+      "channel_map": {
+        "12": 0,
+        "13": 1
+      }
+    }
+  },
+  "gpio12": {
+    "pulse_min": 500,
+    "pulse_center": 1500,
+    "pulse_max": 2500,
+    "speed": 80
+  },
+  "gpio13": {
+    "pulse_min": 500,
+    "pulse_center": 1500,
+    "pulse_max": 2500,
+    "speed": 80
+  }
+}
+```
+
+After saving that config, you can run:
+
+```bash
+uv run pi5servo move 12 45
+uv run pi5servo cmd "12:45/13:-30" --pins 12,13
+```
+
+### CLI Versus `servo.json`
+
+Use CLI flags when:
+
+- you are testing hardware for the first time
+- you want to try a backend without changing saved settings
+- you want a one-off command
+
+Use `servo.json` when:
+
+- you always use the same controller board
+- you want shorter daily-use commands
+- you want `servo-tool`, `move`, `cmd`, and `calib` to reuse the same backend settings automatically
+
 ---
 
 ## 🎮 Quick Start
