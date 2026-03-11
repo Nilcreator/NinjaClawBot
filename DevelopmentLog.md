@@ -2,6 +2,59 @@
 
 ## 2026-03-11
 
+### ninjaclawbot Single-Command Install Packaging
+
+Summary:
+
+- updated `ninjaclawbot` packaging so the sibling `pi5buzzer`, `pi5servo`,
+  `pi5disp`, and `pi5vl53l0x` packages are installed automatically inside the
+  `ninjaclawbot` environment
+- used `uv` local editable path sources so the full integrated robot stack can
+  be installed with one command: `uv sync --extra dev`
+- kept the standalone `pi5*` package folders unchanged so they still work the
+  same independently
+- added an import smoke test to confirm the integrated environment can import
+  all four local driver packages
+
+Files changed:
+
+- [ninjaclawbot/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/pyproject.toml)
+- [ninjaclawbot/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/README.md)
+- [ninjaclawbot/tests/test_dependency_imports.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_dependency_imports.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the previous install flow required users to sync `ninjaclawbot` first and then
+  manually install each sibling driver into the same environment
+- that was error-prone and made the integrated robot setup harder than the
+  standalone driver setup
+- the new path-source packaging keeps one shared integrated environment without
+  changing the standalone behavior of the driver packages themselves
+
+Lint and test results:
+
+- `uv lock`
+- `uv sync --extra dev --refresh`
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q` -> `15 passed`
+- `uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"` -> `imports-ok`
+- `uv run pi5buzzer --help`
+- `uv run pi5servo --help`
+- `uv run pi5disp --help`
+- `uv run pi5vl53l0x --help`
+- `uv run ninjaclawbot --help`
+
+Raspberry Pi validation status:
+
+- no hardware behavior changed in this packaging refinement
+- existing Raspberry Pi validation steps for the drivers and `ninjaclawbot`
+  remain the same
+
 ### ninjaclawbot Foundation And Interactive Tooling
 
 Summary:

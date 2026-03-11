@@ -103,9 +103,31 @@ Enable:
 
 Reboot after changing interface settings.
 
-### 4. Install the standalone Pi 5 driver libraries
+### 4. Install the full NinjaClawBot stack
 
-Each driver package keeps its own virtual environment and test flow.
+If you want the integrated robot environment, use the single-command install in
+the [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot)
+folder:
+
+```bash
+cd ninjaclawbot
+uv sync --extra dev
+```
+
+Expected result:
+
+- `uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"` works
+- `uv run ninjaclawbot --help` works
+- `uv run ninjaclawbot health-check` can see the installed driver packages
+
+The `ninjaclawbot` manifest now pulls the sibling `pi5*` libraries in through
+local editable `uv` sources, so the integrated environment and the standalone
+driver folders use the same code.
+
+### 5. Optional: install a standalone Pi 5 driver by itself
+
+If you only want one driver package on its own, each driver still keeps its own
+virtual environment and test flow.
 
 ```bash
 cd pi5buzzer
@@ -118,21 +140,6 @@ cd ../pi5vl53l0x
 uv sync --extra pi --extra dev
 cd ..
 ```
-
-### 5. Install `ninjaclawbot` and link the local drivers into one environment
-
-The `ninjaclawbot` package imports the local driver packages lazily, so for real robot use they must be installed into the same virtual environment.
-
-```bash
-cd ninjaclawbot
-uv sync --extra dev
-uv pip install -e "../pi5buzzer[pi]" -e "../pi5servo[pi]" -e "../pi5disp[pi]" -e "../pi5vl53l0x[pi]"
-```
-
-Expected result:
-
-- `uv run ninjaclawbot --help` works
-- `uv run ninjaclawbot health-check` can see the installed driver packages
 
 ## Testing Core NinjaClawBot Functions
 

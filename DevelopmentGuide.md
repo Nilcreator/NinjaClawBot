@@ -124,8 +124,16 @@ uv run python -m compileall src tests
 uv run ruff check .
 uv run ruff format --check .
 uv run pytest -q
+uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
 uv run ninjaclawbot --help
 ```
+
+Packaging note:
+
+- `ninjaclawbot/pyproject.toml` now pulls the sibling `pi5*` packages in through
+  `[tool.uv.sources]` local editable path dependencies
+- this keeps the `pi5*` packages standalone while also allowing a single
+  `uv sync --extra dev` inside `ninjaclawbot` to install the whole robot stack
 
 ## ninjaclawbot Raspberry Pi Validation
 

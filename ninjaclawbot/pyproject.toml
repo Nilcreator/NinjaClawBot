@@ -7,6 +7,10 @@ authors = [
 ]
 dependencies = [
     "click>=8.1",
+    "pi5buzzer[pi]",
+    "pi5servo[pi]",
+    "pi5disp[pi]",
+    "pi5vl53l0x[pi]",
 ]
 requires-python = ">=3.11,<3.13"
 readme = "README.md"
@@ -16,6 +20,12 @@ dev = [
     "pytest>=7.0",
     "ruff",
 ]
+
+[tool.uv.sources]
+pi5buzzer = { path = "../pi5buzzer", editable = true }
+pi5servo = { path = "../pi5servo", editable = true }
+pi5disp = { path = "../pi5disp", editable = true }
+pi5vl53l0x = { path = "../pi5vl53l0x", editable = true }
 
 [project.scripts]
 ninjaclawbot = "ninjaclawbot.__main__:cli"
