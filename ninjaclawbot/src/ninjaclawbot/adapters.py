@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import logging
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -12,6 +13,8 @@ from pi5servo.core.endpoint import parse_servo_endpoint
 
 from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.errors import ExecutionError, UnavailableCapabilityError
+
+log = logging.getLogger(__name__)
 
 
 def _import_or_raise(module_name: str):
@@ -221,14 +224,30 @@ class BuzzerAdapter:
         emotion: str | None = None,
         frequency: int | None = None,
         duration: float = 0.3,
-    ) -> None:
+        wait: bool = False,
+    ) -> float:
         buzzer = self._build_buzzer()
+        playback_duration = 0.0
         if emotion:
             buzzer.play_emotion(emotion)
-            return
-        if frequency is None:
+            playback_duration = self._estimate_emotion_duration(emotion)
+        elif frequency is None:
             raise ExecutionError("Sound actions require an emotion name or a frequency value.")
-        buzzer.play_sound(int(frequency), float(duration))
+        else:
+            playback_duration = max(0.0, float(duration))
+            buzzer.play_sound(int(frequency), playback_duration)
+
+        if wait and playback_duration > 0:
+            time.sleep(playback_duration)
+        return playback_duration
+
+    def _estimate_emotion_duration(self, emotion: str) -> float:
+        notes_module = _import_or_raise("pi5buzzer.notes")
+        sound_map = getattr(notes_module, "EMOTION_SOUNDS", {})
+        sound = sound_map.get(emotion)
+        if sound is None:
+            return 0.0
+        return sum(max(0.0, float(note_duration)) for _note, note_duration in sound) + 0.05
 
     def health_check(self) -> DeviceHealth:
         manager_module = _import_or_raise("pi5buzzer.config.config_manager")
@@ -246,12 +265,18 @@ class BuzzerAdapter:
 
     def close(self) -> None:
         if self._buzzer is not None:
-            self._buzzer.off()
+            try:
+                self._buzzer.off()
+            except Exception as exc:  # pragma: no cover - defensive cleanup guard
+                log.warning("Buzzer cleanup failed: %s", exc)
             self._buzzer = None
         if self._backend is not None:
             stop = getattr(self._backend, "stop", None)
             if callable(stop):
-                stop()
+                try:
+                    stop()
+                except Exception as exc:  # pragma: no cover - defensive cleanup guard
+                    log.warning("Buzzer backend shutdown failed: %s", exc)
             self._backend = None
 
 
@@ -331,7 +356,10 @@ class DisplayAdapter:
         if self._display is not None:
             close = getattr(self._display, "close", None)
             if callable(close):
-                close()
+                try:
+                    close()
+                except Exception as exc:  # pragma: no cover - defensive cleanup guard
+                    log.warning("Display cleanup failed: %s", exc)
             self._display = None
 
 

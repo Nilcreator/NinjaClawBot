@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import click
 
@@ -10,6 +11,15 @@ from ninjaclawbot.actions import ActionRequest
 from ninjaclawbot.cli.common import create_executor, extract_movement_data, parse_movement_command
 from ninjaclawbot.cli.expression_tool import expression_tool
 from ninjaclawbot.cli.movement_tool import movement_tool
+
+
+def _execute_and_print(root_dir: str, payload: ActionRequest | dict[str, Any]) -> None:
+    executor = create_executor(root_dir)
+    try:
+        result = executor.execute(payload)
+    finally:
+        executor.runtime.close()
+    click.echo(json.dumps(result.to_dict(), indent=2))
 
 
 @click.group()
@@ -35,10 +45,10 @@ def cli(ctx: click.Context, root_dir: str) -> None:
 def list_assets(ctx: click.Context, asset_type: str) -> None:
     """List saved movement and expression assets."""
 
-    result = create_executor(ctx.obj["root_dir"]).execute(
-        {"action": "list_assets", "parameters": {"asset_type": asset_type}}
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {"action": "list_assets", "parameters": {"asset_type": asset_type}},
     )
-    click.echo(json.dumps(result.to_dict(), indent=2))
 
 
 @cli.command("health-check")
@@ -46,8 +56,7 @@ def list_assets(ctx: click.Context, asset_type: str) -> None:
 def health_check(ctx: click.Context) -> None:
     """Run an integrated hardware availability check."""
 
-    result = create_executor(ctx.obj["root_dir"]).execute({"action": "health_check"})
-    click.echo(json.dumps(result.to_dict(), indent=2))
+    _execute_and_print(ctx.obj["root_dir"], {"action": "health_check"})
 
 
 @cli.command("run-action")
@@ -57,8 +66,7 @@ def run_action(ctx: click.Context, payload: str) -> None:
     """Execute a JSON action payload."""
 
     request = ActionRequest.from_dict(json.loads(payload))
-    result = create_executor(ctx.obj["root_dir"]).execute(request)
-    click.echo(json.dumps(result.to_dict(), indent=2))
+    _execute_and_print(ctx.obj["root_dir"], request)
 
 
 @cli.command("move-servos")
@@ -69,7 +77,8 @@ def move_servos(ctx: click.Context, command: str) -> None:
 
     speed_mode, parsed_moves = parse_movement_command(command)
     targets, per_servo_speeds = extract_movement_data(parsed_moves)
-    result = create_executor(ctx.obj["root_dir"]).execute(
+    _execute_and_print(
+        ctx.obj["root_dir"],
         {
             "action": "move_servos",
             "parameters": {
@@ -77,9 +86,8 @@ def move_servos(ctx: click.Context, command: str) -> None:
                 "speed_mode": speed_mode,
                 "per_servo_speeds": per_servo_speeds,
             },
-        }
+        },
     )
-    click.echo(json.dumps(result.to_dict(), indent=2))
 
 
 @cli.command("perform-movement")
@@ -88,10 +96,10 @@ def move_servos(ctx: click.Context, command: str) -> None:
 def perform_movement(ctx: click.Context, name: str) -> None:
     """Run a saved movement asset."""
 
-    result = create_executor(ctx.obj["root_dir"]).execute(
-        {"action": "perform_movement", "parameters": {"name": name}}
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {"action": "perform_movement", "parameters": {"name": name}},
     )
-    click.echo(json.dumps(result.to_dict(), indent=2))
 
 
 @cli.command("perform-expression")
@@ -100,10 +108,10 @@ def perform_movement(ctx: click.Context, name: str) -> None:
 def perform_expression(ctx: click.Context, name: str) -> None:
     """Run a saved expression asset."""
 
-    result = create_executor(ctx.obj["root_dir"]).execute(
-        {"action": "perform_expression", "parameters": {"name": name}}
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {"action": "perform_expression", "parameters": {"name": name}},
     )
-    click.echo(json.dumps(result.to_dict(), indent=2))
 
 
 cli.add_command(movement_tool)

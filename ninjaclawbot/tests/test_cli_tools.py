@@ -25,9 +25,10 @@ class FakeServoInterface:
 class FakeRuntime:
     def __init__(self) -> None:
         self.servo = FakeServoInterface()
+        self.closed = False
 
     def close(self) -> None:
-        return None
+        self.closed = True
 
     def move_servos(self, *args, **kwargs) -> bool:
         return True
@@ -83,3 +84,23 @@ def test_expression_tool_can_create_asset(tmp_path: Path, monkeypatch) -> None:
     assert result.exit_code == 0
     expression = AssetStore(NinjaClawbotConfig(root_dir=tmp_path)).load_expression("happy")
     assert expression["display"]["text"] == "Hello"
+
+
+def test_perform_expression_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.__main__.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        ["--root-dir", str(tmp_path), "perform-expression", "hello"],
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.closed is True

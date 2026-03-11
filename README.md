@@ -248,6 +248,7 @@ Expected result:
 - `health-check` returns structured JSON
 - unavailable hardware is reported clearly instead of crashing the program
 - `list-assets` returns the saved movement and expression names
+- one-shot `ninjaclawbot` commands now close their runtime cleanly instead of leaving GPIO cleanup to process exit
 
 ### Direct driver tests
 
@@ -328,6 +329,8 @@ Expected result:
 
 - `ninjaclawbot_data/expressions/happy.json` is created at the project root
 - the integrated executor drives display and buzzer actions through the real `pi5*` packages
+- the buzzer emotion melody finishes before the command exits
+- leaving `uv run ninjaclawbot expression-tool` should return to the shell without a GPIO cleanup traceback
 
 ### JSON action test
 

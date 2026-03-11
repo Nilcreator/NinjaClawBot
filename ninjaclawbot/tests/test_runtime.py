@@ -86,3 +86,47 @@ def test_runtime_health_check_catches_adapter_errors() -> None:
 
     assert health["buzzer"]["available"] is False
     assert "boom" in health["buzzer"]["error"]
+
+
+def test_runtime_stop_all_closes_display_before_buzzer() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    call_order: list[str] = []
+
+    class OrderedDeviceAdapter(FakeDeviceAdapter):
+        def close(self) -> None:
+            call_order.append(f"{self.name}.close")
+            super().close()
+
+    runtime._display = OrderedDeviceAdapter("display")
+    runtime._buzzer = OrderedDeviceAdapter("buzzer")
+    runtime._distance = OrderedDeviceAdapter("distance")
+
+    runtime.stop_all()
+
+    assert call_order == ["display.close", "buzzer.close"]
+    assert runtime._servo.calls[-1] == ("stop",)
+
+
+def test_runtime_close_swallows_cleanup_errors() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+
+    class BrokenDevice:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+            raise RuntimeError("cleanup failed")
+
+    runtime._display = BrokenDevice()
+    runtime._buzzer = BrokenDevice()
+    runtime._distance = BrokenDevice()
+
+    runtime.close()
+
+    assert runtime._display.closed is True
+    assert runtime._buzzer.closed is True
+    assert runtime._distance.closed is True
+    assert runtime._servo.calls[-2:] == [("stop",), ("close",)]

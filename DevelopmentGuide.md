@@ -206,6 +206,12 @@ Power-risk tests:
 - power down before rewiring SPI and I2C devices
 - keep one-servo-only tests for the first movement validation pass
 
+Expected integrated expression result:
+
+- `perform-expression` should keep the display output stable
+- queued buzzer emotion playback should finish before the command exits
+- leaving `expression-tool` should not print GPIO cleanup tracebacks
+
 Recommended calibration order before integrated robot tests:
 
 1. `uv run pi5servo calib <endpoint>` or `uv run pi5servo servo-tool`
@@ -213,6 +219,25 @@ Recommended calibration order before integrated robot tests:
 3. `uv run pi5disp init --defaults`
 4. `uv run pi5vl53l0x test`
 5. `uv run ninjaclawbot health-check`
+
+## ninjaclawbot Troubleshooting
+
+### `expression-tool` exit cleanup
+
+If `expression-tool` exits with `RPi.GPIO` or `lgpio` cleanup tracebacks:
+
+- verify the integrated runtime is closing the display before the buzzer
+- verify you are using the current root environment from `uv sync --extra dev`
+- rerun `uv run ninjaclawbot expression-tool` and confirm it returns to the shell cleanly after `Goodbye!`
+
+### `perform-expression` sound playback
+
+If the display text appears but the emotion sound is cut short:
+
+- verify you are running `uv run ninjaclawbot perform-expression <name>` from the project root
+- verify the saved expression uses a valid `sound.emotion` value such as `happy`
+- confirm the command does not return until the buzzer sequence finishes
+- if needed, compare with `uv run pi5buzzer play happy` to confirm the buzzer hardware path itself is healthy
 
 ## pi5buzzer Migration Notes
 

@@ -2,6 +2,51 @@
 
 ## 2026-03-12
 
+### ninjaclawbot Expression Runtime Fix
+
+Summary:
+
+- fixed the `ninjaclawbot` cleanup order so shared display and buzzer GPIO resources shut down safely
+- made one-shot `ninjaclawbot` CLI commands close their runtime deterministically instead of relying on process exit
+- made integrated expression and sound actions wait for queued buzzer playback to finish before shutdown
+- added regression coverage for runtime cleanup order, one-shot CLI runtime ownership, and buzzer wait behavior
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/tests/test_runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_runtime.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [ninjaclawbot/tests/test_cli_tools.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_cli_tools.py)
+- [ninjaclawbot/tests/test_adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_adapters.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- `expression-tool` was closing the buzzer backend before the display backend even though both ultimately depended on the same `RPi.GPIO` / `rpi-lgpio` global state
+- one-shot commands like `perform-expression` and `health-check` created executors without explicitly closing them
+- queued buzzer emotion playback returned immediately, so the process could end before the sound finished
+
+Lint and test results:
+
+- `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml` -> `25 passed`
+- `uv run ninjaclawbot --help`
+
+Raspberry Pi validation status:
+
+- Raspberry Pi validation is still required for the integrated expression path
+- expected pass conditions:
+  - `uv run ninjaclawbot expression-tool` exits cleanly after `Goodbye!`
+  - `uv run ninjaclawbot perform-expression <name>` keeps the display output stable and plays the full buzzer emotion before returning JSON
+  - no `RPi.GPIO` or `lgpio` cleanup traceback appears on exit
+
 ### Root Workspace And ninjaclawbot Rebuild
 
 Summary:

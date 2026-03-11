@@ -42,6 +42,7 @@ class FakeRuntime:
 
     def play_sound(self, **kwargs):
         self.calls.append(("play_sound", kwargs))
+        return float(kwargs.get("duration", 0.0))
 
     def read_distance(self):
         self.calls.append(("read_distance",))
@@ -82,3 +83,45 @@ def test_executor_rejects_invalid_request() -> None:
 
     assert result.status.value == "rejected"
     assert result.error_code == "ACTION_VALIDATION_ERROR"
+
+
+def test_executor_waits_for_expression_sound(tmp_path) -> None:
+    runtime = FakeRuntime()
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+    store.save_expression(
+        {
+            "name": "hello",
+            "display": {"text": "Hello", "duration": 1.0},
+            "sound": {"emotion": "happy", "duration": 0.3},
+        }
+    )
+    executor = ActionExecutor(runtime=runtime, asset_store=store)
+
+    result = executor.execute({"action": "perform_expression", "parameters": {"name": "hello"}})
+
+    assert result.status.value == "success"
+    assert runtime.calls[0] == (
+        "display_text",
+        "Hello",
+        {"scroll": False, "duration": 1.0, "language": "en", "font_size": 32},
+    )
+    assert runtime.calls[1] == (
+        "play_sound",
+        {"emotion": "happy", "frequency": None, "duration": 0.3, "wait": True},
+    )
+    assert result.data["waited_for_s"] == 0.3
+
+
+def test_executor_waits_for_play_sound_action() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute(
+        {"action": "play_sound", "parameters": {"emotion": "happy", "duration": 0.3}}
+    )
+
+    assert result.status.value == "success"
+    assert runtime.calls[0] == (
+        "play_sound",
+        {"emotion": "happy", "frequency": None, "duration": 0.3, "wait": True},
+    )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from ninjaclawbot.adapters import (
@@ -14,6 +15,8 @@ from ninjaclawbot.adapters import (
 from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.locks import ExecutionLock
 
+log = logging.getLogger(__name__)
+
 
 class NinjaClawbotRuntime:
     """Owns the Pi 5 driver adapters used by ninjaclawbot."""
@@ -25,6 +28,7 @@ class NinjaClawbotRuntime:
         self._buzzer = BuzzerAdapter(self.config)
         self._display = DisplayAdapter(self.config)
         self._distance = DistanceAdapter(self.config)
+        self._closed = False
 
     @property
     def execution_lock(self) -> ExecutionLock:
@@ -69,8 +73,14 @@ class NinjaClawbotRuntime:
         emotion: str | None = None,
         frequency: int | None = None,
         duration: float = 0.3,
-    ) -> None:
-        self.buzzer.play(emotion=emotion, frequency=frequency, duration=duration)
+        wait: bool = False,
+    ) -> float:
+        return self.buzzer.play(
+            emotion=emotion,
+            frequency=frequency,
+            duration=duration,
+            wait=wait,
+        )
 
     def display_text(
         self,
@@ -111,12 +121,23 @@ class NinjaClawbotRuntime:
                 health[name] = {"available": False, "error": str(exc)}
         return health
 
+    def _safe_cleanup(self, label: str, callback: Any) -> None:
+        try:
+            callback()
+        except Exception as exc:  # pragma: no cover - defensive cleanup guard
+            log.warning("Cleanup step '%s' failed: %s", label, exc)
+
     def stop_all(self) -> None:
-        self.servo.stop()
-        self.buzzer.close()
-        self.display.close()
+        # Display cleanup must run before buzzer backend shutdown because both
+        # libraries ultimately share the global RPi.GPIO / rpi-lgpio state.
+        self._safe_cleanup("display.close", self.display.close)
+        self._safe_cleanup("buzzer.close", self.buzzer.close)
+        self._safe_cleanup("servo.stop", self.servo.stop)
 
     def close(self) -> None:
+        if self._closed:
+            return
+        self._closed = True
         self.stop_all()
-        self.servo.close()
-        self.distance.close()
+        self._safe_cleanup("servo.close", self.servo.close)
+        self._safe_cleanup("distance.close", self.distance.close)

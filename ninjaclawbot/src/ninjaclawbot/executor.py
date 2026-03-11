@@ -115,15 +115,17 @@ class ActionExecutor:
             )
             return {"text": params["text"]}, ["display"], []
         if request.action == ActionType.PLAY_SOUND:
-            self.runtime.play_sound(
+            waited_for = self.runtime.play_sound(
                 emotion=str(params.get("emotion", "")).strip() or None,
                 frequency=params.get("frequency"),
                 duration=float(params.get("duration", 0.3)),
+                wait=True,
             )
             return (
                 {
                     "emotion": params.get("emotion"),
                     "frequency": params.get("frequency"),
+                    "waited_for_s": waited_for,
                 },
                 ["buzzer"],
                 [],
@@ -206,14 +208,18 @@ class ActionExecutor:
         emotion = str(sound.get("emotion", "")).strip()
         frequency = sound.get("frequency")
         if emotion or frequency is not None:
-            self.runtime.play_sound(
+            waited_for = self.runtime.play_sound(
                 emotion=emotion or None,
                 frequency=frequency,
                 duration=float(sound.get("duration", 0.3)),
+                wait=True,
             )
+        else:
+            waited_for = 0.0
         return {
             "name": asset.get("name"),
             "display_text": display.get("text"),
             "sound_emotion": emotion or None,
             "sound_frequency": frequency,
+            "waited_for_s": waited_for,
         }
