@@ -335,6 +335,8 @@ Quick Move is the best way to send direct operator commands like `F_gpio12:0/gpi
 2. Enter the servo endpoint that carries the servo signal
 3. Use the calibration TUI to find the correct pulse widths
 
+After you save calibration data, `servo-tool` now reloads the config and rebuilds its live servo group in the same session. That means you can go straight into Quick Move and test the calibrated servo without exiting and restarting the tool first.
+
 For a DFR0566 servo on the HAT's physical `PWM0` connector, enter `hat_pwm1`.
 For a DFR0566 servo on the HAT's physical `PWM1` connector, enter `hat_pwm2`.
 

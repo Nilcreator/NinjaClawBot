@@ -158,6 +158,55 @@ def test_servo_tool_uses_auto_backend_for_hat_calibration(monkeypatch, tmp_path)
     assert "✓ Config reloaded" in result.output
 
 
+def test_servo_tool_uses_isolated_backend_for_native_calibration(monkeypatch, tmp_path) -> None:
+    """Native calibration should not borrow the persistent group's live backend object."""
+    config_path = tmp_path / "servo.json"
+    manager = ConfigManager(config_path)
+    manager.set_calibration(12, ServoCalibration())
+    manager.save()
+    manager.load()
+
+    shared_backend = object()
+    persistent_group = FakePersistentGroup(pins=[12], backend=shared_backend)
+    refreshed_group = FakePersistentGroup(pins=[12], backend=object())
+    captured: dict[str, object] = {}
+    groups = iter(
+        [
+            (persistent_group, manager, None, "auto", {}),
+            (refreshed_group, manager, None, "auto", {}),
+        ]
+    )
+
+    class CapturingServo(FakeTransientServo):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            captured["pin"] = self.pin
+            captured["backend"] = self.backend
+            captured["backend_kwargs"] = self.backend_kwargs
+
+    monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
+    monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
+    monkeypatch.setattr(servo_tool_module, "CalibApp", FakeCalibApp)
+    monkeypatch.setattr(servo_tool_module, "Servo", CapturingServo)
+    monkeypatch.setattr(servo_tool_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        servo_tool_module,
+        "create_group_from_config",
+        lambda **_kwargs: next(groups),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        servo_tool_module.servo_tool, ["--config", str(config_path)], input="3\n12\nq\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["pin"] == 12
+    assert captured["backend"] == "auto"
+    assert captured["backend_kwargs"] == {}
+    assert persistent_group.closed is True
+
+
 def test_servo_tool_skips_persistent_group_when_config_is_empty(monkeypatch, tmp_path) -> None:
     """Empty configs should no longer default the interactive tool to GPIO12/GPIO13."""
     config_path = tmp_path / "servo.json"
@@ -238,3 +287,45 @@ def test_servo_tool_quick_move_forces_command_execution(monkeypatch, tmp_path) -
     assert result.exit_code == 0, result.output
     assert persistent_group.execute_calls == [("F_gpio12:0/gpio13:0", True)]
     assert "✓ Done" in result.output
+
+
+def test_servo_tool_rebuilds_persistent_group_after_calibration(monkeypatch, tmp_path) -> None:
+    """Quick Move after calibration should use a rebuilt persistent group in the same session."""
+    config_path = tmp_path / "servo.json"
+    manager = ConfigManager(config_path)
+    manager.set_calibration(12, ServoCalibration())
+    manager.set_calibration(13, ServoCalibration())
+    manager.save()
+    manager.load()
+
+    first_group = FakePersistentGroup(pins=[12, 13], backend=object())
+    second_group = FakePersistentGroup(pins=[12, 13], backend=object())
+    groups = iter(
+        [
+            (first_group, manager, None, "auto", {}),
+            (second_group, manager, None, "auto", {}),
+        ]
+    )
+
+    monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
+    monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
+    monkeypatch.setattr(servo_tool_module, "CalibApp", FakeCalibApp)
+    monkeypatch.setattr(servo_tool_module, "Servo", FakeTransientServo)
+    monkeypatch.setattr(servo_tool_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        servo_tool_module,
+        "create_group_from_config",
+        lambda **_kwargs: next(groups),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        servo_tool_module.servo_tool,
+        ["--config", str(config_path)],
+        input="3\n12\n1\nF_12:0/13:0\nq\nq\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert first_group.closed is True
+    assert first_group.execute_calls == []
+    assert second_group.execute_calls == [("F_12:0/13:0", True)]

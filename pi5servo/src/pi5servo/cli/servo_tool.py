@@ -58,9 +58,7 @@ def servo_tool(
     term = Terminal()
     manager = ConfigManager(config_path)
     manager.load()
-    known_pins = sort_endpoint_keys(
-        [endpoint.legacy_key for endpoint in manager.get_known_endpoints()]
-    )
+    known_pins: list[int | str] = []
 
     persistent_group = None
     runtime = None
@@ -69,6 +67,56 @@ def servo_tool(
 
     def reload_manager() -> None:
         manager.load()
+
+    def refresh_persistent_group(*, center_on_load: bool) -> None:
+        nonlocal known_pins, persistent_group, manager, runtime, resolved_backend, backend_kwargs
+
+        old_group = persistent_group
+        old_runtime = runtime
+
+        reload_manager()
+        known_pins = sort_endpoint_keys(
+            [endpoint.legacy_key for endpoint in manager.get_known_endpoints()]
+        )
+        persistent_group = None
+        runtime = None
+
+        if old_group is not None:
+            old_group.close()
+        close_runtime_handle(old_runtime)
+
+        resolved_backend, backend_kwargs = resolve_backend_settings(
+            manager,
+            backend_name=backend_name,
+            chip=chip,
+            bus_id=bus_id,
+            frequency_hz=frequency_hz,
+            address=address,
+            pin_channel_map=pin_channel_map,
+            channel_map=channel_map,
+        )
+        if not known_pins:
+            return
+
+        persistent_group, manager, runtime, resolved_backend, backend_kwargs = (
+            create_group_from_config(
+                pins=known_pins,
+                config_path=config_path,
+                backend_name=backend_name,
+                chip=chip,
+                bus_id=bus_id,
+                frequency_hz=frequency_hz,
+                address=address,
+                pin_channel_map=pin_channel_map,
+                channel_map=channel_map,
+            )
+        )
+
+        if center_on_load:
+            persistent_group.center_all()
+            time.sleep(0.1)
+            labels = ", ".join(format_endpoint_label(pin) for pin in known_pins)
+            click.echo(term.green(f"✓ All servos centered (0°): {labels}"))
 
     def _build_backend_group(pins: list[int | str]) -> tuple[ServoGroup, object | None]:
         if resolved_backend in LEGACY_BACKENDS:
@@ -103,18 +151,6 @@ def servo_tool(
         return _build_backend_group(pins)
 
     def build_temp_servo(pin: int | str) -> tuple[Servo, object | None]:
-        if persistent_group is not None and pin in persistent_group.pins:
-            return (
-                Servo(
-                    runtime,
-                    pin,
-                    manager.get_calibration(pin),
-                    backend=persistent_group.backend,
-                    owns_backend=False,
-                ),
-                None,
-            )
-
         if resolved_backend in LEGACY_BACKENDS:
             servo, _, temp_runtime, _, _ = create_servo_from_config(
                 pin=pin,
@@ -141,37 +177,8 @@ def servo_tool(
         )
 
     try:
-        resolved_backend, backend_kwargs = resolve_backend_settings(
-            manager,
-            backend_name=backend_name,
-            chip=chip,
-            bus_id=bus_id,
-            frequency_hz=frequency_hz,
-            address=address,
-            pin_channel_map=pin_channel_map,
-            channel_map=channel_map,
-        )
-        if known_pins:
-            persistent_group, manager, runtime, resolved_backend, backend_kwargs = (
-                create_group_from_config(
-                    pins=known_pins,
-                    config_path=config_path,
-                    backend_name=backend_name,
-                    chip=chip,
-                    bus_id=bus_id,
-                    frequency_hz=frequency_hz,
-                    address=address,
-                    pin_channel_map=pin_channel_map,
-                    channel_map=channel_map,
-                )
-            )
-
-        if persistent_group is not None and known_pins:
-            persistent_group.center_all()
-            time.sleep(0.1)
-            labels = ", ".join(format_endpoint_label(pin) for pin in known_pins)
-            click.echo(term.green(f"✓ All servos centered (0°): {labels}"))
-        elif not known_pins:
+        refresh_persistent_group(center_on_load=True)
+        if not known_pins:
             click.echo(
                 term.yellow(
                     "No configured endpoints found. Use explicit endpoints like 'gpio12' or 'hat_pwm1'."
@@ -327,7 +334,7 @@ def servo_tool(
                 click.echo(term.red(f"✗ Error: {exc}"))
                 input("\nPress Enter to continue...")
                 return
-            reload_manager()
+            refresh_persistent_group(center_on_load=False)
             click.echo(term.green("✓ Config reloaded"))
 
         def set_speed() -> None:
@@ -374,7 +381,7 @@ def servo_tool(
                 ),
             )
             manager.save()
-            reload_manager()
+            refresh_persistent_group(center_on_load=False)
             click.echo(term.green(f"✓ Speed for {format_endpoint_label(pin)} set to {new_speed}%"))
             input("\nPress Enter to continue...")
 
@@ -415,7 +422,7 @@ def servo_tool(
                 if path:
                     manager.load_from(path)
                     click.echo(term.green(f"✓ Imported from {path}"))
-                    reload_manager()
+                    refresh_persistent_group(center_on_load=False)
             input("\nPress Enter to continue...")
 
         running = True

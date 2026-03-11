@@ -713,3 +713,45 @@ Follow-up:
 
 - on the Raspberry Pi 5, run `uv run pi5servo servo-tool`, move the servos away from center, then run `F_gpio12:0/gpio13:0` in Quick Move and confirm both servos actively return to center
 - do not proceed with the `ninjaclawbot` integration-layer reset until this standalone `pi5servo` fix is manually confirmed
+
+### 2026-03-12 `pi5servo` Same-Session Calibration Refresh Fix
+
+Summary:
+
+- audited the remaining `servo-tool` failure after the first Quick Move fix
+- identified the true issue as stale live servo-group state after calibration and other config-changing actions inside the same interactive session
+- changed `servo-tool` to rebuild its persistent group after calibration, speed changes, and config imports
+- stopped temporary native-GPIO servo actions from borrowing and tearing down the persistent backend object
+
+Files changed:
+
+- `pi5servo/src/pi5servo/cli/servo_tool.py`
+- `pi5servo/tests/test_servo_tool.py`
+- `pi5servo/README.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+Why:
+
+- the user reported that `F_12:0/13:0` still failed immediately after calibration, but worked after exiting and restarting `servo-tool`
+- that behavior showed the real bug was not only skipped PWM writes; the interactive tool was also keeping stale servo/backend state until the next process restart
+- the old `ninja_core` movement flow explicitly rebuilt state after calibration, and the Pi 5 interactive tool needed the same rule
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q`
+- result in `pi5servo`: `125 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+
+Follow-up:
+
+- on the Raspberry Pi 5, start `uv run pi5servo servo-tool`, calibrate the servo, stay in the same session, then run Quick Move commands including `F_12:0/13:0`
+- confirm the servos still respond correctly without needing to exit and restart the tool
+- do not proceed to the `ninjaclawbot` reset until this same-session validation is confirmed

@@ -132,6 +132,9 @@ virtual environment and test flow.
 For `pi5servo`, the standalone interactive `servo-tool` is the first validation
 target. Quick Move now forces the requested PWM write, so return-to-center
 commands like `F_gpio12:0/gpio13:0` should actively re-send the center pulse.
+After calibration, the same `servo-tool` session should also rebuild its live
+servo state automatically, so you should not need to exit and reopen the tool
+before testing Quick Move.
 
 ```bash
 cd pi5buzzer
