@@ -1,55 +1,245 @@
 # NinjaClawBot
 
-NinjaClawBot is the Raspberry Pi 5 based evolution of the NinjaRobot driver stack. The current migration focus is the standalone Pi 5 driver libraries:
+NinjaClawBot is the Raspberry Pi 5 robot software stack for the NinjaRobot hardware platform.
+It contains two layers:
 
-- `pi5buzzer`
-- `pi5servo`
-- `pi5disp`
-- `pi5vl53l0x`
+- standalone Pi 5 driver libraries for buzzer, servo, display, and distance sensor control
+- `ninjaclawbot`, a new integration layer that combines those drivers into reusable robot actions, interactive authoring tools, and a controlled external hook for AI agents such as OpenClaw
 
-## Implementation Status
+The project is designed so hardware can be tested manually by a human operator, then reused safely by an external AI assistant without exposing the raw driver packages directly.
 
-The migrated libraries that now exist are:
+## Project Specification
+
+Current hardware/software scope:
+
+- target platform: Raspberry Pi 5
+- display: ST7789V SPI display through `pi5disp`
+- servo control: native Pi GPIO PWM and optional DFR0566 / PCA9685 backends through `pi5servo`
+- buzzer control: passive buzzer through `pi5buzzer`
+- distance sensing: VL53L0X through `pi5vl53l0x`
+- integration layer: `ninjaclawbot`
+- planned external AI caller: OpenClaw, through the `ninjaclawbot` action boundary
+
+Core design rules:
+
+- each `pi5*` package remains usable as a standalone library
+- `ninjaclawbot` owns integration, asset loading, action execution, and structured result reporting
+- external AI agents should call `ninjaclawbot`, not the raw `pi5*` packages
+- manual operator tools and external AI actions should use the same saved movement and expression assets
+
+## Repository Structure
+
+```text
+NinjaClawbot/
+├── pi5buzzer/              # Pi 5 passive buzzer driver
+├── pi5servo/               # Pi 5 servo driver with native and external backends
+├── pi5disp/                # Pi 5 ST7789V display driver
+├── pi5vl53l0x/             # Pi 5 VL53L0X distance sensor driver
+├── ninjaclawbot/           # High-level integration layer and interactive tools
+├── NinjaRobotV5_bak/       # Legacy reference implementation and source audit target
+├── developmentPlan.md      # migration and integration plan
+├── DevelopmentGuide.md     # developer workflow and validation notes
+└── DevelopmentLog.md       # dated implementation history
+```
+
+## Package Roles
 
 - [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer)
+  - standalone buzzer driver
+  - note playback, emotion playback, queue-based sound worker, CLI tool
 - [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo)
+  - standalone servo driver
+  - native GPIO endpoints, DFR0566 HAT PWM endpoints, optional PCA9685 backend, calibration and CLI tools
 - [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp)
+  - standalone display driver
+  - text, image, demo, brightness, and display tool workflows
 - [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x)
+  - standalone distance-sensor driver
+  - range reading, calibration, health checks, CLI commands
+- [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot)
+  - integrated runtime and action executor
+  - movement and expression asset storage
+  - interactive `movement-tool` and `expression-tool`
+  - JSON action entrypoint for future OpenClaw integration
 
-`pi5buzzer` preserves the legacy `pi0buzzer` API shape, note and emotion helpers,
-CLI commands, and `buzzer.json` config format, while replacing direct `pigpio`
-usage with a Raspberry Pi 5 compatible `RPi.GPIO` style backend intended for
-`rpi-lgpio`.
+## Installation
 
-`pi5servo` preserves the legacy `pi0servo` motion model, calibration flow,
-movement-tool command format, CLI command set, and `servo.json` contract, while
-replacing direct `pigpio` servo pulses with a backend system for Raspberry Pi 5.
-The standalone-first path targets header-connected servos through hardware-backed
-PWM, with optional PCA9685 support for advanced external controller setups and
-legacy `pigpio` compatibility retained for future integration work. The current
-release also supports explicit mixed-endpoint routing so native GPIO servos and
-DFRobot DFR0566 HAT PWM servos can coexist without identifier ambiguity. DFR0566
-digital ports still follow the native GPIO path, while the HAT PWM connectors
-use the dedicated `dfr0566` backend path. The current HAT naming maps
-`hat_pwm1` to physical `PWM0`, `hat_pwm2` to `PWM1`, `hat_pwm3` to `PWM2`, and
-`hat_pwm4` to `PWM3`. The interactive calibration tool also no longer guesses
-default GPIO pins when `servo.json` is empty.
+### 1. Install `uv`
 
-`pi5vl53l0x` preserves the legacy `pi0vl53l0x` class, CLI command set, and
-`vl53l0x.json` config format, while replacing the old `pigpio` I2C path with a
-thread-safe `smbus2` backend over the Raspberry Pi 5 kernel I2C interface.
+`uv` is the Python package and virtual-environment manager used by this repository.
 
-`pi5disp` preserves the legacy `pi0disp` `ST7789V` driver, CLI command set, and
-`display.json` config format, while replacing the old `pigpio` SPI, GPIO, and
-backlight control path with a Raspberry Pi 5 compatible split backend based on
-`spidev` and an `RPi.GPIO` style interface intended for `rpi-lgpio`. The Pi 5
-runtime now persists saved brightness and keeps `display-tool` on one live
-display session across menu actions.
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-All four standalone-first Pi 5 driver libraries now exist in the project root.
+After installation, restart the shell or run:
 
-For development workflow and validation guidance:
+```bash
+source "$HOME/.local/bin/env"
+```
 
-- see [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md)
-- see [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
-- the agentic implementation workflow is defined in [.agents/skills/ninjaclawbot-implementation/SKILL.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/.agents/skills/ninjaclawbot-implementation/SKILL.md)
+### 2. Prepare Raspberry Pi 5 system packages
+
+These packages cover GPIO, SPI, I2C, and driver build support.
+
+```bash
+sudo apt update
+sudo apt install -y python3-dev build-essential swig i2c-tools
+```
+
+### 3. Enable Raspberry Pi interfaces
+
+Enable the interfaces required by the robot drivers:
+
+```bash
+sudo raspi-config
+```
+
+Enable:
+
+- `I2C`
+- `SPI`
+- any PWM overlay needed for your servo setup
+
+Reboot after changing interface settings.
+
+### 4. Install the standalone Pi 5 driver libraries
+
+Each driver package keeps its own virtual environment and test flow.
+
+```bash
+cd pi5buzzer
+uv sync --extra pi --extra dev
+cd ../pi5servo
+uv sync --extra pi --extra dev
+cd ../pi5disp
+uv sync --extra pi --extra dev
+cd ../pi5vl53l0x
+uv sync --extra pi --extra dev
+cd ..
+```
+
+### 5. Install `ninjaclawbot` and link the local drivers into one environment
+
+The `ninjaclawbot` package imports the local driver packages lazily, so for real robot use they must be installed into the same virtual environment.
+
+```bash
+cd ninjaclawbot
+uv sync --extra dev
+uv pip install -e "../pi5buzzer[pi]" -e "../pi5servo[pi]" -e "../pi5disp[pi]" -e "../pi5vl53l0x[pi]"
+```
+
+Expected result:
+
+- `uv run ninjaclawbot --help` works
+- `uv run ninjaclawbot health-check` can see the installed driver packages
+
+## Testing Core NinjaClawBot Functions
+
+Run the following commands from [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot).
+
+### Safe smoke tests
+
+Check the package and saved asset directories:
+
+```bash
+uv run ninjaclawbot --help
+uv run ninjaclawbot list-assets
+uv run ninjaclawbot health-check
+```
+
+Expected result:
+
+- CLI help is shown
+- the asset list returns an empty or existing list
+- `health-check` returns a JSON result with driver availability details
+
+### Create and test a movement asset
+
+Start the interactive movement tool:
+
+```bash
+uv run ninjaclawbot movement-tool
+```
+
+Suggested first test:
+
+1. Choose `2. Create movement`
+2. Name it `wave`
+3. Enter a movement command such as `M_gpio12:20/hat_pwm1:C`
+4. Save the movement
+5. Exit the tool
+
+Then run the saved movement:
+
+```bash
+uv run ninjaclawbot perform-movement wave
+```
+
+Expected result:
+
+- the movement asset is saved under `ninjaclawbot_data/movements`
+- the executor returns a JSON result
+- the configured servos move only if the related hardware is connected and configured
+
+### Create and test an expression asset
+
+Start the interactive expression tool:
+
+```bash
+uv run ninjaclawbot expression-tool
+```
+
+Suggested first test:
+
+1. Choose `2. Create expression`
+2. Name it `happy`
+3. Enter display text such as `Hello`
+4. Set a sound emotion such as `happy`
+5. Save the expression
+6. Exit the tool
+
+Then run the saved expression:
+
+```bash
+uv run ninjaclawbot perform-expression happy
+```
+
+Expected result:
+
+- the expression asset is saved under `ninjaclawbot_data/expressions`
+- the executor returns a JSON result
+- the display and buzzer react if the related hardware is connected and configured
+
+### Direct hardware-oriented tests
+
+Move servos directly using the integrated endpoint-aware command syntax:
+
+```bash
+uv run ninjaclawbot move-servos "F_gpio12:C/hat_pwm1:15"
+```
+
+Read distance through the integrated JSON action path:
+
+```bash
+uv run ninjaclawbot run-action '{"action":"read_distance"}'
+```
+
+Expected result:
+
+- servo movements return structured action results
+- distance reads return structured sensor data in JSON form
+
+## Validation Notes
+
+- `ninjaclawbot` does not replace the standalone driver CLIs. It sits above them.
+- For DFR0566 PWM control, use external servo power and a common ground.
+- For movement tests, start with one servo and clear mechanical space before running named movements.
+- For display and sensor rewiring, power the Raspberry Pi down first.
+
+## Development References
+
+- [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+- [.agents/skills/ninjaclawbot-implementation/SKILL.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/.agents/skills/ninjaclawbot-implementation/SKILL.md)

@@ -2,12 +2,13 @@
 
 ## Scope
 
-This guide records the current developer workflow for the new standalone Pi 5 driver libraries:
+This guide records the current developer workflow for the standalone Pi 5 driver libraries and the new integration layer:
 
 - `pi5buzzer`
 - `pi5servo`
 - `pi5disp`
 - `pi5vl53l0x`
+- `ninjaclawbot`
 
 The detailed migration and backend strategy lives in [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md).
 
@@ -26,6 +27,43 @@ That skill requires the following workflow:
 5. Pass the quality gate before advancing to the next phase.
 6. Produce a manual Raspberry Pi 5 validation checklist after each migrated library.
 7. Update developer documentation and the development log before closing the task.
+
+## ninjaclawbot Integration Layer
+
+The new [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot) package is the high-level robot control layer for future OpenClaw integration and standalone operator control.
+
+Current responsibilities:
+
+- lazy composition of `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
+- structured action validation and structured result reporting
+- persistent movement and expression assets under `ninjaclawbot_data/`
+- interactive `movement-tool` and `expression-tool`
+- CLI actions for `health-check`, `list-assets`, `move-servos`, `perform-movement`, `perform-expression`, and JSON `run-action`
+
+Important rule:
+
+- external AI assistants should call `ninjaclawbot`, not the raw `pi5*` drivers directly
+
+## ninjaclawbot File Layout
+
+Main package layout:
+
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/results.py`
+- `ninjaclawbot/src/ninjaclawbot/errors.py`
+- `ninjaclawbot/src/ninjaclawbot/config.py`
+- `ninjaclawbot/src/ninjaclawbot/locks.py`
+- `ninjaclawbot/src/ninjaclawbot/assets.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py`
+- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
+
+Generated user asset paths:
+
+- `ninjaclawbot_data/movements`
+- `ninjaclawbot_data/expressions`
 
 ## Required Files To Review During Driver Work
 
@@ -76,6 +114,41 @@ Preferred practice:
 
 - run package-local checks while migrating one library
 - run broader repo checks only if shared files changed
+
+For [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot), use:
+
+```bash
+cd ninjaclawbot
+uv sync --extra dev
+uv run python -m compileall src tests
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest -q
+uv run ninjaclawbot --help
+```
+
+## ninjaclawbot Raspberry Pi Validation
+
+Safe smoke tests:
+
+- `uv run ninjaclawbot list-assets`
+- `uv run ninjaclawbot health-check`
+
+Device communication tests:
+
+- `uv run ninjaclawbot run-action '{"action":"read_distance"}'`
+- `uv run ninjaclawbot perform-expression <name>`
+
+Actuator-moving tests:
+
+- `uv run ninjaclawbot move-servos "M_gpio12:C"`
+- `uv run ninjaclawbot perform-movement <name>`
+
+Power-risk tests:
+
+- use external servo power where required
+- power down before rewiring SPI and I2C devices
+- keep one-servo-only tests for the first movement validation pass
 
 ## pi5buzzer Migration Notes
 

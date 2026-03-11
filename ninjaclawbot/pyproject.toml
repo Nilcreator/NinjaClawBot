@@ -1,0 +1,35 @@
+[project]
+name = "ninjaclawbot"
+version = "0.1.0"
+description = "Integrated robot control layer for NinjaClawBot on Raspberry Pi 5."
+authors = [
+    {name = "Nil Creator", email = "nilcreator@gmail.com"},
+]
+dependencies = [
+    "click>=8.1",
+]
+requires-python = ">=3.11,<3.13"
+readme = "README.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "ruff",
+]
+
+[project.scripts]
+ninjaclawbot = "ninjaclawbot.__main__:cli"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+lint.select = ["E", "F", "W", "I"]
+lint.ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

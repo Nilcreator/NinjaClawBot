@@ -2,6 +2,63 @@
 
 ## 2026-03-11
 
+### ninjaclawbot Foundation And Interactive Tooling
+
+Summary:
+
+- created the new `ninjaclawbot` package as the integrated robot-control layer above the standalone Pi 5 drivers
+- added typed action requests, typed action results, and explicit integration-layer error classes
+- added a lazy runtime that composes `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x` without exposing them directly
+- added persistent movement and expression assets under `ninjaclawbot_data`
+- added the first interactive `movement-tool` and `expression-tool`
+- added a CLI entrypoint for `health-check`, `list-assets`, `move-servos`, `perform-movement`, `perform-expression`, and JSON `run-action`
+- rewrote the root README to describe the full project structure, installation flow, and integrated test steps
+
+Files changed:
+
+- [ninjaclawbot/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/pyproject.toml)
+- [ninjaclawbot/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/README.md)
+- [ninjaclawbot/src/ninjaclawbot/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__init__.py)
+- [ninjaclawbot/src/ninjaclawbot/actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/actions.py)
+- [ninjaclawbot/src/ninjaclawbot/results.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/results.py)
+- [ninjaclawbot/src/ninjaclawbot/errors.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/errors.py)
+- [ninjaclawbot/src/ninjaclawbot/config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/config.py)
+- [ninjaclawbot/src/ninjaclawbot/locks.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/locks.py)
+- [ninjaclawbot/src/ninjaclawbot/assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/assets.py)
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/common.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
+- [ninjaclawbot/tests/test_actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_actions.py)
+- [ninjaclawbot/tests/test_results.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_results.py)
+- [ninjaclawbot/tests/test_assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_assets.py)
+- [ninjaclawbot/tests/test_runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_runtime.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [ninjaclawbot/tests/test_cli_tools.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_cli_tools.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the completed Pi 5 driver migrations needed a stable high-level layer before OpenClaw or another external AI assistant can control the robot safely
+- the project also needed human-usable authoring tools for saved movements and saved expressions so the same assets can be reused by both operators and AI actions
+- the old `ninja_core` execution model exposed broader code and hardware access than the new project should allow
+
+Lint and test results:
+
+- Phase 1: `uv run python -m compileall src tests`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest -q` -> `7 passed`
+- Phase 2: same gate after runtime, assets, and executor -> `11 passed`
+- Phase 3: same gate after CLI and interactive tools -> `14 passed`
+
+Raspberry Pi validation status:
+
+- local unit and CLI tests passed without requiring Raspberry Pi hardware
+- Raspberry Pi 5 validation is still required for live driver composition, movement execution, expression playback, and sensor reads through `ninjaclawbot`
+- start with `uv run ninjaclawbot health-check`, then create a small movement asset and a small expression asset before testing direct servo movement
+
 ### pi5servo DFR0566 Calibration Fix
 
 Summary:

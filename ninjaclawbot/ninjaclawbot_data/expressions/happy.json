@@ -1,0 +1,16 @@
+{
+  "name": "happy",
+  "description": "Happy face",
+  "display": {
+    "text": "Hello",
+    "scroll": false,
+    "duration": 3.0,
+    "language": "en",
+    "font_size": 32
+  },
+  "sound": {
+    "emotion": "happy",
+    "frequency": null,
+    "duration": 0.3
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "wave",
+  "description": "Friendly wave",
+  "steps": [
+    {
+      "targets": {
+        "gpio12": 20.0,
+        "hat_pwm1": 0.0
+      },
+      "speed_mode": "M",
+      "easing": "ease_in_out_cubic",
+      "pause_after_ms": 100
+    }
+  ]
+}

@@ -1,0 +1,194 @@
+"""Typed action executor for the ninjaclawbot integration layer."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from typing import Any
+
+from ninjaclawbot.actions import ActionRequest, ActionType
+from ninjaclawbot.assets import AssetStore
+from ninjaclawbot.errors import ActionValidationError, ExecutionError, NinjaClawbotError
+from ninjaclawbot.results import ActionResult, ActionStatus
+from ninjaclawbot.runtime import NinjaClawbotRuntime
+
+
+class ActionExecutor:
+    """Execute validated robot actions and return structured results."""
+
+    def __init__(
+        self,
+        runtime: NinjaClawbotRuntime | None = None,
+        asset_store: AssetStore | None = None,
+    ) -> None:
+        self.runtime = runtime or NinjaClawbotRuntime()
+        self.asset_store = asset_store or AssetStore(self.runtime.config)
+
+    def execute(self, request: ActionRequest | dict[str, Any]) -> ActionResult:
+        started_at = datetime.now(UTC)
+        try:
+            normalized = (
+                request if isinstance(request, ActionRequest) else ActionRequest.from_dict(request)
+            )
+        except ActionValidationError as exc:
+            return ActionResult.failure(
+                action=str(request.get("action", "unknown"))
+                if isinstance(request, dict)
+                else "unknown",
+                error_code="ACTION_VALIDATION_ERROR",
+                error_message=str(exc),
+                rollback_hint="Fix the request payload and retry the action.",
+                status=ActionStatus.REJECTED,
+                started_at=started_at,
+                ended_at=datetime.now(UTC),
+            )
+
+        try:
+            with self.runtime.execution_lock.acquire():
+                data, devices_used, warnings = self._dispatch(normalized)
+            return ActionResult.success(
+                action=normalized.action.value,
+                devices_used=devices_used,
+                data=data,
+                warnings=warnings,
+                request_id=normalized.request_id,
+                started_at=started_at,
+                ended_at=datetime.now(UTC),
+            )
+        except NinjaClawbotError as exc:
+            return ActionResult.failure(
+                action=normalized.action.value,
+                error_code=type(exc).__name__.upper(),
+                error_message=str(exc),
+                rollback_hint="Review configuration, connected hardware, and requested action parameters.",
+                request_id=normalized.request_id,
+                started_at=started_at,
+                ended_at=datetime.now(UTC),
+            )
+        except Exception as exc:  # pragma: no cover - last-resort guard
+            return ActionResult.failure(
+                action=normalized.action.value,
+                error_code="UNEXPECTED_ERROR",
+                error_message=str(exc),
+                rollback_hint="Inspect the traceback and rerun the action after fixing the integration layer.",
+                request_id=normalized.request_id,
+                started_at=started_at,
+                ended_at=datetime.now(UTC),
+            )
+
+    def _dispatch(self, request: ActionRequest) -> tuple[dict[str, Any], list[str], list[str]]:
+        params = request.parameters
+        if request.action == ActionType.HEALTH_CHECK:
+            return self.runtime.health_check(), ["servo", "buzzer", "display", "distance"], []
+        if request.action == ActionType.MOVE_SERVOS:
+            completed = self.runtime.move_servos(
+                {key: float(value) for key, value in params["targets"].items()},
+                speed_mode=str(params.get("speed_mode", "M")),
+                easing=str(params.get("easing", "ease_in_out_cubic")),
+            )
+            if not completed:
+                raise ExecutionError("Servo movement aborted before completion.")
+            return {"targets": params["targets"], "completed": True}, ["servo"], []
+        if request.action == ActionType.PERFORM_MOVEMENT:
+            asset = self.asset_store.load_movement(str(params["name"]))
+            return self._execute_movement_asset(asset), ["servo"], []
+        if request.action == ActionType.DISPLAY_TEXT:
+            self.runtime.display_text(
+                str(params["text"]),
+                scroll=bool(params.get("scroll", False)),
+                duration=float(params.get("duration", 3.0)),
+                language=str(params.get("language", "en")),
+                font_size=int(params.get("font_size", 32)),
+            )
+            return {"text": params["text"]}, ["display"], []
+        if request.action == ActionType.PLAY_SOUND:
+            self.runtime.play_sound(
+                emotion=str(params.get("emotion", "")).strip() or None,
+                frequency=params.get("frequency"),
+                duration=float(params.get("duration", 0.3)),
+            )
+            return (
+                {"emotion": params.get("emotion"), "frequency": params.get("frequency")},
+                ["buzzer"],
+                [],
+            )
+        if request.action == ActionType.SHOW_EXPRESSION:
+            return (
+                self._execute_expression_definition(
+                    {
+                        "display": {
+                            "text": str(params.get("text", "")).strip(),
+                            "scroll": bool(params.get("scroll", False)),
+                            "duration": float(params.get("duration", 3.0)),
+                            "language": str(params.get("language", "en")),
+                            "font_size": int(params.get("font_size", 32)),
+                        },
+                        "sound": {
+                            "emotion": str(params.get("emotion", "")).strip(),
+                            "frequency": params.get("frequency"),
+                            "duration": float(
+                                params.get("sound_duration", params.get("duration", 0.3))
+                            ),
+                        },
+                    }
+                ),
+                ["display", "buzzer"],
+                [],
+            )
+        if request.action == ActionType.PERFORM_EXPRESSION:
+            asset = self.asset_store.load_expression(str(params["name"]))
+            return self._execute_expression_definition(asset), ["display", "buzzer"], []
+        if request.action == ActionType.READ_DISTANCE:
+            return self.runtime.read_distance(), ["distance"], []
+        if request.action == ActionType.LIST_ASSETS:
+            asset_type = str(params.get("asset_type", "all"))
+            return (
+                {"asset_type": asset_type, "assets": self.asset_store.list_assets(asset_type)},
+                [],
+                [],
+            )
+        if request.action == ActionType.STOP_ALL:
+            self.runtime.stop_all()
+            return {"stopped": True}, ["servo", "buzzer", "display"], []
+        raise ActionValidationError(f"Unsupported action '{request.action.value}'.")
+
+    def _execute_movement_asset(self, asset: dict[str, Any]) -> dict[str, Any]:
+        for step in asset["steps"]:
+            completed = self.runtime.move_servos(
+                step["targets"],
+                speed_mode=step.get("speed_mode", "M"),
+                easing=step.get("easing", "ease_in_out_cubic"),
+            )
+            if not completed:
+                raise ExecutionError(f"Movement '{asset['name']}' was aborted.")
+            pause_after_ms = int(step.get("pause_after_ms", 0))
+            if pause_after_ms > 0:
+                import time
+
+                time.sleep(pause_after_ms / 1000)
+        return {"name": asset["name"], "steps_executed": len(asset["steps"])}
+
+    def _execute_expression_definition(self, asset: dict[str, Any]) -> dict[str, Any]:
+        display = dict(asset.get("display", {}))
+        sound = dict(asset.get("sound", {}))
+        if display.get("text"):
+            self.runtime.display_text(
+                display["text"],
+                scroll=bool(display.get("scroll", False)),
+                duration=float(display.get("duration", 3.0)),
+                language=str(display.get("language", "en")),
+                font_size=int(display.get("font_size", 32)),
+            )
+        emotion = str(sound.get("emotion", "")).strip()
+        frequency = sound.get("frequency")
+        if emotion or frequency is not None:
+            self.runtime.play_sound(
+                emotion=emotion or None,
+                frequency=frequency,
+                duration=float(sound.get("duration", 0.3)),
+            )
+        return {
+            "name": asset.get("name"),
+            "display_text": display.get("text"),
+            "sound_emotion": emotion or None,
+            "sound_frequency": frequency,
+        }
