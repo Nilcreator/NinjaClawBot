@@ -129,6 +129,10 @@ driver folders use the same code.
 If you only want one driver package on its own, each driver still keeps its own
 virtual environment and test flow.
 
+For `pi5servo`, the standalone interactive `servo-tool` is the first validation
+target. Quick Move now forces the requested PWM write, so return-to-center
+commands like `F_gpio12:0/gpio13:0` should actively re-send the center pulse.
+
 ```bash
 cd pi5buzzer
 uv sync --extra pi --extra dev

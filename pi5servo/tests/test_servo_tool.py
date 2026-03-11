@@ -52,6 +52,7 @@ class FakePersistentGroup:
         self.closed = False
         self.off_called = False
         self.move_calls: list[tuple[list[float], str, bool]] = []
+        self.execute_calls: list[tuple[str, bool]] = []
 
     def center_all(self) -> None:
         self.centered = True
@@ -67,6 +68,10 @@ class FakePersistentGroup:
 
     def off(self) -> None:
         self.off_called = True
+
+    def execute_command(self, command: str, *, force: bool = False) -> bool:
+        self.execute_calls.append((command, force))
+        return True
 
     def close(self) -> None:
         self.closed = True
@@ -201,3 +206,35 @@ def test_servo_tool_recovers_from_endpoint_error(monkeypatch, tmp_path) -> None:
     assert result.exit_code == 0, result.output
     assert "✗ Error: RP1 hardware PWM only supports native GPIO endpoints." in result.output
     assert "Goodbye!" in result.output
+
+
+def test_servo_tool_quick_move_forces_command_execution(monkeypatch, tmp_path) -> None:
+    """Quick move should force PWM writes so return-to-center commands are not skipped."""
+    config_path = tmp_path / "servo.json"
+    manager = ConfigManager(config_path)
+    manager.set_calibration(12, ServoCalibration())
+    manager.set_calibration(13, ServoCalibration())
+    manager.save()
+    manager.load()
+
+    persistent_group = FakePersistentGroup(pins=[12, 13], backend=object())
+
+    monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
+    monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
+    monkeypatch.setattr(servo_tool_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        servo_tool_module,
+        "create_group_from_config",
+        lambda **_kwargs: (persistent_group, manager, None, "auto", {}),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        servo_tool_module.servo_tool,
+        ["--config", str(config_path)],
+        input="1\nF_gpio12:0/gpio13:0\nq\nq\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert persistent_group.execute_calls == [("F_gpio12:0/gpio13:0", True)]
+    assert "✓ Done" in result.output

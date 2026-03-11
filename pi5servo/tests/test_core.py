@@ -309,6 +309,19 @@ class TestServoGroupMovement:
         assert backend.pulses[12] != 0
         assert backend.pulses["hat_pwm1"] != 0
 
+    def test_execute_command_force_resends_center_position(self):
+        """Force mode should re-send center pulses even when cached state says 0°."""
+        backend = RecordingBackend()
+        group = ServoGroup(backend, pins=[12])
+        group.servos[12]._last_angle = 0.0
+
+        skipped = group.execute_command("F_gpio12:0")
+        forced = group.execute_command("F_gpio12:0", force=True)
+
+        assert skipped is True
+        assert forced is True
+        assert backend.pulses[12] == PULSE_CENTER
+
     def test_actuator_interface_execute(self, group):
         """Actuator interface execute() returns dict."""
         result = group.execute("F_20:45")

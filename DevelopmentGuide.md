@@ -385,6 +385,7 @@ Raspberry Pi 5 validation checklist:
 - firmware checks: confirm the correct PWM overlay is enabled in `/boot/firmware/config.txt`, reboot the Pi, and verify the intended PWM-capable pins match the selected backend mapping
 - device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, `uv run pi5servo calib hat_pwm1 --backend dfr0566 --address 0x10 --bus-id 1`, and `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`
 - actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior for both `gpioNN` and `hat_pwmN`
+- quick-move regression check: after moving a servo through the interactive tool, run `F_gpio12:0/gpio13:0` or the equivalent endpoints in Quick Move and confirm the servos return to center instead of silently skipping the PWM write
 - mixed-routing tests: verify `servo-tool` accepts both `gpio12` and `hat_pwm1`, and confirm mixed commands no longer fail on mixed-type endpoint sorting
 - signal accuracy tests: measure the servo signal with a logic analyser or oscilloscope at center, min, and max pulse widths before trusting the setup for full robot motion
 - power-risk tests: use an external 5V servo supply with common ground, keep the robot linkage clear during first tests, and power the Pi down before rewiring

@@ -674,3 +674,42 @@ Raspberry Pi validation status:
 Follow-up:
 
 - use the updated skill as the default implementation guide for future `pi5buzzer`, `pi5servo`, `pi5disp`, and `pi5vl53l0x` work
+
+### 2026-03-12 `pi5servo` Quick Move Silent-Skip Fix
+
+Summary:
+
+- fixed the `pi5servo` interactive tool so Quick Move now forces the requested PWM write instead of silently skipping commands like `F_gpio12:0/gpio13:0`
+- added regression coverage for the direct Quick Move path and for the core forced command-execution path
+
+Files changed:
+
+- `pi5servo/src/pi5servo/core/multi_servos.py`
+- `pi5servo/src/pi5servo/cli/servo_tool.py`
+- `pi5servo/tests/test_core.py`
+- `pi5servo/tests/test_servo_tool.py`
+- `pi5servo/README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+Why:
+
+- the interactive tool could skip a return-to-center command when cached servo state said the target was already `0°`, even if the operator needed the PWM signal to be re-sent
+- legacy `ninja_core` movement execution used forced writes to avoid this kind of stale-state skip, and the Pi 5 interactive tool needed the same protection for direct operator commands
+
+Lint and test results:
+
+- `uv run python -m compileall src tests`
+- `uv run ruff check .`
+- `uv run ruff format --check .`
+- `uv run pytest -q`
+- result in `pi5servo`: `123 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+
+Follow-up:
+
+- on the Raspberry Pi 5, run `uv run pi5servo servo-tool`, move the servos away from center, then run `F_gpio12:0/gpio13:0` in Quick Move and confirm both servos actively return to center
+- do not proceed with the `ninjaclawbot` integration-layer reset until this standalone `pi5servo` fix is manually confirmed

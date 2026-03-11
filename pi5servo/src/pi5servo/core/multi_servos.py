@@ -318,10 +318,12 @@ class ServoGroup:
         self,
         command: str,
         easing: str | Callable[[float], float] = "ease_in_out_cubic",
+        *,
+        force: bool = False,
     ) -> bool:
         """Execute a movement-tool format command string."""
         parsed = parse_command(command)
-        return self._execute_parsed(parsed, easing)
+        return self._execute_parsed(parsed, easing, force=force)
 
     async def execute_command_async(
         self,
@@ -336,10 +338,12 @@ class ServoGroup:
         self,
         parsed: ParsedCommand,
         easing: str | Callable[[float], float],
+        *,
+        force: bool = False,
     ) -> bool:
         """Execute a parsed command with per-target speed support."""
         targets, speed_modes = self._resolve_targets(parsed.targets, parsed.speed_mode)
-        return self.move_all_sync(targets, speed_modes, easing)
+        return self.move_all_sync(targets, speed_modes, easing, force=force)
 
     async def _execute_parsed_async(
         self,

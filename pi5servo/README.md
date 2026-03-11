@@ -324,6 +324,8 @@ If `servo.json` is empty, the interactive tool now stays neutral at startup. It 
 ╚══════════════════════════════════════════════════════════╝
 ```
 
+Quick Move is the best way to send direct operator commands like `F_gpio12:0/gpio13:0`. It now forces the requested PWM write, so a return-to-center command is not silently skipped after earlier interactive moves.
+
 ### 3. First-Time Setup: Calibrate Your Servos
 
 > [!IMPORTANT]

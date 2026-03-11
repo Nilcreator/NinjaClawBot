@@ -245,7 +245,10 @@ def servo_tool(
                     group, temp_runtime = build_temp_group(pins)
                     owns_group = group is not persistent_group
 
-                    success = group.execute_command(cmd_str)
+                    # Quick-move commands are direct operator actions. Force the
+                    # final PWM write so center/offline recovery commands are not
+                    # skipped when a prior transient servo object left stale state.
+                    success = group.execute_command(cmd_str, force=True)
                     click.echo(term.green("✓ Done") if success else term.red("✗ Aborted"))
 
                     if owns_group:
