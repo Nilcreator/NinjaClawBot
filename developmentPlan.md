@@ -20,6 +20,9 @@ Date: 2026-03-10
 - [DFR0566 Endpoint Model For `pi5servo`](#dfr0566-endpoint-model-for-pi5servo)
 - [Affected `pi5servo` Functions For Endpoint Refinement](#affected-pi5servo-functions-for-endpoint-refinement)
 - [Optional Future Integration With `ninja_core`](#optional-future-integration-with-ninja_core)
+- [Planned `ninjaclawbot` Integration Layer](#planned-ninjaclawbot-integration-layer)
+- [Interactive Tool Requirement For `ninjaclawbot`](#interactive-tool-requirement-for-ninjaclawbot)
+- [Phased `ninjaclawbot` Implementation Plan](#phased-ninjaclawbot-implementation-plan)
 - [Quality Gates For Every Future Implementation Phase](#quality-gates-for-every-future-implementation-phase)
 - [Raspberry Pi 5 Validation Plan](#raspberry-pi-5-validation-plan)
 - [Recommended Implementation Order](#recommended-implementation-order)
@@ -1092,6 +1095,410 @@ Standalone-first policy:
 - keep optional compatibility entry points where they are cheap to preserve
 - add explicit integration shims only if the new project later chooses to depend on them
 - do not delay any individual driver migration waiting for `ninja_core`
+
+## Planned `ninjaclawbot` Integration Layer
+
+With the standalone Pi 5 driver migration complete, the next planned architecture step is a new `ninjaclawbot` library inside this repository.
+
+Purpose of `ninjaclawbot`:
+
+- provide the single robot-control integration layer for the NinjaClawBot project
+- consolidate `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x` behind one stable API
+- replace the old role previously split across `ninja_core`, `ninja_agent`, and related wrappers in `NinjaRobotV5_bak`
+- become the only robot-facing control surface used by external AI assistants such as OpenClaw
+- return detailed execution results after every action so the caller always knows whether the action succeeded, failed, or partially completed
+
+This layer should not expose raw hardware-driver objects to external callers. Instead, it should expose typed robot actions and typed results.
+
+Planned design rules:
+
+- external AI assistants must call `ninjaclawbot`, not `pi5*` drivers directly
+- `ninjaclawbot` may compose the `pi5*` drivers internally, but should own lifecycle, sequencing, locking, and result reporting
+- all hardware-relevant actions must have structured success, warning, and failure outputs
+- the integration layer must remain usable both from code and from standalone CLI tooling
+- legacy `ninja_core` concepts may be referenced for behavior, but must not become a runtime dependency
+
+Legacy sources that should guide this layer:
+
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/movement_controller.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/api_wrappers.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/dispatcher.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/web_server.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/facial_expressions.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/robot_sound.py`
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/perception.py`
+- `NinjaRobotV5_bak/ninja_utils/src/ninja_utils/interfaces.py`
+
+Planned responsibility split inside `ninjaclawbot`:
+
+- runtime/device composition
+  - initialize, own, and close the Pi 5 driver instances
+  - manage shared locks and safe sequencing across actuators and sensors
+- robot capability layer
+  - movement functions
+  - sound playback and authored expression sounds
+  - display and facial-expression rendering
+  - distance-sensor access
+- action execution layer
+  - validate incoming action requests
+  - execute one action or a bounded action chain
+  - normalize all results into a stable schema
+- interactive tooling layer
+  - provide user-facing interactive tools for authoring and testing movements and expressions
+  - expose those same authored assets to external AI agents through stable action names
+
+Planned result contract:
+
+- `status`
+- `action`
+- `started_at`
+- `ended_at`
+- `duration_ms`
+- `devices_used`
+- `data`
+- `warnings`
+- `error_code`
+- `error_message`
+- `rollback_hint`
+
+The result schema should be designed to replace the old `dispatcher` and `SafeExecutor` broadcast feedback path with a narrower and more reliable robot-action response model.
+
+## Interactive Tool Requirement For `ninjaclawbot`
+
+The new integration layer must also provide interactive tools for building and maintaining reusable robot behavior assets.
+
+Required interactive-tool scope:
+
+- movement authoring and editing
+  - create new named movement sequences
+  - edit existing sequences
+  - preview movements safely
+  - save movement assets for reuse by both humans and external AI callers
+- expression authoring and editing
+  - create and edit combined robot expressions made from sound and facial-display behavior
+  - preview display-only, sound-only, or combined expression sequences
+  - save named expression assets for later execution
+- manual robot control
+  - offer a standalone operator workflow for direct robot testing and demo control
+  - allow manual invocation of saved movements and expressions without requiring an AI assistant
+- external AI reuse
+  - the same saved movement and expression assets must be callable through `ninjaclawbot` action names
+  - OpenClaw or another assistant should request `perform_movement`, `perform_expression`, or similar actions instead of constructing raw servo or display commands
+
+Legacy reference point:
+
+- `NinjaRobotV5_bak/ninja_core/src/ninja_core/movement_cli.py`
+- the old `ninja_core movement-tool` entry point
+
+Refined requirement:
+
+- the interactive tools should be dual-purpose
+  - operator-facing for manual robot setup and testing
+  - integration-facing because they define the reusable named assets that external AI assistants can call
+- these tools must save assets in a format that the non-interactive action executor can load directly
+- the tools must return clear execution outcomes and validation errors, not only terminal text
+
+Recommended asset direction:
+
+- `movements/` for named movement definitions
+- `expressions/` for named sound and display expression definitions
+- shared schema validation so authored assets can be safely executed by both the interactive tools and the AI integration layer
+
+## Phased `ninjaclawbot` Implementation Plan
+
+### Phase 1: Package Scaffold And External Contract Freeze
+
+Objective:
+
+- create the new standalone `ninjaclawbot` package
+- freeze the public action/result contract before wiring hardware
+
+Files and modules likely to change:
+
+- `ninjaclawbot/pyproject.toml`
+- `ninjaclawbot/src/ninjaclawbot/__init__.py`
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/results.py`
+- `ninjaclawbot/src/ninjaclawbot/errors.py`
+- `ninjaclawbot/tests/test_actions.py`
+- `ninjaclawbot/tests/test_results.py`
+
+Key requirements to preserve or define:
+
+- typed action request model
+- typed action result model
+- no raw-driver objects exposed to external callers
+- explicit room for named movement and named expression actions
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- low
+
+Documentation updates required:
+
+- `developmentPlan.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 2: Runtime Composition And Safe Device Ownership
+
+Objective:
+
+- build the runtime layer that composes `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
+- own hardware lifecycle and execution locking in one place
+
+Files and modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/config.py`
+- `ninjaclawbot/src/ninjaclawbot/locks.py`
+- `ninjaclawbot/tests/test_runtime.py`
+
+Key requirements to preserve or define:
+
+- deterministic driver init and shutdown
+- exclusive robot-action execution lock
+- no direct external access to underlying `pi5*` driver instances
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- medium
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 3: Core Capability Modules
+
+Objective:
+
+- implement the reusable robot capabilities on top of the runtime layer
+
+Files and modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/capabilities/servo.py`
+- `ninjaclawbot/src/ninjaclawbot/capabilities/display.py`
+- `ninjaclawbot/src/ninjaclawbot/capabilities/sound.py`
+- `ninjaclawbot/src/ninjaclawbot/capabilities/distance.py`
+- `ninjaclawbot/src/ninjaclawbot/movement.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions.py`
+- `ninjaclawbot/tests/test_capabilities.py`
+- `ninjaclawbot/tests/test_movement.py`
+- `ninjaclawbot/tests/test_expressions.py`
+
+Key requirements to preserve or define:
+
+- named movement execution modeled after legacy `MovementController`
+- facial-expression playback modeled after legacy `AnimatedFaces`
+- sound-expression playback modeled after legacy `RobotSoundPlayer`
+- distance reads and safety checks modeled after legacy `DistanceMonitor`
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- high
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 4: Interactive Movement Tool
+
+Objective:
+
+- build the first interactive authoring tool for movements, replacing the old `movement-tool` role
+
+Files and modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py`
+- `ninjaclawbot/src/ninjaclawbot/assets/movements.py`
+- `ninjaclawbot/tests/test_movement_tool.py`
+- `ninjaclawbot/tests/test_movement_assets.py`
+
+Key requirements to preserve or define:
+
+- create and edit named movement sequences
+- preview movements safely
+- save and load movement assets
+- make saved movement names callable by the non-interactive action executor
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- high
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 5: Interactive Expression Tool
+
+Objective:
+
+- build an interactive tool for authoring and editing named robot expressions using sound and display behavior
+
+Files and modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
+- `ninjaclawbot/src/ninjaclawbot/assets/expressions.py`
+- `ninjaclawbot/tests/test_expression_tool.py`
+- `ninjaclawbot/tests/test_expression_assets.py`
+
+Key requirements to preserve or define:
+
+- create and edit named expressions
+- combine facial-display sequences and sound sequences
+- preview full expressions safely
+- make saved expression names callable by the non-interactive action executor
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- medium-high
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 6: Action Executor And External AI Integration Hook
+
+Objective:
+
+- implement the single validated execution boundary used by OpenClaw and any future external assistant
+
+Files and modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/schemas.py`
+- `ninjaclawbot/src/ninjaclawbot/cli.py`
+- `ninjaclawbot/tests/test_executor.py`
+- `ninjaclawbot/tests/test_schemas.py`
+
+Key requirements to preserve or define:
+
+- explicit robot actions such as:
+  - `move_servos`
+  - `perform_movement`
+  - `show_expression`
+  - `perform_expression`
+  - `display_text`
+  - `play_sound`
+  - `read_distance`
+  - `health_check`
+  - `stop_all`
+- detailed execution results returned after every action
+- no arbitrary Python code execution path
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- high
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+### Phase 7: Raspberry Pi 5 End-To-End Validation For The Integrated Robot Layer
+
+Objective:
+
+- validate the integrated `ninjaclawbot` stack on Raspberry Pi 5 hardware before external-AI adoption
+
+Files and modules likely to change:
+
+- validation notes and test fixtures as needed
+- documentation only if code remains stable
+
+Key requirements to preserve or define:
+
+- saved movement assets execute correctly
+- saved expression assets execute correctly
+- manual interactive tools and external action execution use the same asset definitions
+- the integration layer reports detailed outcomes for success, warnings, and failures
+
+Lint, test, and validation gate:
+
+- `python -m compileall .`
+- `ruff check .`
+- `ruff format --check .`
+- `pytest -q`
+
+Hardware risk level:
+
+- very high
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+Expected Raspberry Pi validation coverage for the integrated layer:
+
+- safe smoke tests
+  - runtime init
+  - driver availability report
+  - action-schema validation with no movement
+- device communication tests
+  - buzzer, display, distance sensor, and servo readiness
+- actuator-moving tests
+  - single-servo move
+  - named movement execution
+  - named expression preview
+  - combined expression plus movement run where mechanically safe
+- power-risk tests
+  - servo external power and common ground
+  - stop-all behavior
+  - controlled shutdown after partial failures
 
 ## Quality Gates For Every Future Implementation Phase
 
