@@ -8,7 +8,13 @@ import click
 
 from ..config import ConfigManager
 from ..core import Servo, ServoCalibration
-from ._common import backend_options, close_runtime_handle, create_servo_from_config
+from ._common import (
+    backend_options,
+    close_runtime_handle,
+    create_servo_from_config,
+    format_endpoint_label,
+    parse_endpoint_value,
+)
 
 # Hardware limits for calibration (NOT the same as default calibration values)
 HARDWARE_PULSE_MIN = 500
@@ -30,13 +36,14 @@ class CalibApp:
     def __init__(
         self,
         servo: Servo,
-        pin: int,
+        pin: int | str,
         config_path: str,
         manager: ConfigManager,
         debug: bool = False,
     ) -> None:
         self.servo = servo
         self.pin = pin
+        self.endpoint_label = format_endpoint_label(pin)
         self.config_path = config_path
         self.debug = debug
         self.manager = manager
@@ -112,7 +119,7 @@ class CalibApp:
     def _simple_mode(self) -> None:
         click.echo("\n=== Simple Calibration Mode ===")
         click.echo(f"Config: {self.config_path}")
-        click.echo(f"GPIO Pin: {self.pin}")
+        click.echo(f"Servo endpoint: {self.endpoint_label}")
         click.echo("Current calibration:")
         click.echo(f"  Min: {self.pulse_min}, Center: {self.pulse_center}, Max: {self.pulse_max}")
         click.echo("\nInstall 'blessed' for interactive mode: pip install blessed")
@@ -121,7 +128,7 @@ class CalibApp:
         click.echo()
         click.echo(f"* Config: {self.config_path}")
         click.echo()
-        click.echo(f"* GPIO{self.pin}")
+        click.echo(f"* {self.endpoint_label}")
         click.echo(f"   Min ({self.TARGET_MIN}°): pulse = {self.pulse_min}")
         click.echo(f"   Center ({self.TARGET_CENTER}°): pulse = {self.pulse_center}")
         click.echo(f"   Max ({self.TARGET_MAX}°): pulse = {self.pulse_max}")
@@ -130,7 +137,7 @@ class CalibApp:
 
     def print_prompt(self) -> None:
         target_str = self.TARGET_NAMES.get(self.cur_target, "Unknown")
-        prompt = f"GPIO{self.pin} | Target: {target_str} | pulse={self.cur_pulse}"
+        prompt = f"{self.endpoint_label} | Target: {target_str} | pulse={self.cur_pulse}"
         print(f"\r{self.term.clear_eol()}{prompt}> ", end="", flush=True)
 
     def inc_target(self) -> None:
@@ -207,7 +214,7 @@ class CalibApp:
         )
         self.manager.set_calibration(self.pin, new_cal)
         self.manager.save()
-        click.echo(f"✓ Saved! {target_str} for GPIO{self.pin} = pulse {self.cur_pulse}")
+        click.echo(f"✓ Saved! {target_str} for {self.endpoint_label} = pulse {self.cur_pulse}")
 
     def display_help(self) -> None:
         click.echo(
@@ -250,7 +257,7 @@ Misc:
 
 
 @click.command("calib")
-@click.argument("pin", type=int, required=False)
+@click.argument("pin", type=str, required=False)
 @click.option(
     "-c",
     "--config",
@@ -271,12 +278,13 @@ Misc:
 )
 @backend_options
 def calib(
-    pin: int | None,
+    pin: str | None,
     config: str,
     debug: bool,
     show: bool,
     backend_name: str | None,
     chip: int | None,
+    bus_id: int | None,
     frequency_hz: int | None,
     address: str | None,
     pin_channel_map: str | None,
@@ -285,19 +293,23 @@ def calib(
     """Interactive servo calibration tool."""
     manager = ConfigManager(config)
     manager.load()
+    try:
+        pin_value = parse_endpoint_value(pin) if pin is not None else None
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="pin") from exc
 
-    if show or pin is None:
-        if pin is not None:
-            _print_calibration(pin, manager.get_calibration(pin))
+    if show or pin_value is None:
+        if pin_value is not None:
+            _print_calibration(pin_value, manager.get_calibration(pin_value))
         else:
-            all_cals = manager.get_all_calibrations()
+            all_cals = manager.get_all_endpoint_calibrations()
             if not all_cals:
                 click.echo("No calibrations stored.")
                 click.echo(f"Config file: {config}")
             else:
                 click.echo(f"Config: {config}")
-                for pin_num, cal in sorted(all_cals.items()):
-                    _print_calibration(pin_num, cal)
+                for endpoint_id, cal in sorted(all_cals.items()):
+                    _print_calibration(endpoint_id, cal)
         return
 
     servo = None
@@ -305,10 +317,11 @@ def calib(
     app = None
     try:
         servo, manager, runtime, resolved_backend, backend_kwargs = create_servo_from_config(
-            pin=pin,
+            pin=pin_value,
             config_path=config,
             backend_name=backend_name,
             chip=chip,
+            bus_id=bus_id,
             frequency_hz=frequency_hz,
             address=address,
             pin_channel_map=pin_channel_map,
@@ -318,7 +331,7 @@ def calib(
             click.echo(f"Backend: {resolved_backend}")
             click.echo(f"Backend kwargs: {backend_kwargs}")
 
-        app = CalibApp(servo, pin, config, manager, debug=debug)
+        app = CalibApp(servo, pin_value, config, manager, debug=debug)
         app.main()
     except KeyboardInterrupt:
         click.echo("\nInterrupted.")
@@ -339,9 +352,9 @@ def calib(
         close_runtime_handle(runtime)
 
 
-def _print_calibration(pin: int, cal: ServoCalibration) -> None:
-    """Print calibration info for a pin."""
-    click.echo(f"Pin {pin}:")
+def _print_calibration(pin: int | str, cal: ServoCalibration) -> None:
+    """Print calibration info for an endpoint."""
+    click.echo(f"Endpoint {format_endpoint_label(pin)}:")
     click.echo(f"  Pulse: {cal.pulse_min} / {cal.pulse_center} / {cal.pulse_max}")
     click.echo(f"  Angle: {cal.angle_min}° / {cal.angle_center}° / {cal.angle_max}°")
     click.echo(f"  Speed: {cal.speed}%")

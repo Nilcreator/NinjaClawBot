@@ -8,9 +8,12 @@ import pytest
 
 from pi5servo.core.backend import (
     BackendConfigurationError,
+    BackendUnavailableError,
+    MixedServoBackend,
     PigpioServoBackend,
     create_servo_backend,
 )
+from pi5servo.core.backends.dfr0566 import DFR0566ServoBackend
 from pi5servo.core.backends.hardware_pwm import HardwarePWMServoBackend
 from pi5servo.core.backends.pca9685 import PCA9685ServoBackend
 
@@ -59,6 +62,61 @@ class FakePCA9685:
 
     def deinit(self) -> None:
         self.deinit_called = True
+
+
+class FakeSMBus:
+    """Simple fake for smbus2.SMBus."""
+
+    def __init__(self, bus_id: int = 1, *, pid: int = 0xDF, vid: int = 0x10) -> None:
+        self.bus_id = bus_id
+        self.pid = pid
+        self.vid = vid
+        self.writes: list[tuple[int, int, list[int]]] = []
+        self.closed = False
+
+    def write_i2c_block_data(self, address: int, register: int, payload: list[int]) -> None:
+        self.writes.append((address, register, list(payload)))
+
+    def read_i2c_block_data(self, address: int, register: int, length: int) -> list[int]:
+        if register == 0x01:
+            return [self.pid]
+        if register == 0x02:
+            return [self.vid]
+        return [0] * length
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class FakeMixedHardwareBackend:
+    """Simple fake for auto-routed native GPIO backend."""
+
+    def __init__(self, *, pins=None, **kwargs) -> None:
+        self.pins = list(pins or [])
+        self.kwargs = kwargs
+        self.pulses: dict[int | str, int] = {}
+
+    def claim(self, identifier: int | str) -> None:
+        self.pulses.setdefault(identifier, 0)
+
+    def set_pulse_us(self, identifier: int | str, pulse_width_us: int) -> None:
+        self.pulses[identifier] = pulse_width_us
+
+    def get_pulse_us(self, identifier: int | str) -> int:
+        return self.pulses.get(identifier, 0)
+
+    def off(self, identifier: int | str) -> None:
+        self.pulses[identifier] = 0
+
+    def release(self, identifier: int | str) -> None:
+        self.pulses.pop(identifier, None)
+
+    def close(self) -> None:
+        return None
+
+
+class FakeMixedHatBackend(FakeMixedHardwareBackend):
+    """Simple fake for auto-routed DFR0566 backend."""
 
 
 def test_pigpio_backend_pass_through(mock_pigpio) -> None:
@@ -122,6 +180,34 @@ def test_pca9685_backend_sets_frequency_and_duty() -> None:
     assert backend._controller.deinit_called is True
 
 
+def test_dfr0566_backend_validates_board_and_sets_pulse() -> None:
+    """DFR0566 backend should validate identity and convert pulses to duty writes."""
+    bus = FakeSMBus()
+    backend = DFR0566ServoBackend(i2c_bus=bus, channel_map={20: 1})
+
+    backend.set_pulse_us(20, 1500)
+    assert backend.get_pulse_us(20) == 1500
+    assert (0x10, 0x03, [0x01]) in bus.writes
+    assert (0x10, 0x06, [7, 5]) in bus.writes
+
+    backend.off(20)
+    assert (0x10, 0x06, [0, 0]) in bus.writes
+
+
+def test_dfr0566_backend_rejects_invalid_channel() -> None:
+    """DFR0566 backend only supports PWM channels 1..4."""
+    backend = DFR0566ServoBackend(i2c_bus=FakeSMBus())
+
+    with pytest.raises(BackendConfigurationError, match="DFR0566 PWM channel"):
+        backend.claim(5)
+
+
+def test_dfr0566_backend_rejects_wrong_device_identity() -> None:
+    """Identity mismatch should fail early instead of writing blind PWM traffic."""
+    with pytest.raises(BackendUnavailableError, match="not detected"):
+        DFR0566ServoBackend(i2c_bus=FakeSMBus(pid=0x00))
+
+
 def test_create_servo_backend_wraps_pigpio(mock_pigpio) -> None:
     """Passing a pigpio-like `pi` should create the legacy wrapper backend."""
     backend = create_servo_backend(pi=mock_pigpio)
@@ -135,3 +221,41 @@ def test_create_servo_backend_accepts_backend_object() -> None:
     backend = MagicMock()
 
     assert create_servo_backend(backend) is backend
+
+
+def test_create_servo_backend_supports_dfr0566() -> None:
+    """Named DFR0566 backend should be created through the shared factory."""
+    bus = FakeSMBus()
+
+    backend = create_servo_backend("dfr0566", i2c_bus=bus, channel_map={21: 2})
+
+    backend.set_pulse_us(21, 1600)
+    assert backend.get_pulse_us(21) == 1600
+    assert (0x10, 0x08, [8, 0]) in bus.writes
+
+
+def test_mixed_servo_backend_routes_gpio_and_hat_endpoints(monkeypatch) -> None:
+    """Auto backend should create a mixed router for GPIO plus DFR0566 endpoints."""
+    import pi5servo.core.backend as backend_module
+
+    monkeypatch.setattr(backend_module, "HardwarePWMServoBackend", FakeMixedHardwareBackend)
+    monkeypatch.setattr(backend_module, "DFR0566ServoBackend", FakeMixedHatBackend)
+
+    backend = create_servo_backend(
+        "auto",
+        pins=[12, "hat_pwm1"],
+        address=0x10,
+        bus_id=1,
+    )
+
+    assert isinstance(backend, MixedServoBackend)
+    backend.set_pulse_us(12, 1500)
+    backend.set_pulse_us("hat_pwm1", 1600)
+
+    gpio_backend, gpio_identifier = backend._routes["gpio12"]
+    hat_backend, hat_identifier = backend._routes["hat_pwm1"]
+
+    assert gpio_identifier == 12
+    assert hat_identifier == "hat_pwm1"
+    assert gpio_backend.pulses[12] == 1500
+    assert hat_backend.pulses["hat_pwm1"] == 1600

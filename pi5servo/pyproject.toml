@@ -16,6 +16,7 @@ license = {file = "LICENSE"}
 [project.optional-dependencies]
 pi = [
     "rpi-hardware-pwm>=0.3.1",
+    "smbus2>=0.4.3",
     "adafruit-blinka>=8.0.0",
     "adafruit-circuitpython-pca9685>=3.4.20",
 ]

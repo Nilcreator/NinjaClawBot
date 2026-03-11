@@ -10,6 +10,7 @@ from pi5servo.core import (
     PULSE_MIN,
     Servo,
     ServoCalibration,
+    ServoEndpoint,
     ServoGroup,
 )
 
@@ -18,25 +19,25 @@ class RecordingBackend:
     """Simple backend fake for backend-aware core tests."""
 
     def __init__(self):
-        self.claimed: list[int] = []
-        self.released: list[int] = []
-        self.pulses: dict[int, int] = {}
+        self.claimed: list[int | str] = []
+        self.released: list[int | str] = []
+        self.pulses: dict[int | str, int] = {}
         self.closed = False
 
-    def claim(self, identifier: int) -> None:
+    def claim(self, identifier: int | str) -> None:
         self.claimed.append(identifier)
         self.pulses.setdefault(identifier, 0)
 
-    def set_pulse_us(self, identifier: int, pulse_width_us: int) -> None:
+    def set_pulse_us(self, identifier: int | str, pulse_width_us: int) -> None:
         self.pulses[identifier] = pulse_width_us
 
-    def get_pulse_us(self, identifier: int) -> int:
+    def get_pulse_us(self, identifier: int | str) -> int:
         return self.pulses.get(identifier, 0)
 
-    def off(self, identifier: int) -> None:
+    def off(self, identifier: int | str) -> None:
         self.pulses[identifier] = 0
 
-    def release(self, identifier: int) -> None:
+    def release(self, identifier: int | str) -> None:
         self.released.append(identifier)
         self.pulses.pop(identifier, None)
 
@@ -170,6 +171,18 @@ class TestServo:
         assert backend.claimed == [12]
         assert backend.pulses[12] == PULSE_CENTER
 
+    def test_init_with_hat_endpoint_backend_object(self):
+        """Servo accepts explicit DFR0566 endpoint identifiers."""
+        backend = RecordingBackend()
+        servo = Servo(backend, pin="hat_pwm1")
+
+        servo.set_angle(0.0)
+
+        assert servo.pin == "hat_pwm1"
+        assert servo.endpoint == ServoEndpoint("hat_pwm", 1)
+        assert backend.claimed == ["hat_pwm1"]
+        assert backend.pulses["hat_pwm1"] == PULSE_CENTER
+
 
 class TestServoGroup:
     """Test ServoGroup class."""
@@ -243,6 +256,15 @@ class TestServoGroup:
 
         assert backend.released == [12, 13]
 
+    def test_group_supports_mixed_endpoint_lookup(self):
+        """ServoGroup should allow native GPIO and HAT endpoints together."""
+        backend = RecordingBackend()
+        group = ServoGroup(backend, pins=[12, "hat_pwm1"])
+
+        assert group.get_servo(12) is not None
+        assert group.get_servo("hat_pwm1") is not None
+        assert group.pins == [12, "hat_pwm1"]
+
 
 class TestServoGroupMovement:
     """Test ServoGroup movement functions."""
@@ -273,6 +295,19 @@ class TestServoGroupMovement:
         """execute_command parses and executes."""
         result = group.execute_command("F_20:45/21:-30")
         assert result is True
+
+    def test_execute_command_with_mixed_endpoints(self):
+        """Command execution should support mixed endpoint identifiers."""
+        backend = RecordingBackend()
+        group = ServoGroup(backend, pins=[12, "hat_pwm1"])
+        group.servos[12]._last_angle = 0.0
+        group.servos["hat_pwm1"]._last_angle = 0.0
+
+        result = group.execute_command("F_gpio12:45/hat_pwm1:-30")
+
+        assert result is True
+        assert backend.pulses[12] != 0
+        assert backend.pulses["hat_pwm1"] != 0
 
     def test_actuator_interface_execute(self, group):
         """Actuator interface execute() returns dict."""

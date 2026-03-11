@@ -6,7 +6,13 @@ import time
 
 import click
 
-from ._common import backend_options, close_runtime_handle, create_servo_from_config
+from ._common import (
+    backend_options,
+    close_runtime_handle,
+    create_servo_from_config,
+    format_endpoint_label,
+    parse_endpoint_value,
+)
 
 # Special position keywords
 POSITION_KEYWORDS = {
@@ -20,7 +26,7 @@ POSITION_KEYWORDS = {
 
 
 @click.command("move")
-@click.argument("pin", type=int)
+@click.argument("pin", type=str)
 @click.argument("angle", type=str)
 @click.option(
     "-c",
@@ -44,19 +50,24 @@ POSITION_KEYWORDS = {
 )
 @backend_options
 def move(
-    pin: int,
+    pin: str,
     angle: str,
     config: str,
     sleep: float,
     debug: bool,
     backend_name: str | None,
     chip: int | None,
+    bus_id: int | None,
     frequency_hz: int | None,
     address: str | None,
     pin_channel_map: str | None,
     channel_map: str | None,
 ) -> None:
     """Move a single servo to an angle or named position."""
+    try:
+        pin_value = parse_endpoint_value(pin)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="pin") from exc
     angle_lower = angle.lower()
     if angle_lower in POSITION_KEYWORDS:
         angle_val = POSITION_KEYWORDS[angle_lower]
@@ -75,10 +86,11 @@ def move(
     runtime = None
     try:
         servo, manager, runtime, resolved_backend, backend_kwargs = create_servo_from_config(
-            pin=pin,
+            pin=pin_value,
             config_path=config,
             backend_name=backend_name,
             chip=chip,
+            bus_id=bus_id,
             frequency_hz=frequency_hz,
             address=address,
             pin_channel_map=pin_channel_map,
@@ -89,9 +101,9 @@ def move(
             click.echo(f"Config: {config}")
             click.echo(f"Backend: {resolved_backend}")
             click.echo(f"Backend kwargs: {backend_kwargs}")
-            click.echo(f"Calibration: {manager.get_calibration(pin)}")
+            click.echo(f"Calibration: {manager.get_calibration(pin_value)}")
 
-        click.echo(f"Moving GPIO{pin} to {angle_val}°")
+        click.echo(f"Moving {format_endpoint_label(pin_value)} to {angle_val}°")
         servo.set_angle(angle_val)
         time.sleep(sleep)
         click.echo("✓ Done")

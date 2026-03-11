@@ -8,7 +8,7 @@ from pathlib import Path
 import click
 
 from ..config import BACKEND_CONFIG_KEY, ConfigManager
-from ..core import ServoCalibration
+from ..core import ServoCalibration, parse_servo_endpoint
 
 
 @click.group("config")
@@ -31,8 +31,18 @@ def config_cmd() -> None:
     default=None,
     help="Show only this pin's configuration.",
 )
-def show_config(config_path: str, pin: int | None) -> None:
+@click.option(
+    "-e",
+    "--endpoint",
+    type=str,
+    default=None,
+    help="Show only this explicit endpoint configuration, for example 'hat_pwm1'.",
+)
+def show_config(config_path: str, pin: int | None, endpoint: str | None) -> None:
     """Display current servo configuration."""
+    if pin is not None and endpoint is not None:
+        raise click.BadParameter("Use either --pin or --endpoint, not both.")
+
     manager = ConfigManager(config_path)
     manager.load()
 
@@ -41,14 +51,18 @@ def show_config(config_path: str, pin: int | None) -> None:
     click.echo(f"Backend: {backend_config['name']}")
     click.echo(f"Backend kwargs: {backend_config['kwargs'] or '{}'}")
 
-    configs = manager.get_all_calibrations()
-    if pin is not None:
-        if pin not in configs:
-            click.echo(f"\nGPIO{pin}: Not configured")
+    configs = manager.get_all_endpoint_calibrations()
+    if pin is not None or endpoint is not None:
+        try:
+            endpoint_id = parse_servo_endpoint(endpoint if endpoint is not None else pin).identifier
+        except ValueError as exc:
+            raise click.BadParameter(str(exc)) from exc
+        if endpoint_id not in configs:
+            click.echo(f"\n{endpoint_id}: Not configured")
             return
 
-        cal = configs[pin]
-        click.echo(f"\nGPIO{pin}:")
+        cal = configs[endpoint_id]
+        click.echo(f"\n{endpoint_id}:")
         click.echo(f"  pulse_min:    {cal.pulse_min}")
         click.echo(f"  pulse_center: {cal.pulse_center}")
         click.echo(f"  pulse_max:    {cal.pulse_max}")
@@ -63,9 +77,9 @@ def show_config(config_path: str, pin: int | None) -> None:
         return
 
     click.echo()
-    for pin_num, cal in sorted(configs.items()):
+    for endpoint_id, cal in sorted(configs.items()):
         click.echo(
-            f"  GPIO{pin_num}: pulse=[{cal.pulse_min}, {cal.pulse_center}, {cal.pulse_max}] speed={cal.speed}%"
+            f"  {endpoint_id}: pulse=[{cal.pulse_min}, {cal.pulse_center}, {cal.pulse_max}] speed={cal.speed}%"
         )
 
 
@@ -123,9 +137,9 @@ def import_config(input_path: str, config_path: str, merge: bool) -> None:
     for pin_str, cal_data in data.items():
         if pin_str == BACKEND_CONFIG_KEY:
             continue
-        pin = int(pin_str)
+        endpoint = parse_servo_endpoint(pin_str)
         manager.set_calibration(
-            pin,
+            endpoint,
             ServoCalibration(
                 pulse_min=cal_data.get("pulse_min", 500),
                 pulse_max=cal_data.get("pulse_max", 2500),

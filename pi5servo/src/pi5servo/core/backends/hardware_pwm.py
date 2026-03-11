@@ -6,6 +6,7 @@ from importlib import import_module
 from typing import Any
 
 from ..backend_errors import BackendConfigurationError, BackendUnavailableError
+from ..endpoint import parse_servo_endpoint
 
 DEFAULT_SERVO_FREQUENCY_HZ = 50
 DEFAULT_PWM_CHIP = 0
@@ -50,7 +51,14 @@ class HardwarePWMServoBackend:
             for pin in pins:
                 self._validate_pin(pin)
 
-    def _validate_pin(self, pin: int) -> int:
+    def _normalize_pin(self, identifier: int | str) -> int:
+        endpoint = parse_servo_endpoint(identifier)
+        if endpoint.kind != "gpio":
+            raise BackendConfigurationError("RP1 hardware PWM only supports native GPIO endpoints.")
+        return endpoint.legacy_pin
+
+    def _validate_pin(self, pin: int | str) -> int:
+        pin = self._normalize_pin(pin)
         try:
             return self._pin_channel_map[pin]
         except KeyError as exc:
@@ -68,7 +76,8 @@ class HardwarePWMServoBackend:
         duty = (pulse_width_us / self._period_us()) * 100.0
         return max(0.0, min(100.0, duty))
 
-    def claim(self, identifier: int) -> None:
+    def claim(self, identifier: int | str) -> None:
+        identifier = self._normalize_pin(identifier)
         if identifier in self._pwms:
             return
         pwm_channel = self._validate_pin(identifier)
@@ -79,7 +88,8 @@ class HardwarePWMServoBackend:
         )
         self._current_pulses.setdefault(identifier, 0)
 
-    def set_pulse_us(self, identifier: int, pulse_width_us: int) -> None:
+    def set_pulse_us(self, identifier: int | str, pulse_width_us: int) -> None:
+        identifier = self._normalize_pin(identifier)
         if pulse_width_us <= 0:
             self.off(identifier)
             return
@@ -97,10 +107,12 @@ class HardwarePWMServoBackend:
 
         self._current_pulses[identifier] = int(pulse_width_us)
 
-    def get_pulse_us(self, identifier: int) -> int:
+    def get_pulse_us(self, identifier: int | str) -> int:
+        identifier = self._normalize_pin(identifier)
         return int(self._current_pulses.get(identifier, 0))
 
-    def off(self, identifier: int) -> None:
+    def off(self, identifier: int | str) -> None:
+        identifier = self._normalize_pin(identifier)
         self.claim(identifier)
         pwm = self._pwms[identifier]
         if identifier in self._active:
@@ -108,7 +120,8 @@ class HardwarePWMServoBackend:
             self._active.discard(identifier)
         self._current_pulses[identifier] = 0
 
-    def release(self, identifier: int) -> None:
+    def release(self, identifier: int | str) -> None:
+        identifier = self._normalize_pin(identifier)
         if identifier not in self._pwms:
             return
         self.off(identifier)

@@ -127,11 +127,55 @@ class TestConfigManager:
         # Read raw JSON to verify
         with open(temp_config) as f:
             data = json.load(f)
-        assert data["20"]["speed"] == 42
+        assert data["gpio20"]["speed"] == 42
 
         # Load and verify
         manager.load()
         assert manager.get_calibration(20).speed == 42
+
+    def test_legacy_numeric_config_keys_load_as_gpio_endpoints(self, temp_config):
+        """Older numeric config keys are normalized on load."""
+        temp_config.write_text(
+            json.dumps(
+                {
+                    "20": {"pulse_center": 1600, "speed": 55},
+                    "__backend__": {"name": "auto", "kwargs": {}},
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        manager = ConfigManager(temp_config)
+        assert manager.load() is True
+        assert manager.get_calibration(20).pulse_center == 1600
+        assert manager.get_all_endpoint_calibrations()["gpio20"].speed == 55
+
+    def test_explicit_endpoint_config_persisted(self, manager, temp_config):
+        """Explicit endpoint identifiers are stored in the new schema."""
+        manager.set_calibration("hat_pwm1", ServoCalibration(speed=60))
+        manager.save()
+
+        with open(temp_config, encoding="utf-8") as handle:
+            data = json.load(handle)
+
+        assert data["hat_pwm1"]["speed"] == 60
+        assert 20 not in manager.get_all_calibrations()
+
+    def test_get_all_calibrations_keeps_legacy_gpio_view(self, manager):
+        """Legacy int-key view should only expose native GPIO endpoints."""
+        manager.set_calibration(20, ServoCalibration(speed=100))
+        manager.set_calibration("hat_pwm2", ServoCalibration(speed=90))
+
+        all_cals = manager.get_all_calibrations()
+        assert all_cals == {20: manager.get_calibration(20)}
+
+    def test_get_known_endpoints_returns_normalized_ids(self, manager):
+        """Configured endpoints should be returned in normalized form."""
+        manager.set_calibration(20, ServoCalibration())
+        manager.set_calibration("hat_pwm1", ServoCalibration())
+
+        endpoints = manager.get_known_endpoints()
+        assert [endpoint.identifier for endpoint in endpoints] == ["gpio20", "hat_pwm1"]
 
     def test_backend_config_defaults_to_auto(self, manager):
         """Backend config defaults to standalone auto mode."""

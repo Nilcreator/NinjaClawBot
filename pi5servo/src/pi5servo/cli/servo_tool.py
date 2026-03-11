@@ -9,7 +9,14 @@ import click
 
 from ..config import ConfigManager
 from ..core import Servo, ServoCalibration, ServoGroup
-from ._common import backend_options, close_runtime_handle, create_group_from_config
+from ._common import (
+    backend_options,
+    close_runtime_handle,
+    create_group_from_config,
+    format_endpoint_label,
+    parse_endpoint_value,
+    sort_endpoint_keys,
+)
 from .calib import CalibApp
 
 try:
@@ -33,6 +40,7 @@ def servo_tool(
     config_path: str,
     backend_name: str | None,
     chip: int | None,
+    bus_id: int | None,
     frequency_hz: int | None,
     address: str | None,
     pin_channel_map: str | None,
@@ -47,7 +55,9 @@ def servo_tool(
     term = Terminal()
     manager = ConfigManager(config_path)
     manager.load()
-    known_pins = sorted(manager.get_all_calibrations().keys()) or [12, 13]
+    known_pins = sort_endpoint_keys(
+        [endpoint.legacy_key for endpoint in manager.get_known_endpoints()]
+    ) or [12, 13]
 
     persistent_group = None
     runtime = None
@@ -81,6 +91,7 @@ def servo_tool(
                 config_path=config_path,
                 backend_name=backend_name,
                 chip=chip,
+                bus_id=bus_id,
                 frequency_hz=frequency_hz,
                 address=address,
                 pin_channel_map=pin_channel_map,
@@ -91,7 +102,8 @@ def servo_tool(
         if known_pins:
             persistent_group.center_all()
             time.sleep(0.1)
-            click.echo(term.green(f"✓ All servos centered (0°): GPIO {known_pins}"))
+            labels = ", ".join(format_endpoint_label(pin) for pin in known_pins)
+            click.echo(term.green(f"✓ All servos centered (0°): {labels}"))
 
         def show_menu() -> None:
             click.echo(term.clear())
@@ -105,7 +117,7 @@ def servo_tool(
             click.echo(term.bold("╠" + "═" * 58 + "╣"))
             click.echo(
                 term.bold("║")
-                + "  1. Quick Move    - Enter commands like '12:30/13:M'    "
+                + "  1. Quick Move    - Enter commands like 'gpio12:30/hat_pwm1:M' "
                 + term.bold("║")
             )
             click.echo(
@@ -143,7 +155,7 @@ def servo_tool(
 
         def quick_move() -> None:
             click.echo("\n" + term.cyan("=== Quick Move Mode ==="))
-            click.echo("Enter commands like 'F_12:45/13:-30'. Type 'q' to return.\n")
+            click.echo("Enter commands like 'F_gpio12:45/hat_pwm1:-30'. Type 'q' to return.\n")
 
             from ..parser import parse_command
 
@@ -156,7 +168,7 @@ def servo_tool(
 
                 try:
                     parsed = parse_command(cmd_str)
-                    pins = sorted({target.pin for target in parsed.targets})
+                    pins = sort_endpoint_keys(list({target.pin for target in parsed.targets}))
                     if set(pins).issubset(set(persistent_group.pins)):
                         group = persistent_group
                         owns_group = False
@@ -174,16 +186,17 @@ def servo_tool(
 
         def single_move() -> None:
             click.echo("\n" + term.cyan("=== Single Move Mode ==="))
-            click.echo("Enter GPIO pin:")
+            click.echo("Enter servo endpoint (for example 12, gpio12, or hat_pwm1):")
             try:
-                pin = int(input("> ").strip())
+                pin = parse_endpoint_value(input("> ").strip())
             except ValueError:
-                click.echo(term.red("Invalid pin"))
+                click.echo(term.red("Invalid endpoint"))
                 input("\nPress Enter to continue...")
                 return
 
             click.echo(
-                f"Moving GPIO{pin}. Enter angle or 'min'/'center'/'max'. Type 'q' to return.\n"
+                f"Moving {format_endpoint_label(pin)}. "
+                "Enter angle or 'min'/'center'/'max'. Type 'q' to return.\n"
             )
             servo = build_temp_servo(pin)
 
@@ -210,16 +223,16 @@ def servo_tool(
                             continue
 
                     servo.set_angle(angle)
-                    click.echo(term.green(f"✓ GPIO{pin} → {angle}°"))
+                    click.echo(term.green(f"✓ {format_endpoint_label(pin)} → {angle}°"))
             finally:
                 servo.close()
 
         def calibrate_servo() -> None:
-            click.echo("\n" + term.yellow("Enter GPIO pin to calibrate:"))
+            click.echo("\n" + term.yellow("Enter servo endpoint to calibrate:"))
             try:
-                pin = int(input("> ").strip())
+                pin = parse_endpoint_value(input("> ").strip())
             except ValueError:
-                click.echo(term.red("Invalid pin"))
+                click.echo(term.red("Invalid endpoint"))
                 input("\nPress Enter to continue...")
                 return
 
@@ -234,22 +247,22 @@ def servo_tool(
 
         def set_speed() -> None:
             click.echo("\n" + term.cyan("=== Set Servo Speed Limit ==="))
-            configs = manager.get_all_calibrations()
+            configs = manager.get_all_endpoint_calibrations()
             if configs:
                 click.echo("\nCurrent speeds:")
-                for pin_num, cal in sorted(configs.items()):
-                    click.echo(f"  GPIO{pin_num}: {cal.speed}%")
+                for endpoint_id, cal in sorted(configs.items()):
+                    click.echo(f"  {endpoint_id}: {cal.speed}%")
 
-            click.echo("\n" + term.yellow("Enter GPIO pin:"))
+            click.echo("\n" + term.yellow("Enter servo endpoint:"))
             try:
-                pin = int(input("> ").strip())
+                pin = parse_endpoint_value(input("> ").strip())
             except ValueError:
-                click.echo(term.red("Invalid pin"))
+                click.echo(term.red("Invalid endpoint"))
                 input("\nPress Enter to continue...")
                 return
 
             cal = manager.get_calibration(pin)
-            click.echo(f"Current speed for GPIO{pin}: {cal.speed}%")
+            click.echo(f"Current speed for {format_endpoint_label(pin)}: {cal.speed}%")
             click.echo(term.yellow("Enter new speed (0-100):"))
             try:
                 new_speed = int(input("> ").strip())
@@ -277,7 +290,7 @@ def servo_tool(
             )
             manager.save()
             reload_manager()
-            click.echo(term.green(f"✓ Speed for GPIO{pin} set to {new_speed}%"))
+            click.echo(term.green(f"✓ Speed for {format_endpoint_label(pin)} set to {new_speed}%"))
             input("\nPress Enter to continue...")
 
         def show_status() -> None:
@@ -285,13 +298,13 @@ def servo_tool(
             click.echo(f"Backend: {resolved_backend}")
             click.echo(f"Backend kwargs: {backend_kwargs or '{}'}")
 
-            configs = manager.get_all_calibrations()
+            configs = manager.get_all_endpoint_calibrations()
             if not configs:
                 click.echo("No servos configured. Run calibration first.")
             else:
-                for pin_num, cal in sorted(configs.items()):
+                for endpoint_id, cal in sorted(configs.items()):
                     click.echo(
-                        f"  GPIO{pin_num}: pulse=[{cal.pulse_min}, {cal.pulse_center}, {cal.pulse_max}] speed={cal.speed}%"
+                        f"  {endpoint_id}: pulse=[{cal.pulse_min}, {cal.pulse_center}, {cal.pulse_max}] speed={cal.speed}%"
                     )
             input("\nPress Enter to continue...")
 

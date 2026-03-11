@@ -1,11 +1,13 @@
 """pi0servo.core - Core servo control classes.
 
 Exports:
+    - ServoEndpoint: Normalized endpoint model for GPIO and HAT PWM targets
     - Servo: Single servo controller with calibration
     - ServoCalibration: Dataclass for calibration data
     - ServoGroup: Multi-servo controller with abort support
 """
 
+from .endpoint import ServoEndpoint, parse_servo_endpoint
 from .multi_servos import ServoGroup
 from .servo import (
     ANGLE_CENTER,
@@ -20,6 +22,9 @@ from .servo import (
 )
 
 __all__ = [
+    # Endpoint helpers
+    "ServoEndpoint",
+    "parse_servo_endpoint",
     # Servo
     "Servo",
     "ServoCalibration",

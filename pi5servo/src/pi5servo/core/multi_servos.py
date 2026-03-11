@@ -19,6 +19,7 @@ except ImportError:
 from ..motion import EASING_FUNCTIONS, calculate_duration, ease_in_out_cubic
 from ..parser import ParsedCommand, ServoTarget, parse_command, resolve_special_angle
 from .backend import ServoPulseBackend, create_servo_backend, is_servo_backend
+from .endpoint import ServoEndpoint, parse_servo_endpoint
 from .servo import Servo, ServoCalibration
 
 # Step interval for motion interpolation (10ms = 100Hz for smoother motion)
@@ -31,8 +32,8 @@ class ServoGroup:
     def __init__(
         self,
         pi: Any | None,
-        pins: list[int],
-        calibrations: dict[int, ServoCalibration] | None = None,
+        pins: list[int | str | ServoEndpoint],
+        calibrations: dict[int | str, ServoCalibration] | None = None,
         *,
         backend: str | ServoPulseBackend | None = None,
         backend_kwargs: dict[str, Any] | None = None,
@@ -49,7 +50,8 @@ class ServoGroup:
             owns_backend: Override backend ownership for advanced use cases.
         """
         self._pi = pi
-        self._pins = list(pins)
+        self._endpoints = [parse_servo_endpoint(pin) for pin in pins]
+        self._pins = [endpoint.legacy_key for endpoint in self._endpoints]
         self._abort_event = threading.Event()
         self._async_abort_event = asyncio.Event()
         self._backend, self._owns_backend = self._resolve_backend(
@@ -60,10 +62,13 @@ class ServoGroup:
             owns_backend,
         )
 
-        self._servos: dict[int, Servo] = {}
+        self._servos: dict[int | str, Servo] = {}
         calibrations = calibrations or {}
         for pin in self._pins:
+            endpoint = parse_servo_endpoint(pin)
             cal = calibrations.get(pin)
+            if cal is None:
+                cal = calibrations.get(endpoint.identifier)
             self._servos[pin] = Servo(
                 pi,
                 pin,
@@ -75,7 +80,7 @@ class ServoGroup:
     @staticmethod
     def _resolve_backend(
         pi: Any | None,
-        pins: list[int],
+        pins: list[int | str | ServoEndpoint],
         backend: str | ServoPulseBackend | None,
         backend_kwargs: dict[str, Any],
         owns_backend: bool | None,
@@ -97,13 +102,13 @@ class ServoGroup:
         return created_backend, pi is None or backend is not None
 
     @property
-    def pins(self) -> list[int]:
-        """List of GPIO pins."""
+    def pins(self) -> list[int | str]:
+        """List of GPIO pins or endpoint identifiers."""
         return list(self._pins)
 
     @property
-    def servos(self) -> dict[int, Servo]:
-        """Dictionary of pin -> Servo."""
+    def servos(self) -> dict[int | str, Servo]:
+        """Dictionary of pin or endpoint identifier -> Servo."""
         return self._servos
 
     @property
@@ -111,14 +116,18 @@ class ServoGroup:
         """Shared pulse backend for this group."""
         return self._backend
 
-    def get_servo(self, pin: int) -> Servo | None:
-        """Get a Servo by pin number."""
-        return self._servos.get(pin)
+    def get_servo(self, pin: int | str | ServoEndpoint) -> Servo | None:
+        """Get a Servo by pin number or endpoint identifier."""
+        endpoint = parse_servo_endpoint(pin)
+        return self._servos.get(endpoint.legacy_key)
 
-    def update_calibration(self, pin: int, calibration: ServoCalibration) -> None:
+    def update_calibration(
+        self, pin: int | str | ServoEndpoint, calibration: ServoCalibration
+    ) -> None:
         """Update calibration for a specific servo."""
-        if pin in self._servos:
-            self._servos[pin].calibration = calibration
+        servo = self.get_servo(pin)
+        if servo is not None:
+            servo.calibration = calibration
 
     def abort(self) -> None:
         """Signal abort for any running movement."""

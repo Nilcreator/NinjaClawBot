@@ -26,7 +26,11 @@ movement-tool command format, CLI command set, and `servo.json` contract, while
 replacing direct `pigpio` servo pulses with a backend system for Raspberry Pi 5.
 The standalone-first path targets header-connected servos through hardware-backed
 PWM, with optional PCA9685 support for advanced external controller setups and
-legacy `pigpio` compatibility retained for future integration work.
+legacy `pigpio` compatibility retained for future integration work. The current
+release also supports explicit mixed-endpoint routing so native GPIO servos and
+DFRobot DFR0566 HAT PWM servos can coexist without identifier ambiguity. DFR0566
+digital ports still follow the native GPIO path, while the HAT PWM connectors
+use the dedicated `dfr0566` backend path.
 
 `pi5vl53l0x` preserves the legacy `pi0vl53l0x` class, CLI command set, and
 `vl53l0x.json` config format, while replacing the old `pigpio` I2C path with a

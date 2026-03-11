@@ -4,7 +4,34 @@
 
 A lightweight, physics-based servo control library for SG90 and MG90S style servos. `pi5servo` keeps the movement model, calibration flow, command format, and interactive tools from `pi0servo`, but replaces the old `pigpio`-only transport with a Raspberry Pi 5 friendly backend system.
 
-The default target is **header-connected servos on Raspberry Pi 5** using hardware-backed PWM. An optional `pca9685` backend is also available for advanced external controller setups.
+The default target is **header-connected servos on Raspberry Pi 5** using hardware-backed PWM. The library also supports the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) for I2C-managed PWM servo channels, plus an optional `pca9685` backend for other advanced external controller setups.
+
+## 🔀 Connection Models
+
+`pi5servo` needs to distinguish two different servo signal paths when the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) is involved:
+
+1. **Native GPIO servo**
+   - the signal wire is driven by the Raspberry Pi itself
+   - this includes a servo plugged directly into the Pi header
+   - this also includes a servo plugged into a DFR0566 **digital** port, because those ports are still Raspberry Pi GPIO breakouts
+
+2. **DFR0566 HAT PWM servo**
+   - the signal wire is driven by one of the HAT's 4 PWM channels
+   - this is a separate MCU-managed path over I2C
+   - this is not the same thing as a native GPIO servo
+
+> [!IMPORTANT]
+> A DFR0566 **digital** port and a DFR0566 **PWM** port are not interchangeable in software. Digital ports follow the native GPIO path. The dedicated PWM ports follow the `dfr0566` backend path.
+
+## 📌 Endpoint Model
+
+`pi5servo` now supports both the old native GPIO shorthand and the new explicit endpoint form:
+
+- `12`, `13`, and similar numeric targets still mean native GPIO shorthand
+- `gpio12`, `gpio13`, and similar names are the explicit native GPIO form
+- `hat_pwm1`, `hat_pwm2`, `hat_pwm3`, and `hat_pwm4` are the DFR0566 PWM channels
+
+Use the explicit form whenever native GPIO servos and DFR0566 PWM servos appear in the same command or config file.
 
 ## ✨ Key Features
 
@@ -14,7 +41,8 @@ The default target is **header-connected servos on Raspberry Pi 5** using hardwa
 - **Per-Servo Speed Limits** – Individual speed limits (0-100%) reduce mechanical stress
 - **Thread-safe Abort** – Immediately stop any running movement
 - **Interactive Tools** – Menu-driven `servo-tool` plus calibration TUI
-- **Pi 5 Standalone Backends** – `auto`, `hardware_pwm`, optional `pca9685`, and legacy `pigpio` compatibility
+- **Mixed Endpoint Support** – Native GPIO and `hat_pwm` endpoints can run together in one group
+- **Pi 5 Standalone Backends** – `auto`, `hardware_pwm`, `dfr0566`, optional `pca9685`, and legacy `pigpio` compatibility
 
 ## 📋 Requirements
 
@@ -73,6 +101,17 @@ Reboot after saving the file.
 > [!NOTE]
 > `pi5servo` defaults to a pin-to-channel map of `12->0`, `13->1`, `18->2`, and `19->3`. If your overlay uses a different mapping, pass `--pin-channel-map` on the CLI or store the custom mapping in `servo.json`.
 
+### Step 2b: Enable I2C If You Will Use DFR0566
+
+If you plan to use the DFR0566 PWM channels, make sure Raspberry Pi I2C is enabled and the HAT appears on bus `1`.
+
+```bash
+ls /dev/i2c-1
+sudo i2cdetect -y 1
+```
+
+Expected result: the DFR0566 appears at `0x10` unless you changed its address.
+
 ### Step 3: Clone the Repository
 
 ```bash
@@ -104,7 +143,7 @@ uv run pi5servo --help
 uv run pi5servo status --pins 12,13
 ```
 
-If you want to use the optional external controller path later, install the same `pi` extra and run the CLI with `--backend pca9685`.
+If you want to use the DFR0566 or PCA9685 controller paths, install the same `pi` extra and select the backend on the CLI or in `servo.json`.
 
 ---
 
@@ -125,7 +164,7 @@ uv run pi5servo servo-tool
 ╔══════════════════════════════════════════════════════════╗
 ║           pi5servo Interactive Tool                      ║
 ╠══════════════════════════════════════════════════════════╣
-║  1. Quick Move    - Enter commands like '12:30/13:M'     ║
+║  1. Quick Move    - Enter commands like 'gpio12:30/hat_pwm1:M' ║
 ║  2. Single Move   - Move one servo to angle              ║
 ║  3. Calibrate     - Launch calibration TUI               ║
 ║  4. Set Speed     - Adjust servo speed limit             ║
@@ -141,7 +180,7 @@ uv run pi5servo servo-tool
 > **Calibration is required before motion work.** Each servo has different real pulse limits, even when it is the same model.
 
 1. Select option **3. Calibrate**
-2. Enter the GPIO pin number that carries the servo signal
+2. Enter the servo endpoint that carries the servo signal
 3. Use the calibration TUI to find the correct pulse widths
 
 | Key | Action |
@@ -163,13 +202,18 @@ Commands use the **movement-tool** format:
 [GLOBAL_SPEED_]PIN:ANGLE[LOCAL_SPEED][/PIN:ANGLE[LOCAL_SPEED]...]
 ```
 
+> [!NOTE]
+> Numeric targets such as `12:45` still mean native GPIO shorthand. Use explicit forms such as `gpio12:45` and `hat_pwm1:45` for mixed native-GPIO and DFR0566 setups.
+
 ### Examples
 
 | Command | Description |
 |---------|-------------|
 | `12:45` | Move GPIO12 to 45° at medium speed (default) |
+| `gpio12:45` | Move explicit native GPIO endpoint `gpio12` to 45° |
+| `hat_pwm1:45` | Move DFR0566 PWM channel 1 to 45° |
 | `F_12:45` | Move GPIO12 to 45° at **Fast** speed |
-| `M_12:45/13:-30` | Move two servos at **Medium** speed |
+| `M_gpio12:45/hat_pwm1:-30` | Move a native GPIO servo and a DFR0566 PWM servo together |
 | `S_12:C/13:MF` | Move GPIO12 to Center and GPIO13 to Min with a fast local override |
 | `12:45S` | Move GPIO12 to 45° at **Slow** speed |
 
@@ -199,18 +243,23 @@ uv run pi5servo servo-tool
 
 # Calibration
 uv run pi5servo calib 12
+uv run pi5servo calib hat_pwm1
 uv run pi5servo calib --show
 
 # Single servo
 uv run pi5servo move 12 45
+uv run pi5servo move hat_pwm1 center
 uv run pi5servo move 12 center
 
 # Multi-servo command
 uv run pi5servo cmd "F_12:45/13:-30" --pins 12,13
+uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1
 
 # Status and configuration
 uv run pi5servo status --pins 12,13
+uv run pi5servo status --pins gpio12,hat_pwm1
 uv run pi5servo config show
+uv run pi5servo config show --endpoint hat_pwm1
 uv run pi5servo config export backup.json
 uv run pi5servo config import backup.json
 ```
@@ -218,6 +267,12 @@ uv run pi5servo config import backup.json
 ### Advanced Backend Examples
 
 ```bash
+# Use the DFR0566 PWM channels directly
+uv run pi5servo move hat_pwm1 45 \
+  --backend dfr0566 \
+  --address 0x10 \
+  --bus-id 1
+
 # Use the optional PCA9685 controller
 uv run pi5servo move 12 45 \
   --backend pca9685 \
@@ -230,8 +285,6 @@ uv run pi5servo status \
   --pins 12,13 \
   --pin-channel-map 12:0,13:1
 ```
-
----
 
 ## 🐍 Python API
 
@@ -247,6 +300,23 @@ calibrations = {12: manager.get_calibration(12), 13: manager.get_calibration(13)
 group = ServoGroup(None, pins=[12, 13], calibrations=calibrations)
 group.move_all_sync(targets=[45, -30], speed_mode="M")
 group.off()
+group.close()
+```
+
+### Mixed Native GPIO And DFR0566 Usage
+
+```python
+from pi5servo import ConfigManager, ServoGroup
+
+manager = ConfigManager("servo.json")
+manager.load()
+calibrations = {
+    "gpio12": manager.get_calibration("gpio12"),
+    "hat_pwm1": manager.get_calibration("hat_pwm1"),
+}
+
+group = ServoGroup(None, pins=["gpio12", "hat_pwm1"], calibrations=calibrations)
+group.move_all_sync(targets=[45, -30], speed_mode="M")
 group.close()
 ```
 
@@ -308,25 +378,34 @@ Calibration and optional backend settings are stored in `servo.json`:
 ```json
 {
   "__backend__": {
-    "name": "hardware_pwm",
+    "name": "auto",
     "kwargs": {
-      "pin_channel_map": {
-        "12": 0,
-        "13": 1
-      }
+      "address": 16,
+      "bus_id": 1
     }
   },
-  "12": {
+  "gpio12": {
     "pulse_min": 500,
     "pulse_center": 1500,
     "pulse_max": 2500,
     "speed": 80
+  },
+  "hat_pwm1": {
+    "pulse_min": 500,
+    "pulse_center": 1500,
+    "pulse_max": 2500,
+    "speed": 70
   }
 }
 ```
 
 > [!NOTE]
 > **Default (uncalibrated) values are all `1500`.** This means an uncalibrated servo stays at the safe center-only state until you calibrate it.
+
+### Endpoint Rule
+
+- native GPIO or DFR0566 digital breakout -> native GPIO endpoint
+- DFR0566 PWM connector -> HAT PWM endpoint
 
 ---
 

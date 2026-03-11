@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ..core.endpoint import ServoEndpoint, parse_servo_endpoint
 from ..core.servo import ServoCalibration
 
 # Default config filename (relative to library)
@@ -44,7 +45,7 @@ class ConfigManager:
         else:
             self._config_path = Path(config_path)
 
-        self._data: dict[int, dict[str, Any]] = {}
+        self._data: dict[str, dict[str, Any]] = {}
         self._backend_config: dict[str, Any] = dict(DEFAULT_BACKEND_CONFIG)
 
     @property
@@ -74,7 +75,6 @@ class ConfigManager:
             with open(self._config_path, "r", encoding="utf-8") as f:
                 raw_data = json.load(f)
 
-            # Convert string keys to int (JSON only supports string keys)
             self._data = {}
             raw_backend = raw_data.get(BACKEND_CONFIG_KEY, DEFAULT_BACKEND_CONFIG)
             if not isinstance(raw_backend, dict):
@@ -87,8 +87,9 @@ class ConfigManager:
                 if key == BACKEND_CONFIG_KEY:
                     continue
                 try:
-                    pin = int(key)
-                    self._data[pin] = value
+                    endpoint = parse_servo_endpoint(key)
+                    if isinstance(value, dict):
+                        self._data[endpoint.identifier] = value
                 except ValueError:
                     pass
 
@@ -106,7 +107,6 @@ class ConfigManager:
             # Ensure parent directory exists
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Convert int keys to strings for JSON
             json_data = self._to_dict()
 
             with open(self._config_path, "w", encoding="utf-8") as f:
@@ -116,19 +116,20 @@ class ConfigManager:
         except OSError:
             return False
 
-    def get_calibration(self, pin: int) -> ServoCalibration:
-        """Get calibration for a specific pin.
+    def get_calibration(self, pin: int | str | ServoEndpoint) -> ServoCalibration:
+        """Get calibration for a specific endpoint.
 
         Args:
-            pin: GPIO pin number
+            pin: GPIO pin number or explicit endpoint identifier
 
         Returns:
-            ServoCalibration for the pin (defaults if not configured)
+            ServoCalibration for the endpoint (defaults if not configured)
         """
-        if pin not in self._data:
+        endpoint = parse_servo_endpoint(pin)
+        if endpoint.identifier not in self._data:
             return ServoCalibration()
 
-        data = self._data[pin]
+        data = self._data[endpoint.identifier]
         return ServoCalibration(
             pulse_min=data.get("pulse_min", 500),
             pulse_max=data.get("pulse_max", 2500),
@@ -139,14 +140,15 @@ class ConfigManager:
             speed=data.get("speed", 80),  # New V5 field
         )
 
-    def set_calibration(self, pin: int, calibration: ServoCalibration):
-        """Set calibration for a specific pin.
+    def set_calibration(self, pin: int | str | ServoEndpoint, calibration: ServoCalibration):
+        """Set calibration for a specific endpoint.
 
         Args:
-            pin: GPIO pin number
+            pin: GPIO pin number or explicit endpoint identifier
             calibration: ServoCalibration to store
         """
-        self._data[pin] = {
+        endpoint = parse_servo_endpoint(pin)
+        self._data[endpoint.identifier] = {
             "pulse_min": calibration.pulse_min,
             "pulse_max": calibration.pulse_max,
             "pulse_center": calibration.pulse_center,
@@ -157,24 +159,41 @@ class ConfigManager:
         }
 
     def get_all_calibrations(self) -> dict[int, ServoCalibration]:
-        """Get all stored calibrations.
+        """Get stored native GPIO calibrations using the legacy int-key view.
 
         Returns:
-            Dict mapping pin numbers to ServoCalibration objects
+            Dict mapping native GPIO pin numbers to ServoCalibration objects
         """
-        return {pin: self.get_calibration(pin) for pin in self._data.keys()}
+        calibrations: dict[int, ServoCalibration] = {}
+        for endpoint_id in self._data:
+            endpoint = parse_servo_endpoint(endpoint_id)
+            if endpoint.kind == "gpio":
+                calibrations[endpoint.legacy_pin] = self.get_calibration(endpoint)
+        return calibrations
 
-    def remove_calibration(self, pin: int) -> bool:
-        """Remove calibration for a specific pin.
+    def get_all_endpoint_calibrations(self) -> dict[str, ServoCalibration]:
+        """Get all stored calibrations using explicit endpoint identifiers."""
+        return {
+            endpoint_id: self.get_calibration(endpoint_id)
+            for endpoint_id in sorted(self._data.keys())
+        }
+
+    def get_known_endpoints(self) -> list[ServoEndpoint]:
+        """Return all configured endpoints in normalized form."""
+        return [parse_servo_endpoint(endpoint_id) for endpoint_id in sorted(self._data)]
+
+    def remove_calibration(self, pin: int | str | ServoEndpoint) -> bool:
+        """Remove calibration for a specific endpoint.
 
         Args:
-            pin: GPIO pin number
+            pin: GPIO pin number or explicit endpoint identifier
 
         Returns:
             True if removed, False if not found
         """
-        if pin in self._data:
-            del self._data[pin]
+        endpoint = parse_servo_endpoint(pin)
+        if endpoint.identifier in self._data:
+            del self._data[endpoint.identifier]
             return True
         return False
 
@@ -202,7 +221,7 @@ class ConfigManager:
         Returns:
             Dict with string keys (for JSON compatibility)
         """
-        json_data = {str(k): v for k, v in self._data.items()}
+        json_data = dict(self._data)
         json_data[BACKEND_CONFIG_KEY] = self.get_backend_config()
         return json_data
 

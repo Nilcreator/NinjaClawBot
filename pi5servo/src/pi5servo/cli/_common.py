@@ -8,13 +8,14 @@ from typing import Any, Callable
 import click
 
 from ..config import ConfigManager
-from ..core import Servo, ServoGroup
+from ..core import Servo, ServoEndpoint, ServoGroup, parse_servo_endpoint
 
 BACKEND_CHOICES = (
     "auto",
     "hardware_pwm",
     "rp1_hardware_pwm",
     "pwm_pio",
+    "dfr0566",
     "pca9685",
     "pigpio",
 )
@@ -28,16 +29,31 @@ def _parse_int(value: str | int) -> int:
     return int(value, 0)
 
 
-def parse_pin_list(pins: str) -> list[int]:
-    """Parse a comma-separated pin list."""
+def parse_endpoint_value(value: int | str | ServoEndpoint) -> int | str:
+    """Normalize a servo endpoint to the legacy-compatible CLI key."""
+    return parse_servo_endpoint(value).legacy_key
+
+
+def format_endpoint_label(value: int | str | ServoEndpoint) -> str:
+    """Format an endpoint for user-facing CLI output."""
+    return parse_servo_endpoint(value).identifier
+
+
+def sort_endpoint_keys(values: list[int | str]) -> list[int | str]:
+    """Sort mixed endpoint keys consistently for display and deterministic routing."""
+    return sorted(values, key=format_endpoint_label)
+
+
+def parse_pin_list(pins: str) -> list[int | str]:
+    """Parse a comma-separated endpoint list."""
     try:
-        return [_parse_int(pin.strip()) for pin in pins.split(",") if pin.strip()]
+        return [parse_endpoint_value(pin.strip()) for pin in pins.split(",") if pin.strip()]
     except ValueError as exc:
         raise click.BadParameter(f"Invalid pins format: {exc}") from exc
 
 
 def parse_mapping_option(value: str | None, option_name: str) -> dict[int, int] | None:
-    """Parse ``PIN:CHANNEL`` mappings from a comma-separated option string."""
+    """Parse ``GPIO_ENDPOINT:CHANNEL`` mappings from a comma-separated option string."""
     if not value:
         return None
 
@@ -48,7 +64,10 @@ def parse_mapping_option(value: str | None, option_name: str) -> dict[int, int] 
             continue
         try:
             left, right = candidate.split(":", 1)
-            mapping[_parse_int(left.strip())] = _parse_int(right.strip())
+            endpoint = parse_servo_endpoint(left.strip())
+            if endpoint.kind != "gpio":
+                raise ValueError("mapping keys must reference native GPIO endpoints")
+            mapping[endpoint.legacy_pin] = _parse_int(right.strip())
         except (TypeError, ValueError) as exc:
             raise click.BadParameter(
                 f"Invalid {option_name} entry '{candidate}'. Use the form LEFT:RIGHT."
@@ -60,7 +79,13 @@ def normalize_mapping(mapping: dict[Any, Any] | None) -> dict[int, int]:
     """Normalize mapping keys and values to integers."""
     if not mapping:
         return {}
-    return {_parse_int(key): _parse_int(value) for key, value in mapping.items()}
+    normalized: dict[int, int] = {}
+    for key, value in mapping.items():
+        endpoint = parse_servo_endpoint(key)
+        if endpoint.kind != "gpio":
+            raise click.BadParameter("Stored mapping keys must reference native GPIO endpoints.")
+        normalized[endpoint.legacy_pin] = _parse_int(value)
+    return normalized
 
 
 def backend_options(command: Callable[..., Any]) -> Callable[..., Any]:
@@ -69,7 +94,9 @@ def backend_options(command: Callable[..., Any]) -> Callable[..., Any]:
         click.option(
             "--channel-map",
             default=None,
-            help="Map servo identifiers to PCA9685 channels, for example '12:0,13:1'.",
+            help=(
+                "Map servo identifiers to external controller channels, for example '12:1,13:2'."
+            ),
         ),
         click.option(
             "--pin-channel-map",
@@ -79,7 +106,16 @@ def backend_options(command: Callable[..., Any]) -> Callable[..., Any]:
         click.option(
             "--address",
             default=None,
-            help="PCA9685 I2C address. Decimal or hex values such as '0x40' are accepted.",
+            help=(
+                "External controller I2C address. Decimal or hex values such as '0x10' "
+                "or '0x40' are accepted."
+            ),
+        ),
+        click.option(
+            "--bus-id",
+            type=int,
+            default=None,
+            help="I2C bus number for DFR0566 or other external I2C controllers.",
         ),
         click.option(
             "--frequency-hz",
@@ -135,6 +171,7 @@ def resolve_backend_settings(
     *,
     backend_name: str | None = None,
     chip: int | None = None,
+    bus_id: int | None = None,
     frequency_hz: int | None = None,
     address: str | None = None,
     pin_channel_map: str | None = None,
@@ -152,6 +189,8 @@ def resolve_backend_settings(
 
     if chip is not None:
         kwargs["chip"] = int(chip)
+    if bus_id is not None:
+        kwargs["bus_id"] = int(bus_id)
     if frequency_hz is not None:
         kwargs["frequency_hz"] = int(frequency_hz)
     if address is not None:
@@ -170,10 +209,11 @@ def resolve_backend_settings(
 
 def create_servo_from_config(
     *,
-    pin: int,
+    pin: int | str,
     config_path: str,
     backend_name: str | None = None,
     chip: int | None = None,
+    bus_id: int | None = None,
     frequency_hz: int | None = None,
     address: str | None = None,
     pin_channel_map: str | None = None,
@@ -187,6 +227,7 @@ def create_servo_from_config(
         manager,
         backend_name=backend_name,
         chip=chip,
+        bus_id=bus_id,
         frequency_hz=frequency_hz,
         address=address,
         pin_channel_map=pin_channel_map,
@@ -206,10 +247,11 @@ def create_servo_from_config(
 
 def create_group_from_config(
     *,
-    pins: list[int],
+    pins: list[int | str],
     config_path: str,
     backend_name: str | None = None,
     chip: int | None = None,
+    bus_id: int | None = None,
     frequency_hz: int | None = None,
     address: str | None = None,
     pin_channel_map: str | None = None,
@@ -223,6 +265,7 @@ def create_group_from_config(
         manager,
         backend_name=backend_name,
         chip=chip,
+        bus_id=bus_id,
         frequency_hz=frequency_hz,
         address=address,
         pin_channel_map=pin_channel_map,

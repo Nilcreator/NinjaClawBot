@@ -6,7 +6,13 @@ import sys
 
 import click
 
-from ._common import backend_options, close_runtime_handle, create_group_from_config, parse_pin_list
+from ._common import (
+    backend_options,
+    close_runtime_handle,
+    create_group_from_config,
+    format_endpoint_label,
+    parse_pin_list,
+)
 
 
 @click.command("cmd")
@@ -15,7 +21,7 @@ from ._common import backend_options, close_runtime_handle, create_group_from_co
     "-p",
     "--pins",
     default="12,13",
-    help="Comma-separated list of GPIO pins to control.",
+    help="Comma-separated list of servo endpoints to control.",
 )
 @click.option(
     "-c",
@@ -38,6 +44,7 @@ def cmd(
     debug: bool,
     backend_name: str | None,
     chip: int | None,
+    bus_id: int | None,
     frequency_hz: int | None,
     address: str | None,
     pin_channel_map: str | None,
@@ -57,6 +64,7 @@ def cmd(
             config_path=config,
             backend_name=backend_name,
             chip=chip,
+            bus_id=bus_id,
             frequency_hz=frequency_hz,
             address=address,
             pin_channel_map=pin_channel_map,
@@ -64,11 +72,14 @@ def cmd(
         )
 
         if debug:
-            click.echo(f"Pins: {pin_list}")
+            click.echo(f"Pins: {[format_endpoint_label(pin) for pin in pin_list]}")
             click.echo(f"Config: {config}")
             click.echo(f"Backend: {resolved_backend}")
             click.echo(f"Backend kwargs: {backend_kwargs}")
-            click.echo(f"Calibrations: {manager.get_all_calibrations()}")
+            click.echo(
+                "Calibrations: "
+                f"{ {format_endpoint_label(pin): manager.get_calibration(pin) for pin in pin_list} }"
+            )
 
         click.echo(f"Executing: {command}")
         success = group.execute_command(command)

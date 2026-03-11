@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .backend import ServoPulseBackend, create_servo_backend, is_servo_backend
+from .endpoint import ServoEndpoint, parse_servo_endpoint
 
 # Default pulse width constants (microseconds)
 # SAFE DEFAULTS: All set to center (1500) to prevent unexpected movement
@@ -48,7 +49,7 @@ class Servo:
     def __init__(
         self,
         pi: Any | None,
-        pin: int,
+        pin: int | str | ServoEndpoint,
         calibration: ServoCalibration | None = None,
         *,
         backend: str | ServoPulseBackend | None = None,
@@ -59,7 +60,7 @@ class Servo:
 
         Args:
             pi: Legacy pigpio-like instance, a backend object, or None for Pi 5 standalone mode.
-            pin: GPIO pin number (header-connected backends) or backend identifier.
+            pin: GPIO pin number, explicit endpoint identifier, or backend identifier.
             calibration: Optional ServoCalibration, uses defaults if None.
             backend: Optional backend name or backend object. Defaults to pigpio compatibility
                 when ``pi`` is provided, otherwise the Pi 5 auto backend.
@@ -67,7 +68,8 @@ class Servo:
             owns_backend: Override backend ownership for advanced use cases.
         """
         self._pi = pi
-        self._pin = int(pin)
+        self._endpoint = parse_servo_endpoint(pin)
+        self._pin = self._endpoint.legacy_key
         self._calibration = calibration or ServoCalibration()
         self._last_angle: float | None = None
 
@@ -83,7 +85,7 @@ class Servo:
     @staticmethod
     def _resolve_backend(
         pi: Any | None,
-        pin: int,
+        pin: int | str | ServoEndpoint,
         backend: str | ServoPulseBackend | None,
         backend_kwargs: dict[str, Any],
         owns_backend: bool | None,
@@ -105,9 +107,14 @@ class Servo:
         return created_backend, pi is None or backend is not None
 
     @property
-    def pin(self) -> int:
-        """GPIO pin number or backend identifier."""
+    def pin(self) -> int | str:
+        """GPIO pin number or endpoint identifier."""
         return self._pin
+
+    @property
+    def endpoint(self) -> ServoEndpoint:
+        """Normalized endpoint metadata."""
+        return self._endpoint
 
     @property
     def calibration(self) -> ServoCalibration:

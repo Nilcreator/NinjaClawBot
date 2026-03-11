@@ -6,6 +6,7 @@ from importlib import import_module
 from typing import Any
 
 from ..backend_errors import BackendConfigurationError, BackendUnavailableError
+from ..endpoint import parse_servo_endpoint
 
 DEFAULT_PCA9685_ADDRESS = 0x40
 DEFAULT_PCA9685_FREQUENCY_HZ = 50
@@ -53,7 +54,16 @@ class PCA9685ServoBackend:
     def _period_us(self) -> float:
         return 1_000_000.0 / float(self._frequency_hz)
 
-    def _resolve_channel(self, identifier: int) -> int:
+    def _normalize_identifier(self, identifier: int | str) -> int:
+        endpoint = parse_servo_endpoint(identifier)
+        if endpoint.kind != "gpio":
+            raise BackendConfigurationError(
+                "PCA9685 routing currently supports native GPIO identifiers only."
+            )
+        return endpoint.legacy_pin
+
+    def _resolve_channel(self, identifier: int | str) -> int:
+        identifier = self._normalize_identifier(identifier)
         channel = self._channel_map.get(identifier, identifier)
         if 0 <= channel <= 15:
             return channel
@@ -66,12 +76,14 @@ class PCA9685ServoBackend:
         duty = int((pulse_width_us / self._period_us()) * 0xFFFF)
         return max(0, min(0xFFFF, duty))
 
-    def claim(self, identifier: int) -> None:
+    def claim(self, identifier: int | str) -> None:
+        identifier = self._normalize_identifier(identifier)
         self._resolve_channel(identifier)
         self._claimed.add(identifier)
         self._current_pulses.setdefault(identifier, 0)
 
-    def set_pulse_us(self, identifier: int, pulse_width_us: int) -> None:
+    def set_pulse_us(self, identifier: int | str, pulse_width_us: int) -> None:
+        identifier = self._normalize_identifier(identifier)
         if pulse_width_us <= 0:
             self.off(identifier)
             return
@@ -82,16 +94,19 @@ class PCA9685ServoBackend:
         )
         self._current_pulses[identifier] = int(pulse_width_us)
 
-    def get_pulse_us(self, identifier: int) -> int:
+    def get_pulse_us(self, identifier: int | str) -> int:
+        identifier = self._normalize_identifier(identifier)
         return int(self._current_pulses.get(identifier, 0))
 
-    def off(self, identifier: int) -> None:
+    def off(self, identifier: int | str) -> None:
+        identifier = self._normalize_identifier(identifier)
         self.claim(identifier)
         channel = self._resolve_channel(identifier)
         self._controller.channels[channel].duty_cycle = 0
         self._current_pulses[identifier] = 0
 
-    def release(self, identifier: int) -> None:
+    def release(self, identifier: int | str) -> None:
+        identifier = self._normalize_identifier(identifier)
         if identifier not in self._claimed:
             return
         self.off(identifier)

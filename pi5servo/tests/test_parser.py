@@ -3,8 +3,10 @@
 import pytest
 
 from pi5servo.parser import (
+    ServoEndpoint,
     ServoTarget,
     parse_command,
+    parse_servo_endpoint,
     resolve_special_angle,
 )
 
@@ -25,6 +27,7 @@ class TestParseCommand:
         result = parse_command("F_20:45")
         assert result.speed_mode == "F"
         assert result.targets[0].angle == 45.0
+        assert result.targets[0].endpoint_id == "gpio20"
 
     def test_slow_speed_prefix(self):
         """Parse command with Slow speed prefix."""
@@ -49,6 +52,7 @@ class TestParseCommand:
         assert result.targets[0].pin == 20
         assert result.targets[0].special == "C"
         assert result.targets[0].angle is None
+        assert result.targets[0].endpoint == ServoEndpoint("gpio", 20)
 
     def test_min_special(self):
         """Parse M (min) special position."""
@@ -69,6 +73,20 @@ class TestParseCommand:
         """Parse floating-point angle values."""
         result = parse_command("20:45.5")
         assert result.targets[0].angle == 45.5
+
+    def test_explicit_gpio_endpoint(self):
+        """Parse explicit GPIO endpoint names."""
+        result = parse_command("gpio20:45")
+        assert result.targets[0].pin == 20
+        assert result.targets[0].endpoint == ServoEndpoint("gpio", 20)
+        assert result.targets[0].endpoint_id == "gpio20"
+
+    def test_hat_pwm_endpoint(self):
+        """Parse DFRobot HAT PWM endpoint names."""
+        result = parse_command("hat_pwm1:45")
+        assert result.targets[0].pin == "hat_pwm1"
+        assert result.targets[0].endpoint == ServoEndpoint("hat_pwm", 1)
+        assert result.targets[0].endpoint_id == "hat_pwm1"
 
     def test_empty_command_raises(self):
         """Empty command should raise ValueError."""
@@ -131,6 +149,11 @@ class TestParseCommand:
         with pytest.raises(ValueError):
             parse_command("20:45X")  # X is not a speed
 
+    def test_invalid_hat_pwm_channel_raises(self):
+        """Reject unsupported DFRobot HAT PWM channels."""
+        with pytest.raises(ValueError, match="DFRobot HAT PWM channels"):
+            parse_command("hat_pwm5:45")
+
 
 class TestServoTarget:
     """Test ServoTarget dataclass."""
@@ -146,6 +169,12 @@ class TestServoTarget:
         """Create target with special position."""
         target = ServoTarget(pin=20, special="C")
         assert target.special == "C"
+
+    def test_with_explicit_endpoint(self):
+        """Create target with explicit HAT endpoint."""
+        target = ServoTarget(pin="hat_pwm2", angle=30.0)
+        assert target.pin == "hat_pwm2"
+        assert target.endpoint == ServoEndpoint("hat_pwm", 2)
 
     def test_with_speed(self):
         """Test initialization with speed."""
@@ -166,6 +195,22 @@ class TestServoTarget:
         """Invalid special code should raise ValueError."""
         with pytest.raises(ValueError, match="Invalid special"):
             ServoTarget(pin=20, special="Z")
+
+
+class TestServoEndpointParsing:
+    """Test endpoint parsing helper."""
+
+    def test_parse_legacy_gpio_number(self):
+        """Integer shorthand still maps to native GPIO."""
+        assert parse_servo_endpoint(12) == ServoEndpoint("gpio", 12)
+
+    def test_parse_gpio_identifier(self):
+        """Explicit GPIO identifier is supported."""
+        assert parse_servo_endpoint("gpio13") == ServoEndpoint("gpio", 13)
+
+    def test_parse_hat_pwm_identifier(self):
+        """Explicit DFRobot HAT PWM identifier is supported."""
+        assert parse_servo_endpoint("hat_pwm3") == ServoEndpoint("hat_pwm", 3)
 
 
 class TestResolveSpecialAngle:

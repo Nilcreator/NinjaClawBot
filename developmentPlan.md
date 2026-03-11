@@ -17,6 +17,8 @@ Date: 2026-03-10
 - [Proposed Target Structure](#proposed-target-structure)
 - [Phased Migration Plan](#phased-migration-plan)
 - [Driver-Specific Migration Notes](#driver-specific-migration-notes)
+- [DFR0566 Endpoint Model For `pi5servo`](#dfr0566-endpoint-model-for-pi5servo)
+- [Affected `pi5servo` Functions For Endpoint Refinement](#affected-pi5servo-functions-for-endpoint-refinement)
 - [Optional Future Integration With `ninja_core`](#optional-future-integration-with-ninja_core)
 - [Quality Gates For Every Future Implementation Phase](#quality-gates-for-every-future-implementation-phase)
 - [Raspberry Pi 5 Validation Plan](#raspberry-pi-5-validation-plan)
@@ -826,6 +828,7 @@ Documentation updates required:
 Objective:
 
 - migrate the servo driver last as a standalone Pi 5 library because it has the strictest timing requirements and the highest real-world regression risk
+- keep the native Raspberry Pi GPIO servo path available while leaving room for a later mixed-endpoint refinement
 
 Files or modules likely to change:
 
@@ -844,6 +847,7 @@ Validation and checks:
 - port all legacy tests
 - add Pi tests for pulse stability, center-min-max calibration, multi-servo synchronization, abort handling, and limp-signal recovery
 - add standalone API parity tests for `MultiServo`, legacy movement helpers, and config schema
+- keep the native GPIO shorthand path stable while planning for explicit endpoint ids such as `gpio12` and `hat_pwm1`
 - `python -m compileall .`
 - `ruff check .`
 - `ruff format --check .`
@@ -929,6 +933,8 @@ Implementation approach:
 - isolate only the pulse I/O operations behind a backend
 - implement backend candidates in this order: external PWM controller backend, `pwm-pio` backend, RP1 hardware PWM backend, then testing-only `lgpio` software backend
 - keep legacy compatibility methods for future integration work, but do not make `ninja_core` a runtime requirement of the standalone package
+- distinguish native GPIO servo outputs from future HAT-managed PWM outputs explicitly in config and command parsing
+- treat DFR0566 digital ports as native GPIO breakouts, not as DFR0566 PWM servo channels
 
 Behavioral parity checks:
 
@@ -937,10 +943,107 @@ Behavioral parity checks:
 - same abort behavior
 - same calibration JSON
 - same `MultiServo` alias
+- same native GPIO numeric shorthand for existing CLI and Python usage until explicit endpoint syntax is introduced
 
 Open technical risk:
 
 - if the chosen Pi 5 backend cannot hold stable multi-pin servo pulses, identical real-world behavior will require a more specialized pulse-generation strategy
+- the current integer-only servo identifier model is not sufficient for mixed native GPIO and DFR0566 PWM routing
+
+## DFR0566 Endpoint Model For `pi5servo`
+
+The DFRobot Raspberry Pi IO Expansion HAT DFR0566 must be modeled as two different servo connection families:
+
+1. Native GPIO servo endpoints
+   - direct Raspberry Pi header GPIO pins
+   - DFR0566 digital ports when they are used only as Raspberry Pi GPIO breakouts
+   - these stay on the native Raspberry Pi backend path
+
+2. DFR0566 HAT PWM servo endpoints
+   - the four dedicated PWM channels on the HAT
+   - these are controlled by the HAT MCU over I2C at the board address, not by direct Raspberry Pi PWM
+   - these require a dedicated `dfr0566` backend
+
+Design rules:
+
+- a DFR0566 digital port used for servo signal must still be treated as a native GPIO endpoint
+- a DFR0566 PWM port must be treated as a HAT PWM endpoint
+- the two endpoint families must not share the same ambiguous integer namespace
+
+Recommended logical endpoint naming for the refinement:
+
+- native GPIO: `gpio12`, `gpio13`, `gpio18`
+- HAT PWM: `hat_pwm1`, `hat_pwm2`, `hat_pwm3`, `hat_pwm4`
+
+Backward-compatibility policy:
+
+- existing numeric command targets such as `12:45` remain shorthand for native GPIO during the transition
+- new mixed-backend support should use explicit endpoint syntax such as `gpio12:45/hat_pwm1:-30`
+
+Recommended config direction:
+
+- move from plain `int -> calibration` assumptions toward endpoint-aware servo records
+- keep legacy numeric keys readable for native GPIO-only setups
+- add endpoint metadata so calibration and backend selection are tied to the same logical servo
+
+## Affected `pi5servo` Functions For Endpoint Refinement
+
+The following functions and modules were reviewed and will need adaptation when the explicit endpoint split is implemented.
+
+Backend selection and backend creation:
+
+- [create_servo_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+  - currently selects one backend by name for a whole servo or group
+  - must gain `dfr0566` support and coexist cleanly with native GPIO backends
+
+Single-servo construction:
+
+- [Servo.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py)
+  - currently stores one integer `pin` or identifier
+  - must accept or derive an endpoint identity without conflating GPIO numbers and HAT PWM channels
+
+Multi-servo routing:
+
+- [ServoGroup.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L30)
+- [ServoGroup._resolve_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L74)
+- [ServoGroup._resolve_targets](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L343)
+  - currently assume one shared backend and one integer-indexed pin list
+  - must be refactored for backend routing across native GPIO and HAT PWM endpoints
+
+Parser and command model:
+
+- [ServoTarget](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L16)
+- [ParsedCommand](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L35)
+- [parse_command](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L50)
+  - currently parse only numeric targets
+  - must support endpoint-aware tokens such as `gpio12` and `hat_pwm1`
+
+CLI creation helpers:
+
+- [parse_pin_list](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L30)
+- [create_servo_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L170)
+- [create_group_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L206)
+  - currently build servos and groups from integer pin lists only
+  - must be extended to resolve endpoint-aware config and mixed backend group creation
+
+Configuration model:
+
+- [ConfigManager.load](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L63)
+- [ConfigManager.get_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L118)
+- [ConfigManager.set_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L141)
+- [ConfigManager.get_all_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L158)
+  - currently assume integer keys for servo data
+  - must be adapted for endpoint-aware servo records while remaining backward-compatible for native GPIO-only configs
+
+CLI commands that will inherit the endpoint change:
+
+- [cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/cmd.py)
+- [move.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/move.py)
+- [calib.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/calib.py)
+- [status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/status.py)
+- [servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
+  - all of these currently present integer GPIO-centric UX
+  - each must explicitly distinguish native GPIO and HAT PWM endpoints after the refinement
 
 ### `pi5disp`
 
@@ -1095,9 +1198,12 @@ Reasoning:
 - [rgpiod and rgpio overview](https://github.com/joan2937/lg)
 - [NXP PCA9685 product page](https://www.nxp.com/products/power-drivers/lighting-driver-and-controller-ics/led-drivers/16-channel-12-bit-pwm-fm-plus-ic-bus-led-driver:PCA9685)
 - [rpi-hardware-pwm package index](https://pypi.org/project/rpi-hardware-pwm/)
+- [DFRobot DFR0566 wiki docs](https://wiki.dfrobot.com/dfr0566/#docs)
+- [DFRobot DFR0566 tech specs](https://wiki.dfrobot.com/dfr0566/#tech_specs)
+- [DFRobot Raspberry Pi Expansion Board library](https://github.com/DFRobot/DFRobot_RaspberryPi_Expansion_Board)
 
 ## Current Status
 
-This document completes the audit and planning stage only.
+This document started as the original migration audit and plan. The standalone `pi5*` driver libraries now exist, including `pi5servo`.
 
-No migration code has been implemented yet.
+The DFR0566 and mixed-endpoint refinement described above has now been implemented in `pi5servo`. The remaining work is Raspberry Pi 5 hardware validation for the native GPIO path, the DFR0566 PWM path, and mixed-routing motion on real servos.

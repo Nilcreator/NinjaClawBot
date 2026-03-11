@@ -251,23 +251,56 @@ Backend rule:
 - keep optional advanced external controller support through the `pca9685` backend
 - `pwm_pio` remains a planned backend placeholder and is not a production runtime yet
 
+DFR0566 endpoint rule:
+
+- treat a DFR0566 digital port used for servo signal as a native GPIO endpoint
+- treat a DFR0566 PWM servo connector as a HAT PWM endpoint driven by the dedicated `dfr0566` backend
+- do not let those two connection families share one ambiguous integer namespace
+- the implemented explicit endpoint naming model is:
+  - native GPIO: `gpio12`, `gpio13`, `gpio18`, `gpio19`
+  - DFR0566 PWM: `hat_pwm1`, `hat_pwm2`, `hat_pwm3`, `hat_pwm4`
+- numeric targets such as `12:45` still mean native GPIO shorthand, but explicit endpoint names are now supported for mixed routing
+
+Functions adapted for DFR0566 mixed-endpoint support:
+
+- [create_servo_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+- [Servo.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py#L47)
+- [ServoGroup.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L30)
+- [ServoGroup._resolve_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L74)
+- [ServoGroup._resolve_targets](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L343)
+- [ServoTarget](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L16)
+- [ParsedCommand](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L35)
+- [parse_command](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L50)
+- [parse_pin_list](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L30)
+- [create_servo_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L170)
+- [create_group_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L206)
+- [ConfigManager.load](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L63)
+- [ConfigManager.get_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L118)
+- [ConfigManager.set_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L141)
+- [ConfigManager.get_all_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L158)
+- [ConfigManager.get_all_endpoint_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py)
+- [config_cmd.show](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/config_cmd.py)
+- [servo_tool](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
+
 Quality gate result:
 
 - `uv run python -m compileall src tests`
 - `uv run ruff check .`
 - `uv run ruff format --check .`
 - `uv run pytest -q`
-- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `95 passed`
+- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `118 passed`
 
 Raspberry Pi 5 validation checklist:
 
 - safe smoke tests: run `uv run pi5servo --help`, `uv run pi5servo status --pins 12,13`, `uv run pi5servo config show`, and confirm the selected backend and `servo.json` values look correct
+- DFR0566 smoke tests: run `uv run pi5servo status --backend dfr0566 --pins hat_pwm1 --address 0x10 --bus-id 1` and confirm the board responds cleanly
 - firmware checks: confirm the correct PWM overlay is enabled in `/boot/firmware/config.txt`, reboot the Pi, and verify the intended PWM-capable pins match the selected backend mapping
-- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, and `uv run pi5servo cmd "M_12:45/13:-30" --pins 12,13`
+- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, and `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`
 - actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior
+- mixed-routing tests: verify `servo-tool` accepts both `gpio12` and `hat_pwm1`, and confirm mixed commands no longer fail on mixed-type endpoint sorting
 - signal accuracy tests: measure the servo signal with a logic analyser or oscilloscope at center, min, and max pulse widths before trusting the setup for full robot motion
 - power-risk tests: use an external 5V servo supply with common ground, keep the robot linkage clear during first tests, and power the Pi down before rewiring
-- expected outcome: stable pulse output on the intended GPIO pins, correct calibration save/load, repeatable sync movement, abortable motion, and safe release on `off()` and CLI exit
+- expected outcome: stable pulse output on the intended GPIO pins, correct DFR0566 I2C communication at the configured address, correct endpoint-aware calibration save/load, repeatable sync movement, abortable motion, and safe release on `off()` and CLI exit
 - rollback: stop the process, disconnect servo signal lines, remove `servo.json` if a clean config reset is needed, and revert to a single-servo center-only test before reintroducing multi-servo motion
 
 ## Raspberry Pi 5 Validation Flow

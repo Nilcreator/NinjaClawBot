@@ -1,5 +1,126 @@
 # Development Log
 
+## 2026-03-11
+
+### pi5servo DFR0566 Refinement Implementation
+
+Summary:
+
+- implemented the full `pi5servo` DFR0566 refinement that was previously only planned
+- added explicit endpoint parsing and storage for native GPIO shorthand, explicit `gpioNN` endpoints, and `hat_pwmN` DFR0566 PWM endpoints
+- added the dedicated `dfr0566` backend over `smbus2`, with board identity validation and PWM control over I2C
+- refactored `Servo` and `ServoGroup` so native GPIO servos and DFR0566 PWM servos can coexist in one mixed motion group
+- updated the standalone CLI so `move`, `cmd`, `calib`, `status`, `config`, and `servo-tool` all understand explicit endpoints
+- fixed a mixed-endpoint CLI risk in `servo-tool` by replacing unsafe direct sorting of mixed `int` and `str` endpoint keys
+
+Files changed:
+
+- [pi5servo/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/pyproject.toml)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/core/endpoint.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/endpoint.py)
+- [pi5servo/src/pi5servo/core/backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+- [pi5servo/src/pi5servo/core/backends/hardware_pwm.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/hardware_pwm.py)
+- [pi5servo/src/pi5servo/core/backends/dfr0566.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/dfr0566.py)
+- [pi5servo/src/pi5servo/core/backends/pca9685.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backends/pca9685.py)
+- [pi5servo/src/pi5servo/core/servo.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py)
+- [pi5servo/src/pi5servo/core/multi_servos.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py)
+- [pi5servo/src/pi5servo/parser/command.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py)
+- [pi5servo/src/pi5servo/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py)
+- [pi5servo/src/pi5servo/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py)
+- [pi5servo/src/pi5servo/cli/move.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/move.py)
+- [pi5servo/src/pi5servo/cli/cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/cmd.py)
+- [pi5servo/src/pi5servo/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/status.py)
+- [pi5servo/src/pi5servo/cli/calib.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/calib.py)
+- [pi5servo/src/pi5servo/cli/config_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/config_cmd.py)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/tests/test_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_backend.py)
+- [pi5servo/tests/test_core.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_core.py)
+- [pi5servo/tests/test_config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_config.py)
+- [pi5servo/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/tests/test_cli.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- DFR0566 digital ports and DFR0566 PWM ports are electrically and software-wise different paths, so one integer-only identifier model was not safe enough
+- the new robot stack needs standalone Pi 5 support for both direct GPIO servo wiring and HAT-based PWM expansion without reintroducing `pigpio`
+- mixed routing had to be solved in the core layer first, not only in the CLI, to keep command execution, calibration, and future robot motion code consistent
+
+Lint and test results:
+
+- Phase 1 gate: `uv run python -m compileall src tests`, `uv run ruff check .`, `uv run ruff format --check .`, `uv run pytest -q` -> `106 passed`
+- Phase 2 gate: same commands after `dfr0566` backend integration -> `111 passed`
+- Phase 3 gate: same commands after mixed-backend routing refactor -> `115 passed`
+- Phase 4 and final package state: same commands after endpoint-aware CLI updates -> `118 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+- required native GPIO checks: verify PWM overlay configuration, run `uv run pi5servo move 12 center`, `min`, `max`, and confirm stable signal on the scope
+- required DFR0566 checks: verify `sudo i2cdetect -y 1` shows `0x10`, run `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, and confirm stable signal/output
+- required mixed checks: run `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`, then run `uv run pi5servo servo-tool` and verify both endpoint types work in one session
+- signal-quality requirement: measure both native GPIO and DFR0566 PWM outputs with a logic analyser or oscilloscope before trusting full robot motion
+
+Follow-up:
+
+- run the Raspberry Pi 5 validation checklist for native GPIO, DFR0566 PWM, and mixed routing
+- if the checks pass, treat the `pi5servo` DFR0566 refinement as hardware-validated
+- if any motion instability appears, capture the exact endpoint type, backend, and pulse measurement before changing calibration or timing logic
+
+### pi5servo DFR0566 Refinement Planning
+
+Summary:
+
+- researched the DFRobot Raspberry Pi IO Expansion HAT DFR0566 using the official wiki, tech specs, and vendor source code
+- confirmed the board must be treated as two different servo connection families:
+  - native GPIO endpoints, including servos attached to DFR0566 digital ports used as Raspberry Pi GPIO breakouts
+  - DFR0566 PWM endpoints, which are MCU-managed over I2C and need a dedicated backend
+- audited the current `pi5servo` code to identify the functions that must change for explicit endpoint naming and mixed backend routing
+- updated the migration plan and documentation so future implementation work distinguishes `gpioXX` from `hat_pwmN` explicitly
+
+Files changed:
+
+- [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the current `pi5servo` implementation still assumes one backend and one integer identifier space
+- that model is fine for native GPIO-only usage, but it is not enough for mixed native GPIO and DFR0566 PWM routing
+- the DFR0566 digital ports and the DFR0566 PWM ports are not equivalent, so the docs and plan need to state that clearly before implementation starts
+
+Affected functions confirmed by audit:
+
+- [create_servo_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
+- [Servo.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py#L47)
+- [ServoGroup.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L30)
+- [ServoGroup._resolve_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L74)
+- [ServoGroup._resolve_targets](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L343)
+- [ServoTarget](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L16)
+- [ParsedCommand](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L35)
+- [parse_command](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L50)
+- [parse_pin_list](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L30)
+- [create_servo_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L170)
+- [create_group_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L206)
+- [ConfigManager.load](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L63)
+- [ConfigManager.get_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L118)
+- [ConfigManager.set_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L141)
+- [ConfigManager.get_all_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L158)
+
+Lint and test results:
+
+- no code changes were made in this planning pass
+- no package test run was required because this was a documentation-only update
+
+Raspberry Pi validation status:
+
+- no new Pi validation was run
+- the DFR0566 refinement validation plan is now documented before implementation begins
+
 ## 2026-03-10
 
 ### pi5servo Migration

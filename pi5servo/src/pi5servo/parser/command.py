@@ -4,33 +4,45 @@ Parses command strings in the format:
     [SPEED_]PIN:ANGLE[/PIN:ANGLE...]
 
 Examples:
-    "20:45"              -> Medium speed, pin 20 to 45°
-    "F_20:45/21:-30"     -> Fast speed, multiple servos
-    "S_20:C/21:M"        -> Slow speed, center/min/max positions
+    "20:45"                   -> Medium speed, GPIO 20 to 45°
+    "gpio20:45"               -> Explicit GPIO endpoint
+    "hat_pwm1:45"             -> DFRobot HAT PWM channel 1
+    "F_20:45/21:-30"          -> Fast speed, multiple servos
+    "S_gpio20:C/hat_pwm1:M"   -> Slow speed, mixed endpoint syntax
 """
 
 import re
 from dataclasses import dataclass, field
 from typing import Optional
 
+from ..core.endpoint import ServoEndpoint, parse_servo_endpoint
+
 
 @dataclass
 class ServoTarget:
     """Parsed target for a single servo."""
 
-    pin: int
+    pin: int | str | ServoEndpoint
     angle: Optional[float] = None  # Degrees (-90 to 90), None for special
     special: Optional[str] = None  # "C" (center), "M" (min), "X" (max)
     speed: Optional[str] = None  # Per-target speed override: "F", "M", or "S"
+    endpoint: ServoEndpoint = field(init=False)
 
     def __post_init__(self):
         """Validate the target."""
+        self.endpoint = parse_servo_endpoint(self.pin)
+        self.pin = self.endpoint.legacy_key
         if self.angle is None and self.special is None:
             raise ValueError("Either angle or special must be provided")
         if self.special and self.special not in ("C", "M", "X"):
             raise ValueError(f"Invalid special position: {self.special}")
         if self.speed and self.speed not in ("F", "M", "S"):
             raise ValueError(f"Invalid speed mode: {self.speed}")
+
+    @property
+    def endpoint_id(self) -> str:
+        """Stable endpoint identifier for mixed-backend routing."""
+        return self.endpoint.identifier
 
 
 @dataclass
@@ -43,9 +55,9 @@ class ParsedCommand:
 
 # Regex patterns
 SPEED_PREFIX_PATTERN = re.compile(r"^([FSM])_")
-# Updated pattern: PIN:ANGLE_OR_SPECIAL[SPEED] where SPEED is optional F/M/S
-# Using ^ and $ to ensure the entire segment matches (rejects garbage suffixes)
-TARGET_PATTERN = re.compile(r"^(\d+):(-?\d+(?:\.\d+)?|[CMX])([FSM])?$")
+# Target format: ENDPOINT:ANGLE_OR_SPECIAL[SPEED] where endpoint is a GPIO
+# number, explicit gpioNN name, or DFRobot HAT PWM identifier.
+TARGET_PATTERN = re.compile(r"^([A-Za-z0-9_]+):(-?\d+(?:\.\d+)?|[CMX])([FSM])?$")
 
 
 def parse_command(command: str) -> ParsedCommand:
@@ -63,11 +75,11 @@ def parse_command(command: str) -> ParsedCommand:
         ValueError: If command format is invalid
 
     Examples:
-        >>> result = parse_command("F_20:45/21:-30")
+        >>> result = parse_command("F_gpio20:45/hat_pwm1:-30")
         >>> result.speed_mode
         'F'
-        >>> result.targets[0].pin
-        20
+        >>> result.targets[0].endpoint_id
+        'gpio20'
         >>> result.targets[0].angle
         45.0
     """
@@ -93,7 +105,7 @@ def parse_command(command: str) -> ParsedCommand:
         if not target_match:
             raise ValueError(f"Invalid target format: {part}")
 
-        pin = int(target_match.group(1))
+        pin = target_match.group(1)
         value = target_match.group(2)
         target_speed = target_match.group(3)  # Optional per-target speed
 
