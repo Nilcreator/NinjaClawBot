@@ -356,6 +356,7 @@ Expected result:
 - `perform-expression` accepts either a saved asset name such as `happy` or a built-in expression name such as `idle`
 - the saved asset can reuse a built-in expression plus optional text and sound overrides
 - the integrated executor drives display and buzzer actions through the real `pi5*` packages
+- the display is now prewarmed before sound starts, and the first face frame is latched before audio playback begins
 - the buzzer emotion melody finishes before the command exits
 - temporary expressions return to the animated `idle` face when `idle_reset` is enabled
 

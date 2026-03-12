@@ -93,6 +93,24 @@ class ExpressionPlayer:
         resolved = self.resolve_definition(definition)
         self.stop()
 
+        display = resolved["display"]
+        self._display.prewarm()
+        text_rendered = False
+
+        if resolved["face_chain"]:
+            first_expression = str(resolved["face_chain"][0]["expression"])
+            first_frame = self._engine_or_create().render_frame(first_expression, 0.0)
+            self._display.show_image(first_frame)
+        elif display.get("text") and not bool(display.get("scroll", False)):
+            self._display.show_text(
+                display["text"],
+                scroll=False,
+                duration=float(display.get("duration", 3.0)),
+                language=str(display.get("language", "en")),
+                font_size=int(display.get("font_size", 32)),
+            )
+            text_rendered = True
+
         waited_for = 0.0
         sound_done = threading.Event()
 
@@ -111,8 +129,7 @@ class ExpressionPlayer:
         if resolved["face_chain"]:
             self._play_face_chain(resolved["face_chain"])
 
-        display = resolved["display"]
-        if display.get("text"):
+        if display.get("text") and not text_rendered:
             self._display.show_text(
                 display["text"],
                 scroll=bool(display.get("scroll", False)),
@@ -120,8 +137,10 @@ class ExpressionPlayer:
                 language=str(display.get("language", "en")),
                 font_size=int(display.get("font_size", 32)),
             )
-            if not bool(display.get("scroll", False)) and display.get("duration", 0.0) > 0:
-                time.sleep(float(display["duration"]))
+            text_rendered = not bool(display.get("scroll", False))
+
+        if text_rendered and display.get("duration", 0.0) > 0:
+            time.sleep(float(display["duration"]))
 
         if sound_thread is not None:
             sound_thread.join()

@@ -298,6 +298,11 @@ class DisplayAdapter:
         self._display = common.create_display()
         return self._display
 
+    def prewarm(self) -> None:
+        """Synchronously initialize the display backend before first render."""
+
+        self._build_display()
+
     def show_text(
         self,
         text: str,

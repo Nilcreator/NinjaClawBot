@@ -2,6 +2,47 @@
 
 ## 2026-03-12
 
+### Expression Startup Synchronization Phase 1
+
+Summary:
+
+- optimized expression startup so the display is prewarmed before sound playback starts
+- latched the first face frame to the panel before buzzer playback begins for face-based expressions
+- rendered static text-only expressions before buzzer playback starts
+- added regression coverage for startup ordering in the expression player
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/player.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/player.py)
+- [ninjaclawbot/tests/test_expressions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_expressions.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the expression player previously started sound immediately while the display still lazily initialized on the first frame
+- that caused sound-first playback, visible panel reset flicker, and a delayed face startup
+- Phase 1 of the optimization plan was to move the display work ahead of sound without changing the asset model again
+
+Lint and test results:
+
+- `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml` -> `37 passed`
+
+Raspberry Pi validation status:
+
+- Raspberry Pi validation is still required
+- expected pass conditions:
+  - `uv run ninjaclawbot perform-expression idle` shows the first face before or with the first sound
+  - `uv run ninjaclawbot perform-expression hello` shows text before or with the first sound
+  - startup flicker is reduced compared with the previous build
+- current limitation:
+  - one-shot CLI execution still rebuilds the runtime for every process, so some panel reset cost can remain until a persistent runtime/session is introduced
+
 ### Built-In `perform-expression` Resolution Fix
 
 Summary:

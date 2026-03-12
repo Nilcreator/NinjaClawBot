@@ -216,6 +216,7 @@ Expected integrated expression result:
 
 - `perform-expression` should keep the display output stable
 - `perform-expression` should resolve both saved expressions and built-in names such as `idle` or `greeting`
+- display startup should be synchronized so the first visible face or text appears before or with the first sound
 - built-in expression previews should show animated legacy-style faces rather than static text-only output
 - queued buzzer emotion playback should finish before the command exits
 - temporary reactions should return to `idle` when `idle_reset` is enabled
@@ -258,6 +259,21 @@ If `uv run ninjaclawbot perform-expression idle` or another built-in name fails:
   - `uv run ninjaclawbot perform-expression idle`
   - `uv run ninjaclawbot perform-expression <saved-name>`
 - expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
+
+### Expression startup responsiveness
+
+If sound still starts noticeably before the face or you still see a startup flash:
+
+- verify you are running from the project root after `uv sync --extra dev`
+- test both:
+  - `uv run ninjaclawbot perform-expression idle`
+  - `uv run ninjaclawbot perform-expression hello`
+- expected result after the Phase 1 optimization:
+  - the display is initialized before sound playback begins
+  - the first face frame is sent to the panel before buzzer playback starts for face-based expressions
+  - static text-only expressions render text before buzzer playback starts
+- current limitation:
+  - one-shot `uv run ninjaclawbot perform-expression ...` still builds and tears down a fresh runtime, so a small panel-reset cost can still exist on every new process
 
 ### Expression preview and idle policy
 
