@@ -525,15 +525,13 @@ Expected result:
 
 ### 17.4 Find and back up the OpenClaw configuration file
 
-Print the OpenClaw config path:
-
-```bash
-openclaw config file
-```
-
 Typical Raspberry Pi path:
 
 - `~/.openclaw/openclaw.json`
+
+OpenClaw normally uses this file directly. Some OpenClaw versions also support
+helper subcommands for config inspection, but you do not need them for this
+guide.
 
 Back up the current file before changing it:
 
@@ -835,23 +833,26 @@ Replace every placeholder with your own real value.
 
 ## 19. Start OpenClaw
 
-Start the OpenClaw gateway (main OpenClaw service):
+Start the OpenClaw gateway service:
 
 ```bash
-openclaw gateway --port 18789
+openclaw gateway start
 ```
 
-Or check its status:
+Check its status:
 
 ```bash
 openclaw gateway status
 ```
 
-If you plan to connect OpenClaw to messaging channels, follow the official OpenClaw login flow:
+If you want to run OpenClaw in the foreground and watch the live log output, use:
 
 ```bash
-openclaw channels login
+openclaw gateway
 ```
+
+If you plan to connect OpenClaw to Telegram or another messaging channel, follow
+the channel setup steps from the `NinjaClawAgent` guide you used in Section 16.
 
 ## 20. First OpenClaw-to-NinjaClawBot Tests
 
@@ -936,7 +937,7 @@ Check:
 - the plugin path in the config is correct
 - `plugins.entries.ninjaclawbot.enabled` is `true`
 - the plugin `projectRoot` points to the NinjaClawBot project root
-- the OpenClaw agent allowlist includes `ninjaclawbot`
+- the OpenClaw agent allowlist includes the `ninjaclawbot_*` tool names
 - the plugin folder passes `npm run typecheck` and `npm test`
 - `uv run ninjaclawbot list-capabilities` works at the project root
 

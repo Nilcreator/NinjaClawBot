@@ -22,6 +22,44 @@ Summary:
   personal values
 - aligned the root and package documentation so the normal user path now points
   to `InstallationGuide.md`
+- corrected the OpenClaw allowlist examples so they refer to the real
+  `ninjaclawbot_*` tool names instead of a single plugin id
+
+### OpenClaw Plugin Metadata Alignment
+
+Summary:
+
+- aligned the local OpenClaw plugin npm package name with the plugin manifest id
+- removed the metadata mismatch that caused the warning:
+  `plugin id mismatch (manifest uses "ninjaclawbot", entry hints "openclaw-plugin")`
+- updated the install guide so it no longer depends on stale OpenClaw CLI
+  commands such as `openclaw config file`
+
+Files changed:
+
+- [integrations/openclaw/ninjaclawbot-plugin/package.json](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/package.json)
+- [integrations/openclaw/ninjaclawbot-plugin/package-lock.json](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/package-lock.json)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- OpenClaw was loading the plugin, but it warned because the plugin package name
+  suggested `openclaw-plugin` while the manifest id and config entry correctly
+  used `ninjaclawbot`
+- the install guide also included CLI examples that were not reliable on the
+  user's installed OpenClaw build
+
+Validation:
+
+- `cd integrations/openclaw/ninjaclawbot-plugin`
+- `npm install`
+- `npm run typecheck`
+- `npm test` -> `3 passed`
+- root CLI smoke:
+  - `uv run ninjaclawbot --help`
+  - `uv run ninjaclawbot list-capabilities`
 
 Files changed:
 

@@ -313,7 +313,7 @@ If the OpenClaw plugin does not work:
 - verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
 - verify `plugins.entries.ninjaclawbot.enabled` is `true`
 - verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
-- verify the target agent allowlist contains `ninjaclawbot`
+- verify the target agent allowlist contains the `ninjaclawbot_*` tool names
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
