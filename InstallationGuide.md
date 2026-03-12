@@ -460,12 +460,72 @@ That guide covers:
 After you finish the OpenClaw installation in that guide, return here to connect
 OpenClaw to NinjaClawBot.
 
-## 17. Locate the OpenClaw Configuration File
+## 17. Find the Real NinjaClawBot Paths and Back Up OpenClaw
 
-After following the `NinjaClawAgent` guide, find the main OpenClaw
-configuration file.
+You need two real paths from your Raspberry Pi:
 
-If you are not sure where it is, run:
+- the NinjaClawBot project root path
+- the NinjaClawBot OpenClaw plugin folder path
+
+Important path rule:
+
+- the plugin folder is inside the **NinjaClawBot** project
+- it is **not** inside the separate `NinjaClawAgent` repository
+
+### 17.1 If you already know where NinjaClawBot is
+
+Move into the NinjaClawBot folder:
+
+```bash
+cd /path/to/NinjaClawbot
+```
+
+Print the real project root path:
+
+```bash
+pwd
+```
+
+Print the real plugin folder path:
+
+```bash
+realpath integrations/openclaw/ninjaclawbot-plugin
+```
+
+### 17.2 If you do not know where NinjaClawBot is
+
+Search your home folder:
+
+```bash
+find ~ -type d \( -name NinjaClawbot -o -name NinjaClawBot \) 2>/dev/null
+```
+
+Then move into the correct folder and run:
+
+```bash
+pwd
+realpath integrations/openclaw/ninjaclawbot-plugin
+```
+
+### 17.3 Save the paths in shell variables
+
+After you are inside the NinjaClawBot project root, run:
+
+```bash
+export NINJACLAWBOT_ROOT="$(pwd)"
+export NINJACLAWBOT_PLUGIN="$(realpath integrations/openclaw/ninjaclawbot-plugin)"
+echo "$NINJACLAWBOT_ROOT"
+echo "$NINJACLAWBOT_PLUGIN"
+```
+
+Expected result:
+
+- the first line is the full NinjaClawBot project root path
+- the second line is the full NinjaClawBot plugin folder path
+
+### 17.4 Find and back up the OpenClaw configuration file
+
+Print the OpenClaw config path:
 
 ```bash
 openclaw config file
@@ -475,55 +535,139 @@ Typical Raspberry Pi path:
 
 - `~/.openclaw/openclaw.json`
 
-Open the file with a text editor:
+Back up the current file before changing it:
+
+```bash
+cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.backup.$(date +%Y%m%d-%H%M%S)
+```
+
+## 18. Add the NinjaClawBot Plugin to the OpenClaw Configuration File
+
+### 18.1 Recommended: patch the existing OpenClaw config safely
+
+The command below updates your current `openclaw.json` without removing your
+existing OpenClaw settings such as:
+
+- login settings
+- model settings
+- Telegram settings
+- gateway settings
+
+Run this from the Raspberry Pi terminal after Section 17:
+
+```bash
+python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+config_path = Path.home() / ".openclaw" / "openclaw.json"
+root = os.environ["NINJACLAWBOT_ROOT"]
+plugin = os.environ["NINJACLAWBOT_PLUGIN"]
+
+tool_names = [
+    "ninjaclawbot_reply",
+    "ninjaclawbot_perform_expression",
+    "ninjaclawbot_perform_movement",
+    "ninjaclawbot_move_servos",
+    "ninjaclawbot_read_distance",
+    "ninjaclawbot_health",
+    "ninjaclawbot_capabilities",
+    "ninjaclawbot_set_idle",
+    "ninjaclawbot_stop",
+    "ninjaclawbot_stop_all",
+]
+
+with config_path.open("r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+plugins = data.setdefault("plugins", {})
+load = plugins.setdefault("load", {})
+paths = load.setdefault("paths", [])
+if plugin not in paths:
+    paths.append(plugin)
+
+entries = plugins.setdefault("entries", {})
+ninjaclawbot_entry = entries.setdefault("ninjaclawbot", {})
+ninjaclawbot_entry["enabled"] = True
+ninjaclawbot_config = ninjaclawbot_entry.setdefault("config", {})
+ninjaclawbot_config["projectRoot"] = root
+
+agents = data.setdefault("agents", {})
+agent_list = agents.setdefault("list", [])
+main_agent = next((item for item in agent_list if item.get("id") == "main"), None)
+if main_agent is None:
+    main_agent = {"id": "main"}
+    agent_list.append(main_agent)
+
+tools = main_agent.setdefault("tools", {})
+allow = tools.setdefault("allow", [])
+for tool_name in tool_names:
+    if tool_name not in allow:
+        allow.append(tool_name)
+
+with config_path.open("w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+
+print(f"Updated {config_path}")
+print(f"projectRoot = {root}")
+print(f"pluginPath = {plugin}")
+PY
+```
+
+What this command does:
+
+- adds the NinjaClawBot plugin folder path to `plugins.load.paths`
+- enables the `ninjaclawbot` plugin entry
+- sets the plugin `projectRoot`
+- adds the NinjaClawBot tool names to the `main` agent allow list
+- keeps your existing personal settings in the same file
+
+### 18.2 Check the updated config
+
+Open the file to confirm the result:
 
 ```bash
 nano ~/.openclaw/openclaw.json
 ```
 
-This is the file you will edit to tell OpenClaw where the NinjaClawBot plugin
-lives.
+The important NinjaClawBot parts should now look like this:
 
-## 18. Add the NinjaClawBot Plugin to the OpenClaw Configuration File
-
-Add or update the `plugins` section so OpenClaw loads the NinjaClawBot plugin
-from your local NinjaClawBot project folder.
-
-Important path rule:
-
-- the plugin folder is inside the **NinjaClawBot** project
-- it is **not** inside the separate `NinjaClawAgent` repository
-
-Use your real NinjaClawBot project path in both places shown below:
-
-- the plugin folder path
-- the project root path
-
-Example:
-
-```json5
+```json
 {
-  plugins: {
-    load: {
-      paths: [
+  "plugins": {
+    "load": {
+      "paths": [
         "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
       ]
     },
-    entries: {
-      ninjaclawbot: {
-        enabled: true,
-        config: {
-          projectRoot: "/absolute/path/to/NinjaClawbot"
+    "entries": {
+      "ninjaclawbot": {
+        "enabled": true,
+        "config": {
+          "projectRoot": "/absolute/path/to/NinjaClawbot"
         }
       }
     }
   },
-  agents: {
-    list: [
+  "agents": {
+    "list": [
       {
-        id: "main",
-        tools: {
-          allow: ["ninjaclawbot"]
+        "id": "main",
+        "tools": {
+          "allow": [
+            "ninjaclawbot_reply",
+            "ninjaclawbot_perform_expression",
+            "ninjaclawbot_perform_movement",
+            "ninjaclawbot_move_servos",
+            "ninjaclawbot_read_distance",
+            "ninjaclawbot_health",
+            "ninjaclawbot_capabilities",
+            "ninjaclawbot_set_idle",
+            "ninjaclawbot_stop",
+            "ninjaclawbot_stop_all"
+          ]
         }
       }
     ]
@@ -531,26 +675,163 @@ Example:
 }
 ```
 
-Replace:
+### 18.3 Full reference template for a new `openclaw.json`
 
-- `/absolute/path/to/NinjaClawbot` with your real project root path
+Use this only if you are building a new OpenClaw config file from scratch.
 
-What this config does:
+If you already have a working OpenClaw setup, use the patch command in
+Section 18.1 instead so you do not lose your current settings.
 
-- tells OpenClaw where the NinjaClawBot plugin folder lives
-- enables the plugin
-- tells the plugin where the project root is
-- allows the target OpenClaw agent to use only the `ninjaclawbot` tool set
+Replace every placeholder with your own real value.
 
-Important:
-
-- you do not need to `cd` into the plugin folder for normal Raspberry Pi setup
-- if OpenClaw is installed from the separate `NinjaClawAgent` workflow, keep
-  using that OpenClaw installation and simply point it to this NinjaClawBot
-  plugin path
-- if your OpenClaw config file already contains `plugins` or `agents`
-  settings, merge the NinjaClawBot entries into the existing file instead of
-  deleting your current settings
+```json
+{
+  "auth": {
+    "profiles": {
+      "YOUR_AUTH_PROFILE_NAME": {
+        "provider": "openai-codex",
+        "mode": "oauth"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "apiKey": "YOUR_MODEL_PROVIDER_API_KEY_OR_LOCAL_TAG",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "YOUR_MODEL_ID",
+            "name": "YOUR_MODEL_NAME"
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openai-codex/gpt-5.3-codex"
+      },
+      "models": {
+        "openai-codex/gpt-5.3-codex": {}
+      },
+      "workspace": "/home/YOUR_USERNAME/.openclaw/workspace"
+    },
+    "list": [
+      {
+        "id": "main",
+        "tools": {
+          "allow": [
+            "ninjaclawbot_reply",
+            "ninjaclawbot_perform_expression",
+            "ninjaclawbot_perform_movement",
+            "ninjaclawbot_move_servos",
+            "ninjaclawbot_read_distance",
+            "ninjaclawbot_health",
+            "ninjaclawbot_capabilities",
+            "ninjaclawbot_set_idle",
+            "ninjaclawbot_stop",
+            "ninjaclawbot_stop_all"
+          ]
+        }
+      }
+    ]
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
+      "groupPolicy": "allowlist",
+      "streaming": false,
+      "network": {
+        "autoSelectFamily": false
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "YOUR_OPENCLAW_GATEWAY_TOKEN"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
+    }
+  },
+  "skills": {
+    "install": {
+      "nodeManager": "npm"
+    },
+    "entries": {}
+  },
+  "plugins": {
+    "load": {
+      "paths": [
+        "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
+      ]
+    },
+    "entries": {
+      "telegram": {
+        "enabled": true
+      },
+      "ninjaclawbot": {
+        "enabled": true,
+        "config": {
+          "projectRoot": "/absolute/path/to/NinjaClawbot"
+        }
+      }
+    }
+  },
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "maxBytes": 20971520,
+        "scope": {
+          "default": "deny",
+          "rules": [
+            {
+              "action": "allow",
+              "match": {
+                "chatType": "direct"
+              }
+            }
+          ]
+        },
+        "models": [
+          {
+            "type": "cli",
+            "command": "/home/YOUR_USERNAME/.local/bin/whisper",
+            "args": [
+              "--model",
+              "base",
+              "--language",
+              "zh",
+              "--output_format",
+              "txt",
+              "--output_dir",
+              "/tmp",
+              "{{MediaPath}}"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
+```
 
 ## 19. Start OpenClaw
 

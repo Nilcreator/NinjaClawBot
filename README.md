@@ -102,6 +102,12 @@ For the full step-by-step process, including Raspberry Pi setup, hardware interf
 For the detailed OpenClaw installation itself, use the linked
 `NinjaClawAgent` guide from [InstallationGuide.md](InstallationGuide.md).
 
+`InstallationGuide.md` also includes:
+
+- commands to find the real NinjaClawBot project root and plugin folder paths
+- a safe copy-paste command to patch `~/.openclaw/openclaw.json`
+- a full reference OpenClaw config template with placeholders
+
 ## What Files Are Created At Runtime
 
 When you use the project from the root, these files are created there:

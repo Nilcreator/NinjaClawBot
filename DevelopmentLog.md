@@ -13,6 +13,13 @@ Summary:
   `integrations/openclaw/ninjaclawbot-plugin` folder
 - rewrote the plugin setup instructions so users add the `ninjaclawbot` plugin
   by editing the OpenClaw configuration file directly
+- added commands to find the true NinjaClawBot project root and plugin folder
+  paths on Raspberry Pi
+- added a safe copy-paste command that patches the existing
+  `~/.openclaw/openclaw.json` file without removing the user's current OpenClaw
+  settings
+- added a full reference OpenClaw config template with placeholders instead of
+  personal values
 - aligned the root and package documentation so the normal user path now points
   to `InstallationGuide.md`
 
