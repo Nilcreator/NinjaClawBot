@@ -99,6 +99,9 @@ This installs:
 
 For the full step-by-step process, including Raspberry Pi setup, hardware interface setup, calibration, and OpenClaw connection, read [InstallationGuide.md](InstallationGuide.md).
 
+For the detailed OpenClaw installation itself, use the linked
+`NinjaClawAgent` guide from [InstallationGuide.md](InstallationGuide.md).
+
 ## What Files Are Created At Runtime
 
 When you use the project from the root, these files are created there:
@@ -146,6 +149,9 @@ This gives you:
 - typed JSON-style action results
 - safer hardware access
 - a shared reply-emotion policy
+
+For the exact OpenClaw setup and plugin configuration steps, use
+[InstallationGuide.md](InstallationGuide.md).
 
 ## OpenClaw Examples
 

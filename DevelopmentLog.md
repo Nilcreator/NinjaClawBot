@@ -2,6 +2,44 @@
 
 ## 2026-03-12
 
+### OpenClaw Installation Guide Correction
+
+Summary:
+
+- corrected the OpenClaw setup section in `InstallationGuide.md`
+- replaced the direct OpenClaw install commands with a pointer to the dedicated
+  `NinjaClawAgent` installation guide
+- removed the misleading end-user step that told users to `cd` into the local
+  `integrations/openclaw/ninjaclawbot-plugin` folder
+- rewrote the plugin setup instructions so users add the `ninjaclawbot` plugin
+  by editing the OpenClaw configuration file directly
+- aligned the root and package documentation so the normal user path now points
+  to `InstallationGuide.md`
+
+Files changed:
+
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [ninjaclawbot/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the previous guide mixed developer plugin-validation steps with the normal
+  Raspberry Pi install path
+- that caused users following the OpenClaw setup flow from a separate repo to
+  hit a broken local `cd integrations/openclaw/ninjaclawbot-plugin` step
+- the corrected user flow is to install OpenClaw from the dedicated
+  `NinjaClawAgent` guide, then register the NinjaClawBot plugin in the OpenClaw
+  config file with the local plugin path and project root
+
+Validation:
+
+- documentation consistency review completed
+- command-name smoke checks remain unchanged because this was a docs-only update
+- no Python or hardware behavior changed in this step
+
 ### Expression Startup Synchronization Phase 1
 
 Summary:

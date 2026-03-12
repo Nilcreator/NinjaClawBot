@@ -444,53 +444,60 @@ Expected result:
 
 ## 16. Install OpenClaw
 
-Install the OpenClaw CLI:
+For the complete, step-by-step OpenClaw installation process, follow the
+dedicated `NinjaClawAgent` guide:
 
-```bash
-npm install -g openclaw@latest
-```
+- [NinjaClawAgent README](https://github.com/Nilcreator/NinjaClawAgent/blob/main/README.md)
 
-Install the OpenClaw background service (daemon, a helper service that keeps OpenClaw ready to run):
+That guide covers:
 
-```bash
-openclaw onboard --install-daemon
-```
+- Raspberry Pi system setup
+- Node.js (JavaScript runtime) installation
+- OpenClaw installation
+- OpenClaw onboarding
+- the main OpenClaw configuration file setup
 
-Check the configuration file path if needed:
+After you finish the OpenClaw installation in that guide, return here to connect
+OpenClaw to NinjaClawBot.
+
+## 17. Locate the OpenClaw Configuration File
+
+After following the `NinjaClawAgent` guide, find the main OpenClaw
+configuration file.
+
+If you are not sure where it is, run:
 
 ```bash
 openclaw config file
 ```
 
-Typical Linux config path:
+Typical Raspberry Pi path:
 
 - `~/.openclaw/openclaw.json`
 
-## 17. Install the NinjaClawBot OpenClaw Plugin
-
-Move into the plugin folder:
+Open the file with a text editor:
 
 ```bash
-cd integrations/openclaw/ninjaclawbot-plugin
+nano ~/.openclaw/openclaw.json
 ```
 
-Install and validate the plugin:
+This is the file you will edit to tell OpenClaw where the NinjaClawBot plugin
+lives.
 
-```bash
-npm install
-npm run typecheck
-npm test
-```
+## 18. Add the NinjaClawBot Plugin to the OpenClaw Configuration File
 
-Expected result:
+Add or update the `plugins` section so OpenClaw loads the NinjaClawBot plugin
+from your local NinjaClawBot project folder.
 
-- the plugin installs
-- TypeScript (typed JavaScript) checks pass
-- the plugin tests pass
+Important path rule:
 
-## 18. Configure OpenClaw to Load the Plugin
+- the plugin folder is inside the **NinjaClawBot** project
+- it is **not** inside the separate `NinjaClawAgent` repository
 
-Edit your OpenClaw config file.
+Use your real NinjaClawBot project path in both places shown below:
+
+- the plugin folder path
+- the project root path
 
 Example:
 
@@ -530,10 +537,20 @@ Replace:
 
 What this config does:
 
-- tells OpenClaw where the NinjaClawBot plugin lives
+- tells OpenClaw where the NinjaClawBot plugin folder lives
 - enables the plugin
 - tells the plugin where the project root is
 - allows the target OpenClaw agent to use only the `ninjaclawbot` tool set
+
+Important:
+
+- you do not need to `cd` into the plugin folder for normal Raspberry Pi setup
+- if OpenClaw is installed from the separate `NinjaClawAgent` workflow, keep
+  using that OpenClaw installation and simply point it to this NinjaClawBot
+  plugin path
+- if your OpenClaw config file already contains `plugins` or `agents`
+  settings, merge the NinjaClawBot entries into the existing file instead of
+  deleting your current settings
 
 ## 19. Start OpenClaw
 

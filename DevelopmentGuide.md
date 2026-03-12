@@ -205,7 +205,7 @@ uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
 uv run ninjaclawbot --help
 ```
 
-For the official OpenClaw plugin wrapper, use:
+For the official OpenClaw plugin wrapper development checks, use:
 
 ```bash
 cd integrations/openclaw/ninjaclawbot-plugin
@@ -213,6 +213,10 @@ npm install
 npm run typecheck
 npm test
 ```
+
+For end-user Raspberry Pi setup, do not use this step as the primary install
+path. Use [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+and enable the plugin by editing the OpenClaw configuration file.
 
 Plugin design rule:
 

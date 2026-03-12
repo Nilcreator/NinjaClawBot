@@ -105,7 +105,12 @@ The official plugin wrapper is stored at:
 
 - [integrations/openclaw/ninjaclawbot-plugin](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin)
 
-Install and validate it with:
+For normal Raspberry Pi setup, follow
+[InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+and add the plugin by editing the OpenClaw configuration file.
+
+Use the commands below only if you are developing or validating the plugin
+itself:
 
 ```bash
 cd /path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin
