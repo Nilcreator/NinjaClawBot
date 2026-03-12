@@ -19,9 +19,11 @@ Date: 2026-03-12
 - [Official OpenClaw Plugin Tool Wrapper](#official-openclaw-plugin-tool-wrapper)
 - [OpenClaw Skill Wrapper](#openclaw-skill-wrapper)
 - [Recommended OpenClaw Behavior Rules](#recommended-openclaw-behavior-rules)
-- [Phased Implementation Plan](#phased-implementation-plan)
+- [Stage 1: Expression-Tool Enhancement](#stage-1-expression-tool-enhancement)
+- [Stage 1 Mandatory Raspberry Pi Validation](#stage-1-mandatory-raspberry-pi-validation)
+- [Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper](#stage-2-openclaw-reply-policy-plugin-tool-and-skill-wrapper)
+- [Stage 2 Mandatory Raspberry Pi Validation](#stage-2-mandatory-raspberry-pi-validation)
 - [Quality Gates](#quality-gates)
-- [Raspberry-Pi-Validation-Plan](#raspberry-pi-validation-plan)
 - [Recommended Implementation Order](#recommended-implementation-order)
 - [References](#references)
 - [Current Status](#current-status)
@@ -401,7 +403,23 @@ The skill and wrapper should explicitly encode these rules:
 7. Do not call raw `pi5disp`, `pi5buzzer`, `pi5servo`, or `pi5vl53l0x` commands from OpenClaw.
 8. Use the `ninjaclawbot` plugin tool as the single robot-control boundary.
 
-## Phased Implementation Plan
+## Stage 1: Expression-Tool Enhancement
+
+Stage 1 covers phases 1 through 5 from the earlier version of this plan.
+
+Stage 1 goal:
+
+- build a reliable expression engine
+- add varied built-in facial and sound expressions
+- make `expression-tool` the main manual console for previewing and testing built-in expressions on Raspberry Pi
+
+Stage 1 includes:
+
+- expression contract and catalog foundation
+- first-class animated face engine
+- built-in sound expression engine
+- persistent idle policy and expression orchestration
+- expression-tool enhancement
 
 ### Phase 1: Expression Contract And Catalog Foundation
 
@@ -550,6 +568,62 @@ Documentation updates required:
 - `DevelopmentGuide.md`
 - `DevelopmentLog.md`
 
+## Stage 1 Mandatory Raspberry Pi Validation
+
+Stage 1 must not be considered complete until manual Raspberry Pi validation passes.
+
+### Safe smoke tests
+
+- `uv sync --extra dev`
+- `uv run ninjaclawbot health-check`
+- `uv run ninjaclawbot expression-tool`
+- confirm clean exit after `Goodbye!`
+
+### Device communication tests
+
+- verify the display can render built-in expressions
+- verify the buzzer can play full emotion sequences
+- verify `idle` can start and stop cleanly
+
+### Expression behavior tests
+
+- preview `idle`, `happy`, `speaking`, `confusing`, and `sleepy`
+- preview at least one new vivid positive emotion and one new vivid negative emotion
+- run a saved built-in expression from `expression-tool`
+- run `perform-expression` from the command line
+- verify temporary reactions return to `idle`
+
+### Expected outcomes
+
+- the face engine renders smoothly without obvious frame tearing
+- the built-in facial expressions are visually distinct and consistent
+- sound expressions match the intended emotion
+- `expression-tool` can manually trigger and preview the built-in expressions reliably
+- no GPIO cleanup traceback appears on exit
+
+### Rollback steps
+
+- stop the running command
+- power down before rewiring display or buzzer hardware
+- remove or restore the changed expression asset files if a test asset is invalid
+- return to the last validated root environment with `uv sync --extra dev`
+
+## Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper
+
+Stage 2 covers phases 6 through 8 from the earlier version of this plan.
+
+Stage 2 goal:
+
+- establish robust communication between OpenClaw and NinjaClawBot
+- encode explicit reply-emotion behavior and idle behavior
+- ensure OpenClaw uses only the approved `ninjaclawbot` control surface
+
+Stage 2 includes:
+
+- reply-emotion policy layer
+- official OpenClaw plugin tool
+- OpenClaw skill wrapper
+
 ### Phase 6: Reply-Emotion Policy Layer
 
 Objective:
@@ -634,28 +708,44 @@ Documentation updates required:
 - `DevelopmentGuide.md`
 - `DevelopmentLog.md`
 
-### Phase 9: Raspberry Pi 5 Validation
+## Stage 2 Mandatory Raspberry Pi Validation
 
-Objective:
+Stage 2 must not be considered complete until OpenClaw-driven manual Raspberry Pi validation passes.
 
-- validate the full enhanced expression system and OpenClaw wrapper on hardware
+### Safe smoke tests
 
-Files or modules likely to change:
+- start the OpenClaw agent on the Raspberry Pi
+- confirm the OpenClaw plugin tool is enabled and allowlisted
+- confirm the OpenClaw skill is loaded
+- confirm the robot returns to `idle` after startup
 
-- documentation and log entries primarily
+### Device communication tests
 
-Lint and validation:
+- OpenClaw triggers a built-in expression through the plugin tool
+- OpenClaw requests a movement through the plugin tool
+- OpenClaw requests `health_check` and receives structured results
 
-- final package-local gate
-- manual Raspberry Pi checklist
+### Reply policy tests
 
-Hardware risk:
+- greeting prompt should trigger `happy`
+- clarification prompt should trigger `confusing`
+- no-answer case should trigger `confusing` or `sad`
+- normal response should trigger `speaking`
+- waiting state should restore `idle`
 
-- very high
+### Expected outcomes
 
-Documentation updates required:
+- OpenClaw uses the approved wrapper instead of raw `pi5*` functions
+- emotion selection matches the documented policy
+- the reply behavior is consistent across repeated prompts
+- the robot returns to `idle` after temporary reactions
 
-- `DevelopmentLog.md`
+### Rollback steps
+
+- disable the OpenClaw plugin tool or remove it from the allowlist
+- remove or disable the OpenClaw skill wrapper if behavior is incorrect
+- fall back to manual `ninjaclawbot` CLI usage from the project root
+- restore the last validated Stage 1 expression behavior before retrying Stage 2
 
 ## Quality Gates
 
@@ -676,57 +766,26 @@ uv run ninjaclawbot expression-tool
 uv run ninjaclawbot perform-expression <name>
 ```
 
-## Raspberry Pi Validation Plan
-
-### Safe smoke tests
-
-- `uv sync --extra dev`
-- `uv run ninjaclawbot health-check`
-- `uv run ninjaclawbot expression-tool`
-- confirm clean exit after `Goodbye!`
-
-### Device communication tests
-
-- verify the display shows built-in expressions
-- verify the buzzer plays full emotion sequences
-- verify `idle` can start and stop cleanly
-
-### Expression behavior tests
-
-- preview `idle`, `happy`, `speaking`, `confusing`, and `sleepy`
-- run a saved built-in expression from `expression-tool`
-- run `perform-expression` from the command line
-- verify temporary reactions return to `idle`
-
-### OpenClaw behavior tests
-
-- greeting prompt should trigger `happy`
-- clarification prompt should trigger `confusing`
-- normal response should use `speaking`
-- waiting state should restore `idle`
-
-### Power-risk tests
-
-- power down before rewiring display or buzzer hardware
-- verify expression loops stop on shutdown
-- verify no GPIO cleanup tracebacks appear on exit
-
 ## Recommended Implementation Order
 
 Recommended order:
 
-1. Phase 1: expression contract and catalog foundation
-2. Phase 2: first-class animated face engine
-3. Phase 3: sound expression engine
-4. Phase 4: persistent idle policy and orchestration
-5. Phase 5: expression-tool enhancement
-6. Phase 6: reply-emotion policy layer
-7. Phase 7: OpenClaw plugin tool
-8. Phase 8: OpenClaw skill wrapper
-9. Phase 9: Raspberry Pi validation
+1. Stage 1:
+   - Phase 1: expression contract and catalog foundation
+   - Phase 2: first-class animated face engine
+   - Phase 3: sound expression engine
+   - Phase 4: persistent idle policy and orchestration
+   - Phase 5: expression-tool enhancement
+2. Stage 1 mandatory Raspberry Pi validation
+3. Stage 2:
+   - Phase 6: reply-emotion policy layer
+   - Phase 7: OpenClaw plugin tool
+   - Phase 8: OpenClaw skill wrapper
+4. Stage 2 mandatory Raspberry Pi validation
 
 This order is deliberate:
 
+- Stage 1 should stabilize the manual expression layer before any OpenClaw integration starts
 - the plugin wrapper should not be built before the expression engine and reply policy exist
 - the skill should teach the final tool surface, not an unstable intermediate one
 - `idle` policy must live in `ninjaclawbot` before OpenClaw instructions can depend on it
@@ -768,7 +827,11 @@ Current state:
   - a reply-emotion policy layer
   - an official OpenClaw plugin tool
   - an OpenClaw skill wrapper with behavior rules and examples
+- the work is now explicitly split into:
+  - Stage 1: Expression-Tool Enhancement
+  - Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper
+- each stage now has a mandatory Raspberry Pi validation gate before the next stage begins
 
 Next implementation decision needed:
 
-- approve the enhancement plan so work can begin at Phase 1
+- approve Stage 1 so work can begin at Phase 1
