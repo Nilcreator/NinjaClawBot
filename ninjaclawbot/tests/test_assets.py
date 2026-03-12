@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ninjaclawbot.assets import AssetStore
 from ninjaclawbot.config import NinjaClawbotConfig
+from ninjaclawbot.errors import ActionValidationError
 
 
 def test_asset_store_round_trips_movement_and_expression_assets(tmp_path: Path) -> None:
@@ -52,3 +55,33 @@ def test_asset_store_migrates_legacy_movement_step_keys(tmp_path: Path) -> None:
 
     assert movement["steps"][0]["speed"] == "F"
     assert movement["steps"][0]["moves"]["gpio12"] == 30.0
+
+
+def test_asset_store_normalizes_builtin_expression_assets(tmp_path: Path) -> None:
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+
+    store.save_expression(
+        {
+            "name": "hello",
+            "builtin": "greeting",
+            "display": {"text": "Hello there"},
+            "face_chain": ["happy", {"expression": "speaking", "duration": 0.8}],
+            "sound_chain": [{"emotion": "success", "duration": 0.25, "pause_after_s": 0.1}],
+            "idle_reset": True,
+        }
+    )
+
+    expression = store.load_expression("hello")
+
+    assert expression["builtin"] == "greeting"
+    assert expression["face_chain"][0]["expression"] == "happy"
+    assert expression["face_chain"][1]["expression"] == "speaking"
+    assert expression["sound_chain"][0]["emotion"] == "exciting"
+    assert expression["idle_reset"] is True
+
+
+def test_asset_store_rejects_unknown_builtin_expression(tmp_path: Path) -> None:
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+
+    with pytest.raises(ActionValidationError, match="Unsupported built-in expression"):
+        store.save_expression({"name": "bad", "builtin": "shrugging"})

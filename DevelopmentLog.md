@@ -2,6 +2,66 @@
 
 ## 2026-03-12
 
+### Stage 1 Expression-Tool Enhancement
+
+Summary:
+
+- added a first-class expression engine to `ninjaclawbot`, ported from the legacy NinjaRobotV5 facial-expression design
+- created a built-in face and sound catalog that preserves legacy expression names and adds new vivid expressions such as `greeting`, `listening`, `thinking`, `curious`, `success`, `warning`, and `error`
+- extended expression assets so they can reference built-ins, face chains, sound chains, and `idle_reset`
+- added runtime-owned expression orchestration and idle handling instead of treating expressions as only text plus a tone
+- upgraded `expression-tool` so it can list built-ins, preview them live, create saved expressions on top of them, and control the idle expression directly
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/assets.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/__init__.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/catalog.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/catalog.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/faces.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/faces.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/player.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/player.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/sounds.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/sounds.py)
+- [ninjaclawbot/tests/test_assets.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_assets.py)
+- [ninjaclawbot/tests/test_cli_tools.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_cli_tools.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [ninjaclawbot/tests/test_expressions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_expressions.py)
+- [ninjaclawbot/tests/test_runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_runtime.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the current `ninjaclawbot` expression layer was too narrow and did not preserve the legacy NinjaRobotV5 facial-expression behavior
+- Stage 1 of the enhancement plan required a real expression engine, not just richer JSON assets
+- built-in preview, idle handling, and manual expression testing had to work from the root project environment before any OpenClaw-facing wrapper work starts
+
+Lint and test results:
+
+- Phase 1 gate:
+  - `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml` -> `27 passed`
+- Phase 2 gate:
+  - same commands after the face engine and sound helpers -> `30 passed`
+- Phase 3 gate:
+  - same commands after runtime orchestration and idle handling -> `31 passed`
+- Phase 4 gate:
+  - same commands after the `expression-tool` enhancement -> `32 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi validation is still required for Stage 1 expression behavior
+- required pass conditions:
+  - `uv run ninjaclawbot expression-tool` can list and preview built-ins such as `idle`, `greeting`, `happy`, `thinking`, and `confusing`
+  - `7. Set idle expression` starts the waiting face and `8. Stop active expression` stops it cleanly
+  - saved expressions created from built-ins run correctly through `uv run ninjaclawbot perform-expression <name>`
+  - the animated face style remains visually aligned with the legacy NinjaRobotV5 design while showing more distinct emotions
+
 ### ninjaclawbot Expression Runtime Fix
 
 Summary:

@@ -52,6 +52,27 @@ class FakeDeviceAdapter:
         self.closed = True
 
 
+class FakeExpressionPlayer:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    def perform(self, definition):
+        self.calls.append(("perform", definition))
+        return {"name": definition.get("name"), "builtin": definition.get("builtin")}
+
+    def set_idle(self) -> None:
+        self.calls.append(("set_idle", None))
+
+    def stop(self) -> None:
+        self.calls.append(("stop", None))
+
+    def close(self) -> None:
+        self.calls.append(("close", None))
+
+    def list_builtins(self) -> list[str]:
+        return ["idle", "happy"]
+
+
 def test_runtime_delegates_servo_moves_and_health_checks() -> None:
     runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
     runtime._servo = FakeServoAdapter()
@@ -130,3 +151,24 @@ def test_runtime_close_swallows_cleanup_errors() -> None:
     assert runtime._buzzer.closed is True
     assert runtime._distance.closed is True
     assert runtime._servo.calls[-2:] == [("stop",), ("close",)]
+
+
+def test_runtime_expression_methods_delegate_to_player() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
+    runtime._expressions = FakeExpressionPlayer()
+
+    result = runtime.perform_expression({"name": "hello", "builtin": "happy"})
+    runtime.set_idle_expression()
+    runtime.stop_expression()
+
+    assert result == {"name": "hello", "builtin": "happy"}
+    assert runtime.list_builtin_expressions() == ["idle", "happy"]
+    assert runtime._expressions.calls == [
+        ("perform", {"name": "hello", "builtin": "happy"}),
+        ("set_idle", None),
+        ("stop", None),
+    ]

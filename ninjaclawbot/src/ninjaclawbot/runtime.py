@@ -13,6 +13,7 @@ from ninjaclawbot.adapters import (
     ServoAdapter,
 )
 from ninjaclawbot.config import NinjaClawbotConfig
+from ninjaclawbot.expressions.player import ExpressionPlayer
 from ninjaclawbot.locks import ExecutionLock
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ class NinjaClawbotRuntime:
         self._buzzer = BuzzerAdapter(self.config)
         self._display = DisplayAdapter(self.config)
         self._distance = DistanceAdapter(self.config)
+        self._expressions: ExpressionPlayer | None = None
         self._closed = False
 
     @property
@@ -49,6 +51,12 @@ class NinjaClawbotRuntime:
     @property
     def distance(self) -> DistanceAdapter:
         return self._distance
+
+    @property
+    def expressions(self) -> ExpressionPlayer:
+        if self._expressions is None:
+            self._expressions = ExpressionPlayer(self.display, self.buzzer)
+        return self._expressions
 
     def move_servos(
         self,
@@ -102,6 +110,18 @@ class NinjaClawbotRuntime:
     def read_distance(self) -> dict[str, Any]:
         return self.distance.read_data()
 
+    def perform_expression(self, definition: dict[str, Any]) -> dict[str, Any]:
+        return self.expressions.perform(definition)
+
+    def set_idle_expression(self) -> None:
+        self.expressions.set_idle()
+
+    def stop_expression(self) -> None:
+        self.expressions.stop()
+
+    def list_builtin_expressions(self) -> list[str]:
+        return self.expressions.list_builtins()
+
     def health_check(self) -> dict[str, Any]:
         health: dict[str, Any] = {}
         checks: dict[str, tuple[str, callable]] = {
@@ -130,6 +150,7 @@ class NinjaClawbotRuntime:
     def stop_all(self) -> None:
         # Display cleanup must run before buzzer backend shutdown because both
         # libraries ultimately share the global RPi.GPIO / rpi-lgpio state.
+        self._safe_cleanup("expressions.stop", self.stop_expression)
         self._safe_cleanup("display.close", self.display.close)
         self._safe_cleanup("buzzer.close", self.buzzer.close)
         self._safe_cleanup("servo.stop", self.servo.stop)
@@ -139,5 +160,7 @@ class NinjaClawbotRuntime:
             return
         self._closed = True
         self.stop_all()
+        if self._expressions is not None:
+            self._safe_cleanup("expressions.close", self._expressions.close)
         self._safe_cleanup("servo.close", self.servo.close)
         self._safe_cleanup("distance.close", self.distance.close)

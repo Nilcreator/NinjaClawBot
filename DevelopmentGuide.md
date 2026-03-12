@@ -62,6 +62,7 @@ Current responsibilities:
 - adapter-based composition of `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
 - structured action validation and structured result reporting
 - persistent movement and expression assets under `ninjaclawbot_data/`
+- a first-class expression engine with animated built-in faces, sound chains, and idle orchestration
 - interactive `movement-tool` and `expression-tool`
 - CLI actions for `health-check`, `list-assets`, `move-servos`, `perform-movement`, `perform-expression`, and JSON `run-action`
 - safe failure reporting when hardware is unavailable or not calibrated yet
@@ -83,6 +84,10 @@ Main package layout:
 - `ninjaclawbot/src/ninjaclawbot/assets.py`
 - `ninjaclawbot/src/ninjaclawbot/runtime.py`
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/sounds.py`
 - `ninjaclawbot/src/ninjaclawbot/__main__.py`
 - `ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py`
 - `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
@@ -199,6 +204,7 @@ Actuator-moving tests:
 
 - `uv run ninjaclawbot move-servos "M_gpio12:C"`
 - `uv run ninjaclawbot perform-movement <name>`
+- `uv run ninjaclawbot expression-tool`
 
 Power-risk tests:
 
@@ -209,7 +215,9 @@ Power-risk tests:
 Expected integrated expression result:
 
 - `perform-expression` should keep the display output stable
+- built-in expression previews should show animated legacy-style faces rather than static text-only output
 - queued buzzer emotion playback should finish before the command exits
+- temporary reactions should return to `idle` when `idle_reset` is enabled
 - leaving `expression-tool` should not print GPIO cleanup tracebacks
 
 Recommended calibration order before integrated robot tests:
@@ -238,6 +246,16 @@ If the display text appears but the emotion sound is cut short:
 - verify the saved expression uses a valid `sound.emotion` value such as `happy`
 - confirm the command does not return until the buzzer sequence finishes
 - if needed, compare with `uv run pi5buzzer play happy` to confirm the buzzer hardware path itself is healthy
+
+### Expression preview and idle policy
+
+If a built-in preview does not look animated or the robot does not return to `idle` correctly:
+
+- verify you are using the current root environment from `uv sync --extra dev`
+- run `uv run ninjaclawbot expression-tool`
+- preview `idle`, `happy`, `speaking`, `thinking`, and `confusing`
+- use `7. Set idle expression`, then `8. Stop active expression`
+- confirm the display returns to an animated waiting face when requested and stops cleanly on command
 
 ## pi5buzzer Migration Notes
 

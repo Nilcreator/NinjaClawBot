@@ -26,12 +26,23 @@ class FakeRuntime:
     def __init__(self) -> None:
         self.servo = FakeServoInterface()
         self.closed = False
+        self.expression_calls: list[tuple[str, object]] = []
 
     def close(self) -> None:
         self.closed = True
 
     def move_servos(self, *args, **kwargs) -> bool:
         return True
+
+    def perform_expression(self, definition):
+        self.expression_calls.append(("perform_expression", definition))
+        return {"builtin": definition.get("builtin")}
+
+    def set_idle_expression(self) -> None:
+        self.expression_calls.append(("set_idle_expression", None))
+
+    def stop_expression(self) -> None:
+        self.expression_calls.append(("stop_expression", None))
 
 
 class FakeExecutor:
@@ -78,12 +89,39 @@ def test_expression_tool_can_create_asset(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(
         cli,
         ["--root-dir", str(tmp_path), "expression-tool"],
-        input="2\nhappy\nHappy face\nHello\nn\n3\nen\n32\nhappy\n\n0.3\n6\n",
+        input="4\nhappy\nHappy face\nhappy\nHello\nn\n3\nen\n32\nhappy\n\n0.3\n\nY\n10\n",
     )
 
     assert result.exit_code == 0
     expression = AssetStore(NinjaClawbotConfig(root_dir=tmp_path)).load_expression("happy")
     assert expression["display"]["text"] == "Hello"
+    assert expression["builtin"] == "happy"
+    assert expression["idle_reset"] is True
+
+
+def test_expression_tool_can_preview_builtin_and_set_idle(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.cli.expression_tool.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        ["--root-dir", str(tmp_path), "expression-tool"],
+        input="3\ngreeting\n7\n8\n10\n",
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.expression_calls == [
+        ("perform_expression", {"builtin": "greeting"}),
+        ("set_idle_expression", None),
+        ("stop_expression", None),
+    ]
 
 
 def test_perform_expression_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:

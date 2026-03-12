@@ -72,6 +72,14 @@ uv run ninjaclawbot perform-expression <name>
 uv run ninjaclawbot run-action '{"action":"read_distance"}'
 ```
 
+`expression-tool` now supports:
+
+- listing saved expressions
+- listing built-in expressions
+- previewing built-in animated face/sound expressions
+- creating saved expressions that reuse a built-in expression plus optional text or sound overrides
+- starting and stopping the idle expression manually
+
 ## Calibration Note
 
 Before using integrated movement features, calibrate `pi5servo` first from the project root:

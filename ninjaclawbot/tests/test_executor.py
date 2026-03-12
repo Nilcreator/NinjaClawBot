@@ -44,6 +44,18 @@ class FakeRuntime:
         self.calls.append(("play_sound", kwargs))
         return float(kwargs.get("duration", 0.0))
 
+    def perform_expression(self, definition):
+        self.calls.append(("perform_expression", definition))
+        return {
+            "name": definition.get("name"),
+            "builtin": definition.get("builtin") or None,
+            "display_text": (definition.get("display", {}) or {}).get("text"),
+            "face_chain": definition.get("face_chain", []),
+            "sound_chain": definition.get("sound_chain", []),
+            "waited_for_s": float((definition.get("sound", {}) or {}).get("duration", 0.0)),
+            "idle_reset": bool(definition.get("idle_reset", False)),
+        }
+
     def read_distance(self):
         self.calls.append(("read_distance",))
         return {"distance_mm": 120}
@@ -100,15 +112,9 @@ def test_executor_waits_for_expression_sound(tmp_path) -> None:
     result = executor.execute({"action": "perform_expression", "parameters": {"name": "hello"}})
 
     assert result.status.value == "success"
-    assert runtime.calls[0] == (
-        "display_text",
-        "Hello",
-        {"scroll": False, "duration": 1.0, "language": "en", "font_size": 32},
-    )
-    assert runtime.calls[1] == (
-        "play_sound",
-        {"emotion": "happy", "frequency": None, "duration": 0.3, "wait": True},
-    )
+    assert runtime.calls[0][0] == "perform_expression"
+    assert runtime.calls[0][1]["display"]["text"] == "Hello"
+    assert runtime.calls[0][1]["sound"]["emotion"] == "happy"
     assert result.data["waited_for_s"] == 0.3
 
 

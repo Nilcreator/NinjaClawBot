@@ -195,31 +195,4 @@ class ActionExecutor:
         return {"name": asset["name"], "steps_executed": len(sequence)}
 
     def _execute_expression_definition(self, asset: dict[str, Any]) -> dict[str, Any]:
-        display = dict(asset.get("display", {}))
-        sound = dict(asset.get("sound", {}))
-        if display.get("text"):
-            self.runtime.display_text(
-                display["text"],
-                scroll=bool(display.get("scroll", False)),
-                duration=float(display.get("duration", 3.0)),
-                language=str(display.get("language", "en")),
-                font_size=int(display.get("font_size", 32)),
-            )
-        emotion = str(sound.get("emotion", "")).strip()
-        frequency = sound.get("frequency")
-        if emotion or frequency is not None:
-            waited_for = self.runtime.play_sound(
-                emotion=emotion or None,
-                frequency=frequency,
-                duration=float(sound.get("duration", 0.3)),
-                wait=True,
-            )
-        else:
-            waited_for = 0.0
-        return {
-            "name": asset.get("name"),
-            "display_text": display.get("text"),
-            "sound_emotion": emotion or None,
-            "sound_frequency": frequency,
-            "waited_for_s": waited_for,
-        }
+        return self.runtime.perform_expression(asset)

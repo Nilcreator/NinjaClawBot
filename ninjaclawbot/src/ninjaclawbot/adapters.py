@@ -335,6 +335,20 @@ class DisplayAdapter:
         draw.text((x_pos, y_pos), text, font=font, fill=(255, 255, 255))
         display.display(image)
 
+    def show_image(self, image: Any) -> None:
+        display = self._build_display()
+        display.display(image)
+
+    @property
+    def width(self) -> int:
+        display = self._build_display()
+        return int(display.width)
+
+    @property
+    def height(self) -> int:
+        display = self._build_display()
+        return int(display.height)
+
     def clear(self) -> None:
         display = self._build_display()
         display.clear()

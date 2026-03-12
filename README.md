@@ -77,7 +77,7 @@ Important runtime files created at the project root:
 - `ninjaclawbot`
   - runs integrated robot actions
   - stores saved movements and expressions
-  - includes `movement-tool`, `expression-tool`, `health-check`, and JSON `run-action`
+  - includes a first-class facial/sound expression engine, `movement-tool`, `expression-tool`, `health-check`, and JSON `run-action`
 
 ## Installation
 
@@ -303,7 +303,7 @@ Expected result:
 - `ninjaclawbot_data/movements/wave.json` is created at the project root
 - the integrated executor runs the saved movement with structured JSON output
 
-### Create and run an expression
+### Preview and run built-in expressions
 
 Start the interactive tool:
 
@@ -313,11 +313,35 @@ uv run ninjaclawbot expression-tool
 
 Suggested first test:
 
-1. Choose `2. Create expression`
+1. Choose `2. List built-in expressions`
+2. Choose `3. Preview built-in expression`
+3. Preview `idle`, `greeting`, `happy`, `thinking`, and `confusing`
+4. Choose `7. Set idle expression`
+5. Choose `8. Stop active expression`
+
+Expected result:
+
+- the built-in face engine follows the legacy NinjaRobotV5 visual language on the SPI display
+- previews use coordinated facial animation and buzzer emotion playback
+- `idle` can start and stop without leaving the display or buzzer in a bad state
+- leaving `uv run ninjaclawbot expression-tool` should return to the shell without a GPIO cleanup traceback
+
+### Create and run a saved expression
+
+Start the interactive tool:
+
+```bash
+uv run ninjaclawbot expression-tool
+```
+
+Suggested first saved-expression test:
+
+1. Choose `4. Create expression asset`
 2. Name it `happy`
-3. Set display text such as `Hello`
-4. Set sound emotion such as `happy`
-5. Exit and save
+3. Set built-in expression to `happy`
+4. Optionally add display text such as `Hello`
+5. Keep the default `Return to idle after playing?` value
+6. Exit and save
 
 Then run:
 
@@ -328,9 +352,10 @@ uv run ninjaclawbot perform-expression happy
 Expected result:
 
 - `ninjaclawbot_data/expressions/happy.json` is created at the project root
+- the saved asset can reuse a built-in expression plus optional text and sound overrides
 - the integrated executor drives display and buzzer actions through the real `pi5*` packages
 - the buzzer emotion melody finishes before the command exits
-- leaving `uv run ninjaclawbot expression-tool` should return to the shell without a GPIO cleanup traceback
+- temporary expressions return to the animated `idle` face when `idle_reset` is enabled
 
 ### JSON action test
 

@@ -11,6 +11,11 @@ from pi5servo.core.endpoint import parse_servo_endpoint
 
 from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.errors import ActionValidationError
+from ninjaclawbot.expressions.catalog import (
+    get_builtin_expression,
+    normalize_face_expression,
+    normalize_sound_emotion,
+)
 
 _NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]+$")
 _SPEED_CHOICES = {"S", "M", "F"}
@@ -103,17 +108,98 @@ def validate_movement_asset(payload: dict[str, Any]) -> dict[str, Any]:
 
 def validate_expression_asset(payload: dict[str, Any]) -> dict[str, Any]:
     name = _validate_asset_name(str(payload.get("name", "")).strip())
+    builtin_name = str(payload.get("builtin", "")).strip()
     display = payload.get("display", {}) or {}
     sound = payload.get("sound", {}) or {}
+    face_chain = payload.get("face_chain", []) or []
+    sound_chain = payload.get("sound_chain", []) or []
     if not isinstance(display, dict) or not isinstance(sound, dict):
         raise ActionValidationError(
             "Expression asset display and sound blocks must be dictionaries."
         )
-    if not display and not sound:
-        raise ActionValidationError("Expression assets must define display, sound, or both.")
+    if not isinstance(face_chain, list) or not isinstance(sound_chain, list):
+        raise ActionValidationError("Expression asset face_chain and sound_chain must be lists.")
+
+    builtin: dict[str, Any] | None = None
+    if builtin_name:
+        try:
+            builtin = get_builtin_expression(builtin_name)
+        except ValueError as exc:
+            raise ActionValidationError(str(exc)) from exc
+        builtin_name = str(builtin["name"])
+
+    normalized_face_chain: list[dict[str, Any]] = []
+    for index, step in enumerate(face_chain, start=1):
+        if isinstance(step, str):
+            step = {"expression": step}
+        if not isinstance(step, dict):
+            raise ActionValidationError(
+                f"Expression face_chain step {index} must be a string or dictionary."
+            )
+        expression_name = str(step.get("expression", "")).strip()
+        if not expression_name:
+            raise ActionValidationError(
+                f"Expression face_chain step {index} must define an expression name."
+            )
+        try:
+            normalized_expression = normalize_face_expression(expression_name)
+        except ValueError as exc:
+            raise ActionValidationError(str(exc)) from exc
+        normalized_face_chain.append(
+            {
+                "expression": normalized_expression,
+                "duration": max(0.05, float(step.get("duration", 1.5))),
+            }
+        )
+
+    normalized_sound_chain: list[dict[str, Any]] = []
+    for index, step in enumerate(sound_chain, start=1):
+        if not isinstance(step, dict):
+            raise ActionValidationError(
+                f"Expression sound_chain step {index} must be a dictionary."
+            )
+        emotion_name = str(step.get("emotion", "")).strip()
+        frequency = step.get("frequency")
+        if not emotion_name and frequency is None:
+            raise ActionValidationError(
+                f"Expression sound_chain step {index} must define an emotion or frequency."
+            )
+        if emotion_name:
+            try:
+                emotion_name = normalize_sound_emotion(emotion_name)
+            except ValueError as exc:
+                raise ActionValidationError(str(exc)) from exc
+        normalized_sound_chain.append(
+            {
+                "emotion": emotion_name,
+                "frequency": None if frequency is None else int(frequency),
+                "duration": max(0.0, float(step.get("duration", 0.3))),
+                "pause_after_s": max(0.0, float(step.get("pause_after_s", 0.0))),
+            }
+        )
+
+    if sound.get("emotion"):
+        try:
+            sound_emotion = normalize_sound_emotion(str(sound.get("emotion", "")))
+        except ValueError as exc:
+            raise ActionValidationError(str(exc)) from exc
+    else:
+        sound_emotion = ""
+
+    if (
+        not builtin
+        and not display
+        and not sound
+        and not normalized_face_chain
+        and not normalized_sound_chain
+    ):
+        raise ActionValidationError(
+            "Expression assets must define a builtin, display, sound, face_chain, sound_chain, or a combination of them."
+        )
     return {
         "name": name,
         "description": str(payload.get("description", "")).strip(),
+        "builtin": builtin_name,
         "display": {
             "text": str(display.get("text", "")).strip(),
             "scroll": bool(display.get("scroll", False)),
@@ -122,10 +208,13 @@ def validate_expression_asset(payload: dict[str, Any]) -> dict[str, Any]:
             "font_size": int(display.get("font_size", 32)),
         },
         "sound": {
-            "emotion": str(sound.get("emotion", "")).strip(),
+            "emotion": sound_emotion,
             "frequency": sound.get("frequency"),
             "duration": float(sound.get("duration", 0.3)),
         },
+        "face_chain": normalized_face_chain,
+        "sound_chain": normalized_sound_chain,
+        "idle_reset": bool(payload.get("idle_reset", True if builtin_name else False)),
     }
 
 
