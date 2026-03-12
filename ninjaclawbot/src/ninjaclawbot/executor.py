@@ -10,6 +10,7 @@ from ninjaclawbot.actions import ActionRequest, ActionType
 from ninjaclawbot.assets import AssetStore
 from ninjaclawbot.errors import ActionValidationError, ExecutionError, NinjaClawbotError
 from ninjaclawbot.expressions.catalog import get_builtin_expression
+from ninjaclawbot.expressions.policy import build_reply_expression, list_reply_states
 from ninjaclawbot.results import ActionResult, ActionStatus
 from ninjaclawbot.runtime import NinjaClawbotRuntime
 
@@ -83,6 +84,20 @@ class ActionExecutor:
         params = request.parameters
         if request.action == ActionType.HEALTH_CHECK:
             return self.runtime.health_check(), ["servo", "buzzer", "display", "distance"], []
+        if request.action == ActionType.LIST_CAPABILITIES:
+            return (
+                {
+                    "actions": [action.value for action in ActionType],
+                    "reply_states": list_reply_states(),
+                    "built_in_expressions": self.runtime.list_builtin_expressions(),
+                    "assets": {
+                        "movements": self.asset_store.list_assets("movements"),
+                        "expressions": self.asset_store.list_assets("expressions"),
+                    },
+                },
+                [],
+                [],
+            )
         if request.action == ActionType.MOVE_SERVOS:
             completed = self.runtime.move_servos(
                 {key: float(value) for key, value in params["targets"].items()},
@@ -106,6 +121,21 @@ class ActionExecutor:
         if request.action == ActionType.PERFORM_MOVEMENT:
             asset = self.asset_store.load_movement(str(params["name"]))
             return self._execute_movement_asset(asset), ["servo"], []
+        if request.action == ActionType.PERFORM_REPLY:
+            definition = build_reply_expression(
+                text=str(params["text"]),
+                reply_state=params["reply_state"],
+                display_text=params.get("display_text"),
+                idle_reset=params.get("idle_reset"),
+                duration=float(params.get("duration", 3.0)),
+                language=str(params.get("language", "en")),
+                font_size=int(params.get("font_size", 32)),
+            )
+            result = self._execute_expression_definition(definition)
+            result["reply_state"] = definition["reply_policy"]["reply_state"]
+            result["reply_text"] = str(params["text"])
+            result["display_text"] = definition["reply_policy"]["display_text"]
+            return result, ["display", "buzzer"], []
         if request.action == ActionType.DISPLAY_TEXT:
             self.runtime.display_text(
                 str(params["text"]),
@@ -150,6 +180,12 @@ class ActionExecutor:
         if request.action == ActionType.PERFORM_EXPRESSION:
             definition = self._resolve_expression_definition(str(params["name"]))
             return self._execute_expression_definition(definition), ["display", "buzzer"], []
+        if request.action == ActionType.SET_IDLE:
+            self.runtime.set_idle_expression()
+            return {"idle_expression": "idle", "active_expression": "idle"}, ["display"], []
+        if request.action == ActionType.STOP_EXPRESSION:
+            self.runtime.stop_expression()
+            return {"stopped": True}, ["display", "buzzer"], []
         if request.action == ActionType.READ_DISTANCE:
             return self.runtime.read_distance(), ["distance"], []
         if request.action == ActionType.LIST_ASSETS:

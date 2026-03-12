@@ -1017,3 +1017,104 @@ Follow-up:
 - on the Raspberry Pi 5, start `uv run pi5servo servo-tool`, calibrate the servo, stay in the same session, then run Quick Move commands including `F_12:0/13:0`
 - confirm the servos still respond correctly without needing to exit and restart the tool
 - do not proceed to the `ninjaclawbot` reset until this same-session validation is confirmed
+
+### 2026-03-12 OpenClaw Stage 2 Reply Policy, Plugin Wrapper, And Skill Wrapper
+
+Summary:
+
+- added the OpenClaw-facing Stage 2 control surface on top of `ninjaclawbot`
+- introduced typed Python actions for `perform_reply`, `list_capabilities`, `set_idle`, and `stop_expression`
+- added a new `expressions/policy.py` module so OpenClaw reply states map to the correct built-in face and sound behavior instead of constructing expression chains manually
+- added the machine-facing `openclaw-action` bridge command for plugin use
+- created the official OpenClaw plugin package under `integrations/openclaw/ninjaclawbot-plugin`
+- created the `ninjaclawbot_control` OpenClaw skill so the agent is explicitly taught to keep `idle` while waiting and to use the correct reply states for greeting, uncertainty, success, warning, and error cases
+
+Files changed:
+
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
+- `ninjaclawbot/tests/test_actions.py`
+- `ninjaclawbot/tests/test_cli_tools.py`
+- `ninjaclawbot/tests/test_executor.py`
+- `ninjaclawbot/tests/test_policy.py`
+- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+- `integrations/openclaw/ninjaclawbot-plugin/package.json`
+- `integrations/openclaw/ninjaclawbot-plugin/tsconfig.json`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md`
+- `README.md`
+- `ninjaclawbot/README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+Why:
+
+- Stage 1 made the expression engine and manual tools stable, but OpenClaw still needed an official execution path instead of shelling directly into raw driver commands
+- OpenClaw’s official integration model is plugin tools with JSON-schema parameters plus plugin-shipped skills, so the wrapper needed to follow that model rather than invent a parallel interface
+- a dedicated reply policy keeps emotion-selection rules centralized, testable, and consistent with the legacy NinjaRobotV5 face and sound design
+
+Lint and test results:
+
+- Python gate:
+  - `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
+  - `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml`
+  - result: `47 passed`
+- OpenClaw plugin gate:
+  - `cd integrations/openclaw/ninjaclawbot-plugin`
+  - `npm install`
+  - `npm run typecheck`
+  - `npm test`
+  - result: `3 passed`
+
+Raspberry Pi validation status:
+
+- manual Raspberry Pi 5 validation is still required
+
+Follow-up:
+
+- from the project root, run `uv run ninjaclawbot list-capabilities`, `uv run ninjaclawbot perform-reply --reply-state greeting "Hello"`, and `uv run ninjaclawbot set-idle`
+- in the plugin folder, confirm the Node toolchain is installed with `npm install`, `npm run typecheck`, and `npm test`
+- enable the plugin in OpenClaw, allowlist `ninjaclawbot`, then validate `ninjaclawbot_health`, `ninjaclawbot_capabilities`, `ninjaclawbot_reply`, and `ninjaclawbot_set_idle` on the Raspberry Pi before trusting the agent for live robot control
+
+### 2026-03-12 Installation Guide And Root README Documentation Refresh
+
+Summary:
+
+- created a new root-level `InstallationGuide.md` as the single source of truth for installing, wiring, calibrating, testing, and connecting the full NinjaClawBot project to OpenClaw on Raspberry Pi 5
+- rewrote the root `README.md` into a shorter guidebook that explains what the project is, how the major parts fit together, how OpenClaw uses the project, and where to find the detailed documents
+- updated the advanced docs so the new document hierarchy is clear
+
+Files changed:
+
+- `InstallationGuide.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+- `ninjaclawbot/README.md`
+
+Why:
+
+- the project had grown large enough that installation, calibration, standalone driver usage, integrated `ninjaclawbot` usage, and OpenClaw setup needed one clear end-to-end document
+- the root README had become too large to act as both overview and full setup manual at the same time
+- users need one simple Raspberry Pi path from fresh install to OpenClaw robot control without searching across multiple files
+
+Lint and test results:
+
+- no code behavior changed
+- command names and documented root workflows were checked against the current project CLI surface
+
+Raspberry Pi validation status:
+
+- not applicable for this documentation-only update
+
+Follow-up:
+
+- use `InstallationGuide.md` as the first document for new Raspberry Pi setups
+- keep future install, calibration, or OpenClaw changes synchronized across `InstallationGuide.md`, `README.md`, and `DevelopmentGuide.md`

@@ -12,6 +12,14 @@ This guide records the current developer workflow for the standalone Pi 5 driver
 
 The detailed migration and backend strategy lives in [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md).
 
+The main user-facing installation and Raspberry Pi setup path now lives in [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md).
+
+Use the documents this way:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md) for the project overview
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md) for step-by-step setup, calibration, testing, and OpenClaw connection
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md) for advanced development and validation details
+
 ## Root Workspace Workflow
 
 The repository root is now the main install and execution location.
@@ -63,13 +71,16 @@ Current responsibilities:
 - structured action validation and structured result reporting
 - persistent movement and expression assets under `ninjaclawbot_data/`
 - a first-class expression engine with animated built-in faces, sound chains, and idle orchestration
+- a reply-emotion policy for OpenClaw-facing conversational replies
 - interactive `movement-tool` and `expression-tool`
-- CLI actions for `health-check`, `list-assets`, `move-servos`, `perform-movement`, `perform-expression`, and JSON `run-action`
+- CLI actions for `health-check`, `list-assets`, `list-capabilities`, `move-servos`, `perform-movement`, `perform-expression`, `perform-reply`, `set-idle`, and JSON `run-action`
+- a machine-facing `openclaw-action` bridge used only by the official OpenClaw plugin
 - safe failure reporting when hardware is unavailable or not calibrated yet
 
 Important rule:
 
 - external AI assistants should call `ninjaclawbot`, not the raw `pi5*` drivers directly
+- OpenClaw should call the official plugin wrapper, not invoke `ninjaclawbot` shell commands directly
 
 ## ninjaclawbot File Layout
 
@@ -86,11 +97,23 @@ Main package layout:
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/sounds.py`
 - `ninjaclawbot/src/ninjaclawbot/__main__.py`
 - `ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py`
 - `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
+
+OpenClaw wrapper layout:
+
+- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+- `integrations/openclaw/ninjaclawbot-plugin/package.json`
+- `integrations/openclaw/ninjaclawbot-plugin/tsconfig.json`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
 
 Generated user asset paths:
 
@@ -182,6 +205,21 @@ uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
 uv run ninjaclawbot --help
 ```
 
+For the official OpenClaw plugin wrapper, use:
+
+```bash
+cd integrations/openclaw/ninjaclawbot-plugin
+npm install
+npm run typecheck
+npm test
+```
+
+Plugin design rule:
+
+- the plugin must stay thin
+- it should validate OpenClaw tool parameters, call the project-root `ninjaclawbot openclaw-action` bridge, and return the structured JSON result
+- it must not implement robot logic that already exists in Python
+
 Packaging note:
 
 - the root [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml) is now the canonical project install entry
@@ -194,11 +232,14 @@ Safe smoke tests:
 
 - `uv run ninjaclawbot list-assets`
 - `uv run ninjaclawbot health-check`
+- `uv run ninjaclawbot list-capabilities`
+- `uv run ninjaclawbot perform-reply --reply-state greeting "Hello"`
 
 Device communication tests:
 
 - `uv run ninjaclawbot run-action '{"action":"read_distance"}'`
 - `uv run ninjaclawbot perform-expression <name>`
+- `uv run ninjaclawbot set-idle`
 
 Actuator-moving tests:
 
@@ -221,6 +262,8 @@ Expected integrated expression result:
 - queued buzzer emotion playback should finish before the command exits
 - temporary reactions should return to `idle` when `idle_reset` is enabled
 - leaving `expression-tool` should not print GPIO cleanup tracebacks
+- `perform-reply` should map greeting, confusion, success, warning, and error replies to the expected built-in expressions
+- `list-capabilities` should report supported reply states and available assets for OpenClaw
 
 Recommended calibration order before integrated robot tests:
 
@@ -258,6 +301,17 @@ If `uv run ninjaclawbot perform-expression idle` or another built-in name fails:
 - check both execution paths:
   - `uv run ninjaclawbot perform-expression idle`
   - `uv run ninjaclawbot perform-expression <saved-name>`
+
+### OpenClaw plugin wrapper
+
+If the OpenClaw plugin does not work:
+
+- verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
+- verify `plugins.entries.ninjaclawbot.enabled` is `true`
+- verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
+- verify the target agent allowlist contains `ninjaclawbot`
+- rerun `npm run typecheck` and `npm test` in the plugin folder
+- rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
 
 ### Expression startup responsiveness

@@ -51,7 +51,8 @@ class FakeExecutor:
         self.asset_store = AssetStore(NinjaClawbotConfig(root_dir=root_dir))
 
     def execute(self, payload):
-        return ActionResult.success(action=str(payload["action"]))
+        action = payload["action"] if isinstance(payload, dict) else payload.action.value
+        return ActionResult.success(action=str(action))
 
 
 def test_parse_movement_command_supports_speed_prefix_aliases_and_per_servo_speeds() -> None:
@@ -137,6 +138,58 @@ def test_perform_expression_closes_executor_runtime(tmp_path: Path, monkeypatch)
     result = runner.invoke(
         cli,
         ["--root-dir", str(tmp_path), "perform-expression", "hello"],
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.closed is True
+
+
+def test_perform_reply_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.__main__.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        [
+            "--root-dir",
+            str(tmp_path),
+            "perform-reply",
+            "--reply-state",
+            "greeting",
+            "Hello there",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.closed is True
+
+
+def test_openclaw_action_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.__main__.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        [
+            "--root-dir",
+            str(tmp_path),
+            "openclaw-action",
+            '{"action":"health_check"}',
+        ],
     )
 
     assert result.exit_code == 0

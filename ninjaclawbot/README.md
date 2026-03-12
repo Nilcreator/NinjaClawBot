@@ -17,6 +17,10 @@ Its job is to provide:
 - saved expression assets
 - interactive `movement-tool` and `expression-tool`
 - a controlled external hook for AI callers such as OpenClaw
+- a reply-emotion policy for conversational robot replies
+- a machine-facing JSON bridge used by the official OpenClaw plugin
+
+If you want the full Raspberry Pi installation, calibration, and OpenClaw setup path, read [../InstallationGuide.md](../InstallationGuide.md).
 
 ## Recommended Install
 
@@ -64,11 +68,14 @@ From the project root:
 ```bash
 uv run ninjaclawbot health-check
 uv run ninjaclawbot list-assets
+uv run ninjaclawbot list-capabilities
 uv run ninjaclawbot move-servos "F_12:C/13:C"
 uv run ninjaclawbot movement-tool
 uv run ninjaclawbot expression-tool
 uv run ninjaclawbot perform-movement <name>
 uv run ninjaclawbot perform-expression <name>
+uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
+uv run ninjaclawbot set-idle
 uv run ninjaclawbot run-action '{"action":"read_distance"}'
 ```
 
@@ -84,6 +91,37 @@ uv run ninjaclawbot run-action '{"action":"read_distance"}'
 
 - saved expression assets such as `hello`
 - built-in expression names such as `idle`, `greeting`, or `confusing`
+
+`perform-reply` adds the OpenClaw-facing reply policy. It maps reply situations such as
+`greeting`, `speaking`, `asking_clarification`, `cannot_answer`, `success`, and `error`
+to the correct built-in face and sound behavior.
+
+`set-idle` starts the persistent idle face, and the hidden `openclaw-action` command is the
+machine-facing bridge used by the OpenClaw plugin.
+
+## OpenClaw Plugin
+
+The official plugin wrapper is stored at:
+
+- [integrations/openclaw/ninjaclawbot-plugin](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin)
+
+Install and validate it with:
+
+```bash
+cd /path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin
+npm install
+npm run typecheck
+npm test
+```
+
+The plugin exposes typed `ninjaclawbot_*` tools for OpenClaw and ships the
+`ninjaclawbot_control` skill so OpenClaw can:
+
+- keep the robot on `idle` while waiting
+- use `ninjaclawbot_reply` for normal conversational replies
+- choose `confusing` behavior for uncertainty or clarifying questions
+- choose `happy` or `success` behavior for greetings and completed tasks
+- avoid calling raw `pi5*` drivers directly
 
 ## Calibration Note
 

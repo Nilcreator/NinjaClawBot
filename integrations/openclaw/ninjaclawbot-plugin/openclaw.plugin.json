@@ -1,0 +1,29 @@
+{
+  "id": "ninjaclawbot",
+  "name": "NinjaClawBot",
+  "description": "Official OpenClaw tools and skills for NinjaClawBot hardware control.",
+  "version": "0.1.0",
+  "skills": ["./skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "projectRoot": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Absolute path to the NinjaClawBot project root."
+      },
+      "rootDir": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Optional root directory for ninjaclawbot config and assets. Defaults to projectRoot."
+      },
+      "uvCommand": {
+        "type": "string",
+        "minLength": 1,
+        "description": "Command used to invoke uv. Defaults to 'uv'."
+      }
+    },
+    "required": ["projectRoot"]
+  }
+}

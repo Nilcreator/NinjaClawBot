@@ -63,6 +63,16 @@ class FakeRuntime:
     def stop_all(self):
         self.calls.append(("stop_all",))
 
+    def set_idle_expression(self):
+        self.calls.append(("set_idle_expression",))
+
+    def stop_expression(self):
+        self.calls.append(("stop_expression",))
+
+    def list_builtin_expressions(self):
+        self.calls.append(("list_builtin_expressions",))
+        return ["idle", "greeting", "happy"]
+
 
 def test_executor_runs_movement_asset_from_store(tmp_path) -> None:
     runtime = FakeRuntime()
@@ -116,6 +126,53 @@ def test_executor_waits_for_expression_sound(tmp_path) -> None:
     assert runtime.calls[0][1]["display"]["text"] == "Hello"
     assert runtime.calls[0][1]["sound"]["emotion"] == "happy"
     assert result.data["waited_for_s"] == 0.3
+
+
+def test_executor_builds_reply_expression_from_policy() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute(
+        {
+            "action": "perform_reply",
+            "parameters": {"text": "Hello!", "reply_state": "greeting"},
+        }
+    )
+
+    assert result.status.value == "success"
+    assert runtime.calls[0][0] == "perform_expression"
+    assert runtime.calls[0][1]["builtin"] == "greeting"
+    assert runtime.calls[0][1]["display"]["text"] == "Hello!"
+    assert result.data["reply_state"] == "greeting"
+
+
+def test_executor_lists_capabilities(tmp_path) -> None:
+    runtime = FakeRuntime()
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+    store.save_movement({"name": "wave", "steps": [{"speed": "F", "moves": {"gpio12": 20}}]})
+    store.save_expression({"name": "hello", "display": {"text": "HELLO"}})
+    executor = ActionExecutor(runtime=runtime, asset_store=store)
+
+    result = executor.execute({"action": "list_capabilities"})
+
+    assert result.status.value == "success"
+    assert "perform_reply" in result.data["actions"]
+    assert "greeting" in result.data["reply_states"]
+    assert result.data["assets"]["movements"] == ["wave"]
+    assert result.data["assets"]["expressions"] == ["hello"]
+    assert result.data["built_in_expressions"] == ["idle", "greeting", "happy"]
+
+
+def test_executor_can_set_idle_and_stop_expression() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    idle_result = executor.execute({"action": "set_idle"})
+    stop_result = executor.execute({"action": "stop_expression"})
+
+    assert idle_result.status.value == "success"
+    assert stop_result.status.value == "success"
+    assert runtime.calls == [("set_idle_expression",), ("stop_expression",)]
 
 
 def test_executor_runs_builtin_expression_without_saved_asset() -> None:

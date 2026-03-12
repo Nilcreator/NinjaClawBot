@@ -44,6 +44,31 @@ def test_action_request_requires_name_for_movement() -> None:
         ActionRequest.from_dict({"action": "perform_movement", "parameters": {}})
 
 
+def test_action_request_validates_reply_state() -> None:
+    request = ActionRequest.from_dict(
+        {
+            "action": "perform_reply",
+            "parameters": {
+                "text": "Hello there",
+                "reply_state": "greeting",
+            },
+        }
+    )
+
+    assert request.action is ActionType.PERFORM_REPLY
+    assert request.parameters["reply_state"] == "greeting"
+
+
+def test_action_request_rejects_unknown_reply_state() -> None:
+    with pytest.raises(ActionValidationError, match="Unsupported reply_state"):
+        ActionRequest.from_dict(
+            {
+                "action": "perform_reply",
+                "parameters": {"text": "Hello", "reply_state": "shrugging"},
+            }
+        )
+
+
 def test_action_request_requires_non_empty_text() -> None:
     with pytest.raises(ActionValidationError, match="Display text"):
         ActionRequest.from_dict({"action": "display_text", "parameters": {"text": "  "}})

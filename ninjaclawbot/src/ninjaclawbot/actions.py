@@ -9,18 +9,23 @@ from typing import Any
 from pi5servo.core.endpoint import parse_servo_endpoint
 
 from ninjaclawbot.errors import ActionValidationError
+from ninjaclawbot.expressions.policy import normalize_reply_state
 
 
 class ActionType(StrEnum):
     """Stable action names for robot control."""
 
     HEALTH_CHECK = "health_check"
+    LIST_CAPABILITIES = "list_capabilities"
     MOVE_SERVOS = "move_servos"
     PERFORM_MOVEMENT = "perform_movement"
+    PERFORM_REPLY = "perform_reply"
     DISPLAY_TEXT = "display_text"
     PLAY_SOUND = "play_sound"
     SHOW_EXPRESSION = "show_expression"
     PERFORM_EXPRESSION = "perform_expression"
+    SET_IDLE = "set_idle"
+    STOP_EXPRESSION = "stop_expression"
     READ_DISTANCE = "read_distance"
     LIST_ASSETS = "list_assets"
     STOP_ALL = "stop_all"
@@ -28,12 +33,16 @@ class ActionType(StrEnum):
 
 _REQUIRED_PARAMETERS: dict[ActionType, tuple[str, ...]] = {
     ActionType.HEALTH_CHECK: (),
+    ActionType.LIST_CAPABILITIES: (),
     ActionType.MOVE_SERVOS: ("targets",),
     ActionType.PERFORM_MOVEMENT: ("name",),
+    ActionType.PERFORM_REPLY: ("text", "reply_state"),
     ActionType.DISPLAY_TEXT: ("text",),
     ActionType.PLAY_SOUND: (),
     ActionType.SHOW_EXPRESSION: (),
     ActionType.PERFORM_EXPRESSION: ("name",),
+    ActionType.SET_IDLE: (),
+    ActionType.STOP_EXPRESSION: (),
     ActionType.READ_DISTANCE: (),
     ActionType.LIST_ASSETS: (),
     ActionType.STOP_ALL: (),
@@ -62,6 +71,8 @@ class ActionRequest:
             self._validate_targets()
         elif self.action in {ActionType.PERFORM_MOVEMENT, ActionType.PERFORM_EXPRESSION}:
             self._validate_named_asset()
+        elif self.action == ActionType.PERFORM_REPLY:
+            self._validate_reply()
         elif self.action == ActionType.DISPLAY_TEXT:
             self._validate_text()
         elif self.action == ActionType.LIST_ASSETS:
@@ -100,6 +111,26 @@ class ActionRequest:
         text = self.parameters.get("text")
         if not isinstance(text, str) or not text.strip():
             raise ActionValidationError("Display text must be a non-empty string.")
+
+    def _validate_reply(self) -> None:
+        text = self.parameters.get("text")
+        if not isinstance(text, str) or not text.strip():
+            raise ActionValidationError("Reply text must be a non-empty string.")
+
+        reply_state = self.parameters.get("reply_state")
+        try:
+            normalize_reply_state(reply_state)
+        except ValueError as exc:
+            raise ActionValidationError(str(exc)) from exc
+
+        display_text = self.parameters.get("display_text")
+        if display_text is not None and not isinstance(display_text, str):
+            raise ActionValidationError("display_text must be a string when provided.")
+
+        for boolean_name in ("idle_reset", "sound_enabled"):
+            value = self.parameters.get(boolean_name)
+            if value is not None and not isinstance(value, bool):
+                raise ActionValidationError(f"{boolean_name} must be a boolean when provided.")
 
     def _validate_asset_type(self) -> None:
         asset_type = self.parameters.get("asset_type", "all")

@@ -819,8 +819,9 @@ OpenClaw research references:
 
 Current state:
 
-- this is a planning document only
-- no code was changed as part of this enhancement-planning refinement
+- Stage 1 expression-engine and `expression-tool` work has been implemented
+- Stage 2 reply policy, OpenClaw plugin wrapper, and OpenClaw skill wrapper have been implemented in the repository
+- the remaining Stage 2 blocker is manual Raspberry Pi validation with a real OpenClaw agent session
 - the refined plan now explicitly includes:
   - a first-class expression engine
   - a persistent idle policy
@@ -834,4 +835,4 @@ Current state:
 
 Next implementation decision needed:
 
-- approve Stage 1 so work can begin at Phase 1
+- run the Stage 2 Raspberry Pi validation checklist and capture pass or failure details in `DevelopmentLog.md`
