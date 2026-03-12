@@ -580,6 +580,11 @@ with config_path.open("r", encoding="utf-8") as handle:
     data = json.load(handle)
 
 plugins = data.setdefault("plugins", {})
+plugin_allow = plugins.setdefault("allow", [])
+for plugin_id in ("telegram", "ninjaclawbot"):
+    if plugin_id not in plugin_allow:
+        plugin_allow.append(plugin_id)
+
 load = plugins.setdefault("load", {})
 paths = load.setdefault("paths", [])
 if plugin not in paths:
@@ -616,6 +621,7 @@ PY
 
 What this command does:
 
+- adds trusted plugin ids to `plugins.allow`
 - adds the NinjaClawBot plugin folder path to `plugins.load.paths`
 - enables the `ninjaclawbot` plugin entry
 - sets the plugin `projectRoot`
@@ -635,6 +641,10 @@ The important NinjaClawBot parts should now look like this:
 ```json
 {
   "plugins": {
+    "allow": [
+      "telegram",
+      "ninjaclawbot"
+    ],
     "load": {
       "paths": [
         "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
@@ -775,6 +785,10 @@ Replace every placeholder with your own real value.
     "entries": {}
   },
   "plugins": {
+    "allow": [
+      "telegram",
+      "ninjaclawbot"
+    ],
     "load": {
       "paths": [
         "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
@@ -934,6 +948,7 @@ Check:
 Check:
 
 - OpenClaw is installed
+- `plugins.allow` contains `ninjaclawbot`
 - the plugin path in the config is correct
 - `plugins.entries.ninjaclawbot.enabled` is `true`
 - the plugin `projectRoot` points to the NinjaClawBot project root
