@@ -24,7 +24,7 @@ def expression_tool(ctx: click.Context) -> None:
             click.echo("3. Preview built-in expression")
             click.echo("4. Create expression asset")
             click.echo("5. Show saved expression")
-            click.echo("6. Run saved expression")
+            click.echo("6. Run expression")
             click.echo("7. Set idle expression")
             click.echo("8. Stop active expression")
             click.echo("9. Delete expression")

@@ -9,6 +9,7 @@ from typing import Any
 from ninjaclawbot.actions import ActionRequest, ActionType
 from ninjaclawbot.assets import AssetStore
 from ninjaclawbot.errors import ActionValidationError, ExecutionError, NinjaClawbotError
+from ninjaclawbot.expressions.catalog import get_builtin_expression
 from ninjaclawbot.results import ActionResult, ActionStatus
 from ninjaclawbot.runtime import NinjaClawbotRuntime
 
@@ -147,8 +148,8 @@ class ActionExecutor:
             }
             return self._execute_expression_definition(definition), ["display", "buzzer"], []
         if request.action == ActionType.PERFORM_EXPRESSION:
-            asset = self.asset_store.load_expression(str(params["name"]))
-            return self._execute_expression_definition(asset), ["display", "buzzer"], []
+            definition = self._resolve_expression_definition(str(params["name"]))
+            return self._execute_expression_definition(definition), ["display", "buzzer"], []
         if request.action == ActionType.READ_DISTANCE:
             return self.runtime.read_distance(), ["distance"], []
         if request.action == ActionType.LIST_ASSETS:
@@ -196,3 +197,17 @@ class ActionExecutor:
 
     def _execute_expression_definition(self, asset: dict[str, Any]) -> dict[str, Any]:
         return self.runtime.perform_expression(asset)
+
+    def _resolve_expression_definition(self, name: str) -> dict[str, Any]:
+        try:
+            return self.asset_store.load_expression(name)
+        except ActionValidationError as exc:
+            if str(exc) != f"Unknown expression asset '{name}'.":
+                raise
+        try:
+            get_builtin_expression(name)
+        except ValueError as builtin_exc:
+            raise ActionValidationError(
+                f"Unknown expression asset or built-in expression '{name}'."
+            ) from builtin_exc
+        return {"name": name, "builtin": name}

@@ -118,6 +118,50 @@ def test_executor_waits_for_expression_sound(tmp_path) -> None:
     assert result.data["waited_for_s"] == 0.3
 
 
+def test_executor_runs_builtin_expression_without_saved_asset() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute({"action": "perform_expression", "parameters": {"name": "idle"}})
+
+    assert result.status.value == "success"
+    assert runtime.calls[0] == ("perform_expression", {"name": "idle", "builtin": "idle"})
+    assert result.data["builtin"] == "idle"
+
+
+def test_executor_prefers_saved_expression_over_builtin_name(tmp_path) -> None:
+    runtime = FakeRuntime()
+    store = AssetStore(NinjaClawbotConfig(root_dir=tmp_path))
+    store.save_expression(
+        {
+            "name": "happy",
+            "display": {"text": "Saved wins"},
+            "sound": {"emotion": "happy", "duration": 0.3},
+        }
+    )
+    executor = ActionExecutor(runtime=runtime, asset_store=store)
+
+    result = executor.execute({"action": "perform_expression", "parameters": {"name": "happy"}})
+
+    assert result.status.value == "success"
+    assert runtime.calls[0][0] == "perform_expression"
+    assert runtime.calls[0][1]["display"]["text"] == "Saved wins"
+    assert runtime.calls[0][1]["builtin"] == ""
+
+
+def test_executor_rejects_unknown_expression_name() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute(
+        {"action": "perform_expression", "parameters": {"name": "does-not-exist"}}
+    )
+
+    assert result.status.value == "failed"
+    assert result.error_code == "ACTIONVALIDATIONERROR"
+    assert "Unknown expression asset or built-in expression" in str(result.error_message)
+
+
 def test_executor_waits_for_play_sound_action() -> None:
     runtime = FakeRuntime()
     executor = ActionExecutor(runtime=runtime)

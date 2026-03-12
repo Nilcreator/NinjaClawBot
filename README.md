@@ -347,11 +347,13 @@ Then run:
 
 ```bash
 uv run ninjaclawbot perform-expression happy
+uv run ninjaclawbot perform-expression idle
 ```
 
 Expected result:
 
 - `ninjaclawbot_data/expressions/happy.json` is created at the project root
+- `perform-expression` accepts either a saved asset name such as `happy` or a built-in expression name such as `idle`
 - the saved asset can reuse a built-in expression plus optional text and sound overrides
 - the integrated executor drives display and buzzer actions through the real `pi5*` packages
 - the buzzer emotion melody finishes before the command exits

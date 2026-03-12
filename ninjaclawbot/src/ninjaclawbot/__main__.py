@@ -106,7 +106,7 @@ def perform_movement(ctx: click.Context, name: str) -> None:
 @click.argument("name")
 @click.pass_context
 def perform_expression(ctx: click.Context, name: str) -> None:
-    """Run a saved expression asset."""
+    """Run a saved expression asset or a built-in expression."""
 
     _execute_and_print(
         ctx.obj["root_dir"],

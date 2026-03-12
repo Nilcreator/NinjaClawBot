@@ -2,6 +2,44 @@
 
 ## 2026-03-12
 
+### Built-In `perform-expression` Resolution Fix
+
+Summary:
+
+- fixed `ninjaclawbot perform-expression` so it can execute built-in expressions such as `idle` and `greeting`, not only saved JSON expression assets
+- kept saved-expression precedence, so a saved asset still wins if it uses the same name as a built-in
+- added regression coverage for built-in execution, saved-asset precedence, and invalid-expression failures
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the Stage 1 expression engine introduced built-in expressions, but `perform-expression` still assumed every name had to exist as a saved asset on disk
+- that caused built-in names to fail even though the runtime and expression player could already execute them
+
+Lint and test results:
+
+- `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
+- `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml` -> `35 passed`
+
+Raspberry Pi validation status:
+
+- Raspberry Pi validation is still required
+- required pass conditions:
+  - `uv run ninjaclawbot perform-expression idle` succeeds
+  - `uv run ninjaclawbot perform-expression hello` still succeeds for a saved asset
+  - if a saved asset intentionally uses a built-in name, the saved asset behavior takes precedence
+
 ### Stage 1 Expression-Tool Enhancement
 
 Summary:

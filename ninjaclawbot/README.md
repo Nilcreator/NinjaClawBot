@@ -80,6 +80,11 @@ uv run ninjaclawbot run-action '{"action":"read_distance"}'
 - creating saved expressions that reuse a built-in expression plus optional text or sound overrides
 - starting and stopping the idle expression manually
 
+`perform-expression <name>` now supports both:
+
+- saved expression assets such as `hello`
+- built-in expression names such as `idle`, `greeting`, or `confusing`
+
 ## Calibration Note
 
 Before using integrated movement features, calibrate `pi5servo` first from the project root:

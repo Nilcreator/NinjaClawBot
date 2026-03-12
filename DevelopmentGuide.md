@@ -215,6 +215,7 @@ Power-risk tests:
 Expected integrated expression result:
 
 - `perform-expression` should keep the display output stable
+- `perform-expression` should resolve both saved expressions and built-in names such as `idle` or `greeting`
 - built-in expression previews should show animated legacy-style faces rather than static text-only output
 - queued buzzer emotion playback should finish before the command exits
 - temporary reactions should return to `idle` when `idle_reset` is enabled
@@ -246,6 +247,17 @@ If the display text appears but the emotion sound is cut short:
 - verify the saved expression uses a valid `sound.emotion` value such as `happy`
 - confirm the command does not return until the buzzer sequence finishes
 - if needed, compare with `uv run pi5buzzer play happy` to confirm the buzzer hardware path itself is healthy
+
+### Built-in expression execution
+
+If `uv run ninjaclawbot perform-expression idle` or another built-in name fails:
+
+- verify you are running from the project root after `uv sync --extra dev`
+- confirm the name is one of the built-ins exposed by `expression-tool`
+- check both execution paths:
+  - `uv run ninjaclawbot perform-expression idle`
+  - `uv run ninjaclawbot perform-expression <saved-name>`
+- expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
 
 ### Expression preview and idle policy
 
