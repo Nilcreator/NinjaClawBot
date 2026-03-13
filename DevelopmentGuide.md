@@ -14,6 +14,16 @@ The detailed migration and backend strategy lives in [developmentPlan.md](/Users
 
 The main user-facing installation and Raspberry Pi setup path now lives in [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md).
 
+That guide now follows an interactive-tool-first path for first-time setup:
+
+- `pi5servo servo-tool`
+- `pi5buzzer buzzer-tool`
+- `pi5disp init` plus `pi5disp display-tool`
+- `pi5vl53l0x sensor-tool`
+
+It also ends with an appendix that groups troubleshooting and alternative
+commands by setup stage, so the main path stays shorter for non-developer users.
+
 Use the documents this way:
 
 - [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md) for the project overview

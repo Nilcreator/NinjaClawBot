@@ -1,5 +1,56 @@
 # Development Log
 
+## 2026-03-14
+
+### Installation Guide Simplification With Interactive Tools And Appendix
+
+Summary:
+
+- refined the Raspberry Pi installation guide again so the main flow is shorter
+  and easier to follow
+- changed the main setup path to prefer the guided tools where they are the
+  most reliable first-run option:
+  - `pi5servo servo-tool`
+  - `pi5buzzer buzzer-tool`
+  - `pi5disp init` plus `display-tool`
+  - `pi5vl53l0x sensor-tool`
+- added short purpose explanations to every main step
+- moved lower-priority fallback commands out of the main path and into an
+  appendix
+- added appendix sections for:
+  - troubleshooting methods
+  - alternative commands
+  - quick links from the main steps
+- aligned the project-level docs so they now describe the installation guide as
+  the interactive-tool-first setup path
+
+Files changed:
+
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the previous rewrite was correct, but the main path still exposed too many
+  one-off commands before the user reached the guided tools
+- the user explicitly asked for a simpler and more reliable guide that leans on
+  the interactive utilities and keeps fallback material out of the main flow
+
+Validation:
+
+- documentation rewrite only
+- reviewed against the current standalone library READMEs
+- reviewed against the validated `openclaw.json` shared by the user
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- the underlying startup -> reply -> power-off path was already validated by
+  the user before this documentation refinement
+- the rewritten guide now presents that validated path more directly
+
 ## 2026-03-13
 
 ### Installation Guide Rewrite For The Validated OpenClaw Build
