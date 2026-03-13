@@ -568,100 +568,154 @@ Documentation updates required:
 
 #### Phase 2.4: Arbitration, Dedupe, Degraded Mode, And Config Hardening
 
-Status: Partially implemented on 2026-03-13.
+Status: Re-audited on 2026-03-14. The happy-path lifecycle is working on Raspberry Pi, but arbitration, degraded-mode reporting, and config hardening are still incomplete.
 
-Execution refinement:
+Current validated deployment baseline:
 
-- the first implementation slice will keep this phase intentionally bounded
-- initial hardening scope:
-  - add plugin config flags for Always On behavior
-  - coalesce repeated low-priority `thinking` and fallback `idle` updates
-  - degrade gracefully when the persistent bridge is unavailable
-- deeper queueing and stale-event suppression remains part of this phase, but should be added only after the first lifecycle pass works end to end on Raspberry Pi
+- the Pi-validated OpenClaw setup uses a minimal plugin config:
+  - `projectRoot`
+  - `rootDir`
+  - `uvCommand`
+  - `enablePersistentBridge`
+  - bridge timeout settings
+- startup greeting is currently validated through OpenClaw internal `boot-md` plus workspace `BOOT.md`
+- final answer expressions are currently validated through:
+  - tool allowlist
+  - enabled `ninjaclawbot_control` skill
+  - workspace `AGENTS.md`
+- sleepy power-down is currently validated through the plugin-managed bridge shutdown path
+- therefore this phase must harden both:
+  - plugin-driven lifecycle requests
+  - workspace-driven prompt and tool behavior
 
-Implemented in the initial pass:
+Audit-confirmed gaps:
 
-- plugin config flags for:
-  - `enableAlwaysOn`
-  - `enableStartupGreeting`
-  - `enableAutoThinking`
-  - `enableShutdownSequence`
-- graceful skip behavior when Always On depends on the persistent bridge but the bridge is disabled or unavailable
-- service-core status fields for current presence mode and last lifecycle event
-
-Still pending in this phase:
-
-- a stronger scheduler for stale-event suppression and precedence under bursty traffic
-- deeper coalescing and retry behavior after real Raspberry Pi stress validation
+- `OpenClawServiceCore` serializes access with a single `RLock`, but it does not schedule, prioritize, or coalesce competing lifecycle requests
+- `ExecutionLock` still rejects overlap instead of queueing or deduping low-priority lifecycle work
+- duplicate shutdown sources already exist:
+  - plugin service `stop()`
+  - `gateway_stop`
+- startup may be requested from more than one surface:
+  - plugin lifecycle hook
+  - internal `boot-md` workspace startup
+- `DisplayAdapter` still builds `pi5disp` through the package CLI helper and does not reliably honor `NinjaClawbotConfig.display_config_path`
+- the plugin code and manifest still advertise optional lifecycle flags, but the validated Raspberry Pi deployment does not rely on them
+- bridge fallback behavior exists, but there is no strong degraded-mode model for operators or tests
+- tracked `__pycache__` and `.pyc` files are still present in the repository and have already broken `git pull` on Raspberry Pi
 
 Objective:
 
-- make the lifecycle system resilient when hooks, tools, retries, and hardware failures interact
-- remove the remaining integration rough edges found during the audit
+- make lifecycle behavior deterministic under duplicate, overlapping, or stale events
+- align config, tests, and documentation with the minimal OpenClaw deployment that is proven on Raspberry Pi
+- preserve the hybrid model:
+  - reusable Python service core
+  - plugin-managed bridge now
+  - future standalone host later without redesigning the arbitration layer
 
-Verified reason for this phase:
+Refined implementation slices:
 
-- current `ExecutionLock` rejects overlaps instead of queueing or coalescing them
-- one physical robot may receive multiple lifecycle events faster than hardware should react
-- current display config loading does not consistently honor `--root-dir`
-- robot-side failures must not destabilize the OpenClaw gateway
+1. Service-side arbitration model
+   - add a lightweight lifecycle scheduler inside `OpenClawServiceCore`
+   - assign each lifecycle request:
+     - source
+     - priority
+     - coalescing key
+     - activity epoch or monotonic sequence id
+   - keep this logic in the Python service core, not inside OpenClaw-only plugin code
 
-Recommended hardening work:
+2. Precedence and stale-event suppression
+   - define the effective priority order as:
+     - shutdown
+     - explicit user-initiated robot actions
+     - explicit `ninjaclawbot_reply` actions
+     - startup/bootstrap transitions
+     - lifecycle presence updates such as `thinking`
+     - fallback idle recovery
+   - coalesce repeated low-priority events such as:
+     - repeated `message_received -> thinking`
+     - repeated idle fallback
+     - duplicate shutdown requests
+   - suppress stale fallback events so an old `agent_end -> idle` cannot overwrite a newer explicit reply or shutdown
 
-- add a bridge-side action queue or scheduler
-- treat low-priority lifecycle events such as repeated `thinking` or fallback `idle` as coalescible
-- add an activity epoch or similar stale-event suppression so old fallback events do not overwrite newer states
-- define a clear precedence order:
-  - shutdown
-  - explicit user-initiated robot actions
-  - explicit reply tool actions
-  - lifecycle presence updates
-  - fallback idle updates
-- make bridge and hook failures degrade gracefully:
-  - log warnings
-  - keep the gateway alive
-  - return structured errors for explicit tools
-- fix integrated display construction so root-level display config is respected
-- add bounded plugin config options for:
-  - enabling or disabling Always On behavior
-  - startup greeting
-  - auto-thinking
-  - bridge timeouts
-  - shutdown timeout
-- keep these controls layered so:
-  - plugin config governs OpenClaw-hosted deployment choices
-  - Python-side service-core config remains reusable if a future standalone daemon is added
+3. Duplicate lifecycle source handling
+   - make startup and shutdown idempotent across:
+     - plugin lifecycle hooks
+     - plugin service start/stop
+     - internal `boot-md`
+   - record source labels such as:
+     - `gateway_start`
+     - `boot_md`
+     - `agent_end`
+     - `gateway_stop`
+     - `service_stop`
+   - keep one visible robot outcome even if multiple sources race
+
+4. Degraded mode and fallback policy
+   - explicitly distinguish:
+     - persistent bridge healthy
+     - persistent bridge degraded but explicit tools still usable
+     - lifecycle automation unavailable
+     - hardware cleanup or render failure
+   - keep the OpenClaw gateway alive when lifecycle automation degrades
+   - keep explicit robot tools usable whenever one-shot fallback is still viable
+   - return structured errors only for explicit user-facing tool calls, not for background lifecycle events
+
+5. Config hardening around the validated build
+   - make the minimal plugin config the documented and release-tested path
+   - treat optional lifecycle flags as compatibility overrides only until a later cleanup decision is made
+   - do not make the Raspberry Pi install path depend on those optional flags
+   - fix `DisplayAdapter` so root-level `display.json` is honored through `NinjaClawbotConfig.display_config_path`
+   - add repository hygiene work:
+     - remove tracked `__pycache__` and `.pyc` files
+     - add ignore rules so Raspberry Pi validation no longer blocks future `git pull`
 
 Files or modules likely to change:
 
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/locks.py`
 - `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/locks.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/adapters.py`
+- `ninjaclawbot/src/ninjaclawbot/config.py`
 - `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
 - `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
-- `pi5disp/src/pi5disp/cli/_common.py` or an equivalent display-config path if needed
+- `ninjaclawbot/tests/test_runtime.py`
 - `ninjaclawbot/tests/test_adapters.py`
-- plugin service and runner tests
+- `ninjaclawbot/tests/test_openclaw_bridge.py`
+- plugin runner and lifecycle tests
+- root repository ignore rules if still missing
 
 Interfaces to preserve:
 
-- standalone `pi5*` package boundaries
-- current driver public entry points
-- current manual `ninjaclawbot` CLI usage
+- `ninjaclawbot_reply` remains the preferred answer-emotion tool
+- the existing `openclaw-serve` bridge protocol remains additive and backward-compatible where practical
+- current manual `ninjaclawbot` CLI usage must remain available
+- standalone `pi5*` package boundaries must remain intact
 
 Lint and validation:
 
 - rerun the plugin and Python validation gates
-- rerun any affected `pi5disp` tests if config-loading behavior changes
-- add queue and stale-event suppression tests
-- add degraded-mode tests for unavailable hardware or bridge restart
+- rerun affected `pi5disp` tests if display-config loading changes
+- add tests for:
+  - duplicate startup from `boot-md` plus plugin lifecycle
+  - duplicate shutdown from `gateway_stop` plus service stop
+  - repeated `thinking` dedupe under bursty traffic
+  - stale idle suppression after explicit reply activity
+  - degraded bridge fallback behavior
+  - root-level display config loading
+  - repository hygiene preventing tracked cache artifacts
 
 Manual Raspberry Pi validation required:
 
-- restart the OpenClaw gateway multiple times and confirm no stale bridge remains
-- verify repeated inbound messages do not cause flickering or queue storms
-- verify the configured root-level display file is actually used by `ninjaclawbot`
-- verify hardware failures do not crash the OpenClaw gateway process
+- restart the OpenClaw gateway multiple times and confirm:
+  - no stale bridge remains
+  - no duplicate greeting appears
+- send repeated inbound messages and confirm:
+  - no flickering
+  - no queue storm
+  - final explicit reply still wins
+- confirm the configured root-level display file is actually used by `ninjaclawbot`
+- confirm hardware failures or bridge degradation do not crash the OpenClaw gateway process
 
 Hardware risk:
 
@@ -677,43 +731,103 @@ Documentation updates required:
 
 #### Phase 2.5: Validation, Observability, And Release Gate
 
-Status: Partially implemented on 2026-03-13.
+Status: Re-audited on 2026-03-14. Basic internal status exists, but operator-facing diagnostics and the release gate are still incomplete.
 
-Execution refinement:
+Already implemented:
 
-- after the lifecycle behavior is implemented, this phase will add:
-  - bridge status visibility for current presence mode and last lifecycle event
-  - a copy-paste Raspberry Pi validation flow for Telegram-backed OpenClaw sessions
-  - explicit rollback instructions for disabling Always On behavior while keeping the plugin usable
+- bridge status currently tracks:
+  - `requests_handled`
+  - `current_presence_mode`
+  - `last_lifecycle_event`
+  - `startup_completed`
+  - `last_error`
+- the installation guide already includes a validated Raspberry Pi flow for:
+  - startup
+  - reply
+  - shutdown
 
-Implemented in the initial pass:
+Still missing:
 
-- bridge status now reports:
-  - current presence mode
-  - last lifecycle event
-  - startup-completed state
-- the installation guide now includes a Telegram-oriented Raspberry Pi validation flow and rollback instructions
+- an operator-facing diagnostic tool or command
+- explicit visibility into degraded or fallback mode
+- a release gate that protects Raspberry Pi updates from repository hygiene mistakes
+- a diagnostic checklist that matches the real deployed OpenClaw workspace model:
+  - `BOOT.md`
+  - `AGENTS.md`
+  - tool allowlist
+  - enabled skill
+  - minimal plugin config
 
 Objective:
 
-- make the Stage 2 rollout diagnosable and safe to validate on Raspberry Pi before wider use
+- make the current build diagnosable by non-developers
+- make Raspberry Pi rollout safe, repeatable, and release-ready
+- ensure future regressions are caught before another install or update reaches hardware
 
 Verified reason for this phase:
 
-- lifecycle bugs are difficult to debug if bridge state is invisible
-- gateway-start, message-received, and gateway-stop issues can otherwise look like random robot glitches
+- several recent bugs only became understandable after manual log inspection and config spelunking
+- startup, reply, and shutdown correctness now depends on multiple layers:
+  - Python bridge service
+  - OpenClaw plugin
+  - OpenClaw workspace files
+  - OpenClaw allowlists and skills
+- without better observability, small regressions still look like random robot glitches
 
-Recommended additions:
+Refined implementation targets:
 
-- add a simple service-status or bridge-status diagnostic path for operators
-- expose whether the bridge is connected, current persistent mode, last lifecycle event, and last error
-- add explicit Pi validation instructions for startup, thinking, reply, shutdown, and recovery
-- ensure the diagnostics model is reusable for both plugin-managed and future standalone deployment
+1. Operator-visible diagnostics
+   - add a simple diagnostic surface such as:
+     - `ninjaclawbot_bridge_status`
+     - or `ninjaclawbot_diagnostics`
+   - expose:
+     - persistent bridge active or degraded
+     - current presence mode
+     - last lifecycle event
+     - startup completed state
+     - last error
+     - request counters
+     - sanitized config summary
+   - do not expose secrets such as gateway tokens or provider credentials
+
+2. Workspace and deployment health reporting
+   - add checks for the validated deployment prerequisites:
+     - plugin loaded
+     - persistent bridge configured
+     - skill enabled
+     - tool allowlist present
+     - `BOOT.md` present when startup is workspace-driven
+     - `AGENTS.md` present when reply-tool behavior is workspace-driven
+   - report these as health hints, not as raw OpenClaw internals
+
+3. Release gate and regression checks
+   - codify a release checklist for:
+     - startup -> idle
+     - thinking
+     - explicit reply emotion
+     - shutdown sleepy and display power-down
+     - duplicate-event handling
+     - degraded bridge recovery
+   - add a repository hygiene gate that rejects tracked cache artifacts and other generated files that block Pi updates
+   - make sure docs, plugin manifest, and validated `openclaw.json` shape stay aligned
+
+4. Failure recovery and rollback
+   - provide a concise operator recovery path for:
+     - bad `uvCommand`
+     - missing workspace startup files
+     - reply-tool not being selected
+     - persistent bridge failure
+     - rollback to one-shot behavior if needed
+   - keep this recovery model compatible with a future standalone launcher
 
 Files or modules likely to change:
 
-- plugin-side diagnostics in `integrations/openclaw/ninjaclawbot-plugin/src/`
-- optional Python-side status reporting in `ninjaclawbot/src/ninjaclawbot/openclaw/`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- plugin tests for status and diagnostics behavior
+- release-hygiene or repository-ignore files if needed
 - `README.md`
 - `DevelopmentGuide.md`
 - `DevelopmentLog.md`
@@ -722,12 +836,25 @@ Files or modules likely to change:
 Lint and validation:
 
 - rerun all Phase 2 plugin and Python validation gates
-- verify diagnostics do not expose unsafe raw hardware controls
+- add tests verifying diagnostics:
+  - report degraded mode correctly
+  - remain secret-safe
+  - reflect startup and shutdown state correctly
+- add a repository-hygiene check that catches tracked cache artifacts before release
 
 Manual Raspberry Pi validation required:
 
-- confirm operator can inspect bridge state during startup, idle, thinking, and shutdown
-- confirm recovery steps are sufficient after forced gateway stop or bridge crash
+- confirm an operator can inspect status during:
+  - startup
+  - idle
+  - thinking
+  - reply
+  - shutdown
+- confirm the diagnostic path explains the difference between:
+  - healthy persistent mode
+  - degraded fallback mode
+  - missing workspace guidance for startup or reply
+- confirm recovery steps are sufficient after forced gateway stop, bridge crash, or bad local config
 
 Hardware risk:
 
