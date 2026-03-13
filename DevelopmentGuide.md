@@ -328,11 +328,14 @@ If the OpenClaw plugin does not work:
 - verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
 - verify `plugins.entries.ninjaclawbot.enabled` is `true`
 - verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
+- verify `plugins.entries.ninjaclawbot.config.uvCommand` is the absolute result of `command -v uv` on the Raspberry Pi if the gateway log shows `spawn uv ENOENT`
 - verify `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is not disabled if you expect persistent idle and lifecycle-aware behavior
 - verify `plugins.entries.ninjaclawbot.config.enableAlwaysOn` is not disabled if you expect startup greeting, auto-thinking, and sleepy shutdown
 - verify `plugins.entries.ninjaclawbot.config.enableStartupGreeting`, `enableAutoThinking`, and `enableShutdownSequence` match the behavior you expect
+- verify `openclaw hooks list --verbose` shows `ninjaclawbot` lifecycle hook entries; if they do not appear, startup greeting and sleepy shutdown cannot fire even when the bridge is healthy
 - restore the default bridge timeouts if `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` were tuned too aggressively
 - verify the target agent allowlist contains the `ninjaclawbot_*` tool names
+- start a new chat session after plugin or skill changes so the OpenClaw session prompt picks up the latest NinjaClawBot skill snapshot
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path

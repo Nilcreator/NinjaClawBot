@@ -218,6 +218,13 @@ drives these transitions automatically:
 - gateway stop:
   - `sleepy`
   - display power-down
+
+Operator note:
+
+- `openclaw hooks list --verbose` should show NinjaClawBot lifecycle hooks when
+  the plugin is loaded correctly
+- after changing plugin or skill behavior, start a fresh chat session so the
+  OpenClaw prompt picks up the latest NinjaClawBot skill snapshot
   - runtime cleanup
 
 ## Recommended Reading Order

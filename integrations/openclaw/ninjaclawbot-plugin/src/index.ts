@@ -39,12 +39,8 @@ function registerOptionalTool(
   );
 }
 
-function registerLifecycleHook(api: any, eventName: string, handler: () => Promise<void>) {
-  if (typeof api.on !== "function") {
-    return;
-  }
-
-  api.on(eventName, async () => {
+function wrapLifecycleHandler(eventName: string, handler: () => Promise<void>) {
+  return async () => {
     try {
       await handler();
     } catch (error) {
@@ -54,7 +50,28 @@ function registerLifecycleHook(api: any, eventName: string, handler: () => Promi
         }`,
       );
     }
-  });
+  };
+}
+
+function registerLifecycleHook(
+  api: any,
+  eventName: string,
+  description: string,
+  handler: () => Promise<void>,
+) {
+  const wrapped = wrapLifecycleHandler(eventName, handler);
+
+  if (typeof api.registerHook === "function") {
+    api.registerHook(eventName, wrapped, {
+      name: `ninjaclawbot.${eventName}`,
+      description,
+    });
+    return;
+  }
+
+  if (typeof api.on === "function") {
+    api.on(eventName, wrapped);
+  }
 }
 
 export default function registerNinjaClawbotPlugin(api: any) {
@@ -80,21 +97,41 @@ export default function registerNinjaClawbotPlugin(api: any) {
     });
   }
 
-  registerLifecycleHook(api, "gateway_start", async () => {
-    const startup = await runStartupSequence(api);
-    if (startup === null) {
-      await setPersistentPresenceMode(api, "idle", "gateway_start");
-    }
-  });
-  registerLifecycleHook(api, "message_received", async () => {
-    await setPersistentPresenceMode(api, "thinking", "message_received");
-  });
-  registerLifecycleHook(api, "agent_end", async () => {
-    await setPersistentPresenceMode(api, "idle", "agent_end");
-  });
-  registerLifecycleHook(api, "gateway_stop", async () => {
-    await runShutdownSequence(api, "gateway_stop");
-  });
+  registerLifecycleHook(
+    api,
+    "gateway_start",
+    "Run the NinjaClawBot startup greeting and enter idle on gateway startup.",
+    async () => {
+      const startup = await runStartupSequence(api);
+      if (startup === null) {
+        await setPersistentPresenceMode(api, "idle", "gateway_start");
+      }
+    },
+  );
+  registerLifecycleHook(
+    api,
+    "message_received",
+    "Switch NinjaClawBot into persistent thinking when a user message arrives.",
+    async () => {
+      await setPersistentPresenceMode(api, "thinking", "message_received");
+    },
+  );
+  registerLifecycleHook(
+    api,
+    "agent_end",
+    "Return NinjaClawBot to idle after an agent run completes.",
+    async () => {
+      await setPersistentPresenceMode(api, "idle", "agent_end");
+    },
+  );
+  registerLifecycleHook(
+    api,
+    "gateway_stop",
+    "Run the NinjaClawBot sleepy shutdown sequence on gateway stop.",
+    async () => {
+      await runShutdownSequence(api, "gateway_stop");
+    },
+  );
 
   registerOptionalTool(
     api,

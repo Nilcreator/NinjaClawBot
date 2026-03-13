@@ -2,6 +2,52 @@
 
 ## 2026-03-13
 
+### OpenClaw Lifecycle Hook Registration Fix
+
+Summary:
+
+- corrected the OpenClaw plugin lifecycle registration path so the plugin now
+  prefers the plugin hook API instead of relying only on `api.on(...)`
+- kept the `api.on(...)` path as a compatibility fallback for older OpenClaw
+  environments
+- updated the plugin tests to verify explicit lifecycle hook registration
+- updated the Raspberry Pi validation steps so they now require checking
+  `openclaw hooks list --verbose` and starting a fresh Telegram session after
+  plugin or skill changes
+
+Files changed:
+
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- Raspberry Pi verification showed that the bridge and tools were healthy, but
+  `openclaw hooks list --verbose` exposed that no NinjaClawBot lifecycle hooks
+  were actually registered
+- without registered lifecycle hooks, the gateway cannot trigger startup
+  greeting, auto-thinking, or sleepy shutdown even when the bridge is alive
+- reply expressions also needed clearer operator validation because OpenClaw
+  session prompts can lag behind plugin and skill changes until a fresh chat is
+  started
+
+Validation:
+
+- `cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin`
+- `npm run typecheck`
+- `npm test`
+
+Raspberry Pi validation status:
+
+- still required after syncing this fix to the Pi
+- next validation should confirm that `openclaw hooks list --verbose` shows the
+  NinjaClawBot lifecycle hooks before testing startup greeting and sleepy
+  shutdown
+- Telegram reply validation should be run from a fresh `/new` session
+
 ### Phase 2.2 And 2.3 Initial Always On Lifecycle Pass
 
 Summary:

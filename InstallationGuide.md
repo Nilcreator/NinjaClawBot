@@ -514,14 +514,26 @@ After you are inside the NinjaClawBot project root, run:
 ```bash
 export NINJACLAWBOT_ROOT="$(pwd)"
 export NINJACLAWBOT_PLUGIN="$(realpath integrations/openclaw/ninjaclawbot-plugin)"
+export NINJACLAWBOT_UV="$(command -v uv)"
 echo "$NINJACLAWBOT_ROOT"
 echo "$NINJACLAWBOT_PLUGIN"
+echo "$NINJACLAWBOT_UV"
 ```
 
 Expected result:
 
 - the first line is the full NinjaClawBot project root path
 - the second line is the full NinjaClawBot plugin folder path
+- the third line is the full absolute path to the `uv` binary
+
+If the third line is empty, OpenClaw will not be able to start the
+NinjaClawBot bridge. Install `uv` first or locate the real absolute path before
+continuing.
+
+Official `uv` install docs:
+
+- [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+- [uv installer options](https://docs.astral.sh/uv/reference/installer/)
 
 ### 17.4 Find and back up the OpenClaw configuration file
 
@@ -562,6 +574,7 @@ from pathlib import Path
 config_path = Path.home() / ".openclaw" / "openclaw.json"
 root = os.environ["NINJACLAWBOT_ROOT"]
 plugin = os.environ["NINJACLAWBOT_PLUGIN"]
+uv_command = os.environ["NINJACLAWBOT_UV"]
 
 tool_names = [
     "ninjaclawbot_reply",
@@ -596,14 +609,11 @@ ninjaclawbot_entry["enabled"] = True
 ninjaclawbot_config = ninjaclawbot_entry.setdefault("config", {})
 ninjaclawbot_config["projectRoot"] = root
 ninjaclawbot_config["rootDir"] = root
+ninjaclawbot_config["uvCommand"] = uv_command
 ninjaclawbot_config["enablePersistentBridge"] = True
 ninjaclawbot_config["bridgeStartTimeoutMs"] = 10000
 ninjaclawbot_config["bridgeRequestTimeoutMs"] = 15000
 ninjaclawbot_config["bridgeShutdownTimeoutMs"] = 5000
-ninjaclawbot_config["enableAlwaysOn"] = True
-ninjaclawbot_config["enableStartupGreeting"] = True
-ninjaclawbot_config["enableAutoThinking"] = True
-ninjaclawbot_config["enableShutdownSequence"] = True
 
 agents = data.setdefault("agents", {})
 agent_list = agents.setdefault("list", [])
@@ -625,6 +635,7 @@ with config_path.open("w", encoding="utf-8") as handle:
 print(f"Updated {config_path}")
 print(f"projectRoot = {root}")
 print(f"pluginPath = {plugin}")
+print(f"uvCommand = {uv_command}")
 PY
 ```
 
@@ -669,14 +680,11 @@ The important NinjaClawBot parts should now look like this:
         "config": {
           "projectRoot": "/absolute/path/to/NinjaClawbot",
           "rootDir": "/absolute/path/to/NinjaClawbot",
+          "uvCommand": "/absolute/path/to/uv",
           "enablePersistentBridge": true,
           "bridgeStartTimeoutMs": 10000,
           "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000,
-          "enableAlwaysOn": true,
-          "enableStartupGreeting": true,
-          "enableAutoThinking": true,
-          "enableShutdownSequence": true
+          "bridgeShutdownTimeoutMs": 5000
         }
       }
     }
@@ -719,10 +727,40 @@ fallback path:
         "config": {
           "projectRoot": "/absolute/path/to/NinjaClawbot",
           "rootDir": "/absolute/path/to/NinjaClawbot",
+          "uvCommand": "/absolute/path/to/uv",
           "enablePersistentBridge": true,
           "bridgeStartTimeoutMs": 10000,
           "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000,
+          "bridgeShutdownTimeoutMs": 5000
+        }
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- leave `enablePersistentBridge` at `true` for the normal OpenClaw-to-NinjaClawBot path
+- set `uvCommand` to the absolute result of `command -v uv` on Raspberry Pi; this avoids `spawn uv ENOENT` when OpenClaw runs with a narrower `PATH`
+- set `enablePersistentBridge` to `false` only if you need to force the older per-call bridge path while debugging
+- only raise the timeout values if Raspberry Pi startup or hardware initialization is slower than the defaults
+- the lifecycle-driven Always On behavior defaults to enabled in the current NinjaClawBot plugin code, so you do not need extra config fields for startup greeting, auto-thinking, or sleepy shutdown
+- if OpenClaw reports `must NOT have additional properties` for `enableAlwaysOn`, `enableStartupGreeting`, `enableAutoThinking`, or `enableShutdownSequence`, the gateway is validating against an older or different `ninjaclawbot` plugin manifest than the one in this repository
+- in that case, remove those four fields from `openclaw.json`, verify `plugins.load.paths` points to the intended local plugin folder, and refresh or relink the local plugin before trying the optional lifecycle flags again
+
+### Optional lifecycle flags
+
+Add these fields only after you have confirmed that the Raspberry Pi is loading
+the updated local `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+from this repository:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "ninjaclawbot": {
+        "config": {
           "enableAlwaysOn": true,
           "enableStartupGreeting": true,
           "enableAutoThinking": true,
@@ -736,13 +774,9 @@ fallback path:
 
 Notes:
 
-- leave `enablePersistentBridge` at `true` for the normal OpenClaw-to-NinjaClawBot path
-- set `enablePersistentBridge` to `false` only if you need to force the older per-call bridge path while debugging
-- only raise the timeout values if Raspberry Pi startup or hardware initialization is slower than the defaults
-- leave `enableAlwaysOn` at `true` if you want startup greeting, auto-thinking, and sleepy shutdown
-- set `enableStartupGreeting` to `false` only if you want the gateway to start quietly and move straight to `idle`
-- set `enableAutoThinking` to `false` only if you do not want automatic thinking on every incoming user message
-- set `enableShutdownSequence` to `false` only if you need immediate bridge teardown while debugging
+- these flags are optional because the current plugin code defaults them to `true`
+- if your Raspberry Pi still rejects them, keep them out of `openclaw.json`; that does not disable the feature in the updated plugin code
+- a validation error here means your Pi is still resolving an older or stale plugin copy
 
 ### 18.3 Full reference template for a new `openclaw.json`
 
@@ -864,14 +898,11 @@ Replace every placeholder with your own real value.
         "config": {
           "projectRoot": "/absolute/path/to/NinjaClawbot",
           "rootDir": "/absolute/path/to/NinjaClawbot",
+          "uvCommand": "/absolute/path/to/uv",
           "enablePersistentBridge": true,
           "bridgeStartTimeoutMs": 10000,
           "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000,
-          "enableAlwaysOn": true,
-          "enableStartupGreeting": true,
-          "enableAutoThinking": true,
-          "enableShutdownSequence": true
+          "bridgeShutdownTimeoutMs": 5000
         }
       }
     }
@@ -976,19 +1007,33 @@ If you want to watch the live gateway log in another terminal, run:
 openclaw logs --follow
 ```
 
+Also verify that the plugin lifecycle hooks are actually registered:
+
+```bash
+openclaw hooks list --verbose | grep -iE 'ninjaclawbot|gateway_start|message_received|agent_end|gateway_stop' || true
+```
+
+Expected result:
+
+- entries for the NinjaClawBot plugin lifecycle hooks appear in the hook list
+- if no NinjaClawBot hook entries appear, the gateway will not trigger startup greeting or sleepy shutdown even if the bridge is healthy
+
 ### 20.2 Telegram message validation
 
 After the gateway is running and your Telegram channel is connected:
 
-1. send this exact message to the bot:
+1. start a fresh Telegram chat session so OpenClaw rebuilds the session prompt:
+   - `/new`
+2. send this exact message to the bot:
    - `hello`
-2. wait for the robot response
+3. wait for the robot response
 
 Expected result:
 
 - as soon as the message is received, the robot switches into persistent `thinking`
 - when the final answer is produced, the robot shows the explicit reply emotion chosen by the agent
 - after the answer finishes, the robot returns to persistent `idle`
+- the gateway log should show the `ninjaclawbot_reply` tool call during the answer path
 
 ### 20.3 Repeated-message validation
 
@@ -1010,6 +1055,13 @@ Run:
 ```bash
 openclaw gateway stop
 openclaw gateway status
+```
+
+If shutdown behavior is missing, inspect the hook list again before debugging the
+Python side:
+
+```bash
+openclaw hooks list --verbose | grep -iE 'ninjaclawbot|gateway_stop' || true
 ```
 
 Expected result:
