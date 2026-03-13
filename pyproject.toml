@@ -57,5 +57,9 @@ pythonpath = [
     "src",
 ]
 testpaths = [
-    "workspace_tests",
+    "pi5buzzer/tests",
+    "pi5servo/tests",
+    "pi5disp/tests",
+    "pi5vl53l0x/tests",
+    "ninjaclawbot/tests",
 ]
