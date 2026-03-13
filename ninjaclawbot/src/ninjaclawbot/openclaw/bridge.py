@@ -73,6 +73,31 @@ def _handle_request(
         return BridgeResponse(ok=True, request_id=request.request_id, data={"alive": True}), False
     if request.type == "status":
         return BridgeResponse(ok=True, request_id=request.request_id, data=service.status()), False
+    if request.type == "startup_sequence":
+        return (
+            BridgeResponse(
+                ok=True,
+                request_id=request.request_id,
+                data=service.startup_sequence(),
+            ),
+            False,
+        )
+    if request.type == "set_presence_mode":
+        if request.payload is None:
+            return _response_error(
+                request.request_id, "set_presence_mode requires a payload."
+            ), False
+        return (
+            BridgeResponse(
+                ok=True,
+                request_id=request.request_id,
+                data=service.set_presence_mode(
+                    str(request.payload.get("mode", "")),
+                    lifecycle_event=str(request.payload.get("lifecycle_event", "")).strip() or None,
+                ),
+            ),
+            False,
+        )
     if request.type == "execute_action":
         if request.payload is None:
             return _response_error(request.request_id, "execute_action requires a payload."), False
@@ -81,6 +106,18 @@ def _handle_request(
                 ok=True,
                 request_id=request.request_id,
                 data=service.execute_action(request.payload),
+            ),
+            False,
+        )
+    if request.type == "shutdown_sequence":
+        return (
+            BridgeResponse(
+                ok=True,
+                request_id=request.request_id,
+                data=service.shutdown_sequence(
+                    lifecycle_event=str((request.payload or {}).get("lifecycle_event", "")).strip()
+                    or "gateway_stop"
+                ),
             ),
             False,
         )

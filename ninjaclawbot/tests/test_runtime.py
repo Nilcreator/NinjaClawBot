@@ -35,6 +35,7 @@ class FakeDeviceAdapter:
     def __init__(self, name: str) -> None:
         self.name = name
         self.closed = False
+        self.powered_down = False
 
     def health_check(self) -> DeviceHealth:
         return DeviceHealth(True, {"device": self.name})
@@ -51,6 +52,10 @@ class FakeDeviceAdapter:
     def close(self) -> None:
         self.closed = True
 
+    def power_down(self) -> None:
+        self.powered_down = True
+        self.close()
+
 
 class FakeExpressionPlayer:
     def __init__(self) -> None:
@@ -62,6 +67,17 @@ class FakeExpressionPlayer:
 
     def set_idle(self) -> None:
         self.calls.append(("set_idle", None))
+
+    def set_presence(self, name: str, *, play_sound: bool = True):
+        self.calls.append(("set_presence", (name, play_sound)))
+        return {
+            "name": name,
+            "builtin": name,
+            "persistent": True,
+            "waited_for_s": 0.0,
+            "active_expression": name,
+            "presence_mode": name,
+        }
 
     def stop(self) -> None:
         self.calls.append(("stop", None))
@@ -169,6 +185,38 @@ def test_runtime_expression_methods_delegate_to_player() -> None:
     assert runtime.list_builtin_expressions() == ["idle", "happy"]
     assert runtime._expressions.calls == [
         ("perform", {"name": "hello", "builtin": "happy"}),
-        ("set_idle", None),
+        ("set_presence", ("idle", False)),
         ("stop", None),
     ]
+
+
+def test_runtime_can_set_presence_mode() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
+    runtime._expressions = FakeExpressionPlayer()
+
+    result = runtime.set_presence_mode("thinking")
+
+    assert result["presence_mode"] == "thinking"
+    assert runtime._expressions.calls == [("set_presence", ("thinking", True))]
+
+
+def test_runtime_shutdown_sequence_powers_down_display() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
+    runtime._expressions = FakeExpressionPlayer()
+
+    result = runtime.shutdown_sequence()
+
+    assert result["closed"] is True
+    assert runtime._display.powered_down is True
+    assert runtime._buzzer.closed is True
+    assert runtime._distance.closed is True
+    assert runtime._servo.calls[-2:] == [("stop",), ("close",)]
+    assert runtime._expressions.calls[0] == ("perform", {"builtin": "sleepy", "idle_reset": False})

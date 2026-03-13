@@ -53,7 +53,7 @@ Stage 1 delivered the expression/runtime layer and the initial OpenClaw integrat
 
 ## Stage 2: Refined Always On OpenClaw Integration
 
-Status: Planned
+Status: In Progress
 
 ### Stage 2 Purpose
 
@@ -367,80 +367,131 @@ File-by-file change map:
 
 #### Phase 2.2: Persistent Presence Modes And Shutdown Contract
 
+Approved execution order for implementation:
+
+1. Phase 2.2A
+   - add explicit persistent presence actions and service-core status tracking
+2. Phase 2.2B
+   - add an explicit sleepy shutdown sequence and display power-down contract
+3. Phase 2.3
+   - connect OpenClaw lifecycle hooks to the new persistent service-core contract
+4. Phase 2.4
+   - add bounded lifecycle config, degraded-mode behavior, and coalescing for low-priority presence events
+5. Phase 2.5
+   - expose operator-facing diagnostics and finalize Raspberry Pi validation guidance
+
+Immediate implementation scope for the next development pass:
+
+- startup greeting on `gateway_start`
+- automatic transition to persistent `idle` after startup
+- automatic persistent `thinking` on `message_received`
+- final answer emotion still driven by explicit `ninjaclawbot_reply`
+- sleepy shutdown sequence on `gateway_stop` or plugin stop
+- bridge and service status fields sufficient to diagnose current presence mode and last lifecycle event
+
+### Phase 2.2A: Explicit Persistent Presence Contract
+
+Status: Initial implementation completed on 2026-03-13.
+
 Objective:
 
-- add explicit persistent robot-presence modes instead of forcing temporary reply actions to do long-lived work
-- add an explicit shutdown sequence contract for sleepy -> display off -> cleanup
+- add explicit machine-facing support for persistent `idle`, `thinking`, and `listening`
+- keep this as a reusable Python service-core contract, not an OpenClaw-only shortcut
 
-Verified reason for this phase:
+Concrete implementation targets:
 
-- current `ExpressionPlayer` can only keep `idle` alive indefinitely
-- `thinking` and `listening` currently behave like temporary reactions, not true persistent states
-- current shutdown behavior relies on generic runtime close, not an explicit sleepy-then-power-down flow
-
-Recommended action-surface refinement:
-
+- add `set_presence_mode` to the Python action contract
 - preserve `set_idle` as a compatibility alias
-- add a generalized persistent-mode action such as `set_presence_mode`
-- recommended supported persistent modes:
-  - `idle`
-  - `thinking`
-  - `listening`
-- add an explicit `shutdown_sequence` action for:
-  - play `sleepy` without auto-reset to `idle`
-  - turn the display off or sleep it
-  - close the runtime safely
+- extend the persistent bridge protocol with a dedicated presence-mode request
+- track:
+  - current presence mode
+  - last lifecycle event
+  - whether the service startup sequence has already run
+- keep tool actions and lifecycle actions serialized through the same service-core lock so the current non-reentrant runtime lock is not tripped by concurrent hooks
 
-Recommended runtime refinement:
+Files to implement first:
 
-- extend `ExpressionPlayer` so any built-in expression can run indefinitely when requested
-- separate temporary reply expressions from persistent presence modes
-- add a display power-down helper that uses `off()`, `sleep()`, and then `close()` with defensive fallbacks
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
+- `ninjaclawbot/tests/test_actions.py`
+- `ninjaclawbot/tests/test_executor.py`
+- `ninjaclawbot/tests/test_runtime.py`
+- `ninjaclawbot/tests/test_openclaw_bridge.py`
 
-Files or modules likely to change:
+### Phase 2.2B: Explicit Shutdown Sequence Contract
+
+Status: Initial implementation completed on 2026-03-13.
+
+Objective:
+
+- add a deliberate `sleepy -> display sleep/off -> cleanup` path
+- separate gateway-stop behavior from generic runtime close behavior
+
+Concrete implementation targets:
+
+- add `shutdown_sequence` to the Python action contract
+- add display adapter helpers for:
+  - `sleep()`
+  - `off()`
+  - `power_down()`
+- make shutdown use the built-in `sleepy` expression with `idle_reset=False`
+- keep one-shot generic runtime close behavior unchanged for non-lifecycle cleanup
+
+Files to implement in the second code step:
 
 - `ninjaclawbot/src/ninjaclawbot/actions.py`
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
 - `ninjaclawbot/src/ninjaclawbot/runtime.py`
 - `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
-- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
-- `ninjaclawbot/tests/test_executor.py`
-- `ninjaclawbot/tests/test_expressions.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
 - `ninjaclawbot/tests/test_runtime.py`
+- `ninjaclawbot/tests/test_expressions.py`
+- `ninjaclawbot/tests/test_openclaw_bridge.py`
 
-Interfaces to preserve:
+### Phase 2.3: OpenClaw Lifecycle Hook Wiring
 
-- `perform_reply` as the main answer-expression API
-- current built-in expression names where possible
-- `set_idle` as a stable public command
+Status: Initial implementation completed on 2026-03-13.
 
-Lint and validation:
+Objective:
 
-- same Python validation gate as Phase 2.1
-- new tests for persistent `thinking` and `listening`
-- new tests ensuring `shutdown_sequence` does not bounce back to `idle`
-- new tests for display power-down fallback ordering
+- connect real OpenClaw lifecycle events to the new Python-side presence and shutdown contract
 
-Manual Raspberry Pi validation required:
+Concrete implementation targets:
 
-- verify `idle` remains animated between gateway events
-- verify `thinking` remains active until replaced
-- verify shutdown shows `sleepy`, then powers down the display, then cleans up
+- register OpenClaw lifecycle hooks for:
+  - `gateway_start`
+  - `message_received`
+  - `agent_end`
+  - `gateway_stop`
+- keep `ninjaclawbot_reply` as the explicit final-answer expression path
+- skip Always On lifecycle behavior automatically if the persistent bridge is disabled or unavailable
 
-Hardware risk:
+Files to implement in the third code step:
 
-- medium
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-- `InstallationGuide.md`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+- new plugin lifecycle-hook tests under `integrations/openclaw/ninjaclawbot-plugin/tests/`
+- `integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md`
 
 #### Phase 2.3: Lifecycle Hook Orchestration And Reply Policy Coordination
+
+Execution refinement:
+
+- this phase was implemented after the Python-side presence and shutdown contracts passed their validation gate
+- the initial implementation will use the documented OpenClaw lifecycle events:
+  - `gateway_start`
+  - `message_received`
+  - `agent_end`
+  - `gateway_stop`
+- plugin lifecycle handlers should call dedicated persistent-bridge requests first
+- only explicit user-facing robot tools should fall back to one-shot execution
 
 Objective:
 
@@ -516,6 +567,32 @@ Documentation updates required:
 - `InstallationGuide.md`
 
 #### Phase 2.4: Arbitration, Dedupe, Degraded Mode, And Config Hardening
+
+Status: Partially implemented on 2026-03-13.
+
+Execution refinement:
+
+- the first implementation slice will keep this phase intentionally bounded
+- initial hardening scope:
+  - add plugin config flags for Always On behavior
+  - coalesce repeated low-priority `thinking` and fallback `idle` updates
+  - degrade gracefully when the persistent bridge is unavailable
+- deeper queueing and stale-event suppression remains part of this phase, but should be added only after the first lifecycle pass works end to end on Raspberry Pi
+
+Implemented in the initial pass:
+
+- plugin config flags for:
+  - `enableAlwaysOn`
+  - `enableStartupGreeting`
+  - `enableAutoThinking`
+  - `enableShutdownSequence`
+- graceful skip behavior when Always On depends on the persistent bridge but the bridge is disabled or unavailable
+- service-core status fields for current presence mode and last lifecycle event
+
+Still pending in this phase:
+
+- a stronger scheduler for stale-event suppression and precedence under bursty traffic
+- deeper coalescing and retry behavior after real Raspberry Pi stress validation
 
 Objective:
 
@@ -599,6 +676,23 @@ Documentation updates required:
 - `InstallationGuide.md`
 
 #### Phase 2.5: Validation, Observability, And Release Gate
+
+Status: Partially implemented on 2026-03-13.
+
+Execution refinement:
+
+- after the lifecycle behavior is implemented, this phase will add:
+  - bridge status visibility for current presence mode and last lifecycle event
+  - a copy-paste Raspberry Pi validation flow for Telegram-backed OpenClaw sessions
+  - explicit rollback instructions for disabling Always On behavior while keeping the plugin usable
+
+Implemented in the initial pass:
+
+- bridge status now reports:
+  - current presence mode
+  - last lifecycle event
+  - startup-completed state
+- the installation guide now includes a Telegram-oriented Raspberry Pi validation flow and rollback instructions
 
 Objective:
 

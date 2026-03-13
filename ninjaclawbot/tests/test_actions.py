@@ -72,3 +72,17 @@ def test_action_request_rejects_unknown_reply_state() -> None:
 def test_action_request_requires_non_empty_text() -> None:
     with pytest.raises(ActionValidationError, match="Display text"):
         ActionRequest.from_dict({"action": "display_text", "parameters": {"text": "  "}})
+
+
+def test_action_request_validates_presence_mode() -> None:
+    request = ActionRequest.from_dict(
+        {"action": "set_presence_mode", "parameters": {"mode": "thinking"}}
+    )
+
+    assert request.action is ActionType.SET_PRESENCE_MODE
+    assert request.parameters["mode"] == "thinking"
+
+
+def test_action_request_rejects_unknown_presence_mode() -> None:
+    with pytest.raises(ActionValidationError, match="Unsupported presence mode"):
+        ActionRequest.from_dict({"action": "set_presence_mode", "parameters": {"mode": "sleeping"}})

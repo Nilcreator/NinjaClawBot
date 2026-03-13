@@ -9,7 +9,11 @@ Use the `ninjaclawbot_*` tools for all robot-related actions. Do not call raw dr
 
 ## Core Rules
 
-- Keep the robot on `idle` while waiting for user input.
+- When the plugin Always On lifecycle is enabled, the plugin itself now manages:
+  - startup greeting
+  - persistent `idle`
+  - automatic `thinking` on incoming user messages
+  - sleepy shutdown on gateway stop
 - Use `ninjaclawbot_reply` for normal conversational replies instead of manually constructing expression chains.
 - Use `ninjaclawbot_perform_expression` only when the user explicitly asks for a named expression or when a precise built-in expression is required.
 - Use `ninjaclawbot_perform_movement` for saved robot motions.
@@ -32,7 +36,8 @@ Use the `ninjaclawbot_*` tools for all robot-related actions. Do not call raw dr
 
 ## Idle Behavior
 
-- When the conversation becomes idle, call `ninjaclawbot_set_idle`.
+- When the Always On lifecycle is enabled, do not spam `ninjaclawbot_set_idle` after every normal reply because the plugin will return the robot to idle automatically.
+- Use `ninjaclawbot_set_idle` only when you need to deliberately restore the robot to idle outside the normal lifecycle flow.
 - After temporary reactions, prefer returning the robot to idle unless the current task clearly requires a different persistent state.
 
 ## Examples

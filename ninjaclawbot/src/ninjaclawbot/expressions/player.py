@@ -14,6 +14,7 @@ from ninjaclawbot.expressions.catalog import (
 )
 from ninjaclawbot.expressions.faces import AnimatedFaceEngine
 from ninjaclawbot.expressions.sounds import normalize_sound_chain, normalize_sound_step
+from ninjaclawbot.presence import normalize_presence_mode
 
 
 class ExpressionPlayer:
@@ -164,8 +165,42 @@ class ExpressionPlayer:
         return self.perform({"builtin": name})
 
     def set_idle(self) -> None:
-        self._idle_active = True
-        self._engine_or_create().set_idle()
+        self.set_presence("idle", play_sound=False)
+
+    def set_presence(self, name: str, *, play_sound: bool = True) -> dict[str, Any]:
+        mode = normalize_presence_mode(name)
+        resolved = self.resolve_definition({"builtin": mode, "idle_reset": False})
+        self.stop()
+        self._display.prewarm()
+
+        waited_for = 0.0
+        first_expression = mode
+        if resolved["face_chain"]:
+            first_expression = str(resolved["face_chain"][0]["expression"])
+            first_frame = self._engine_or_create().render_frame(first_expression, 0.0)
+            self._display.show_image(first_frame)
+        elif resolved["display"].get("text"):
+            self._display.show_text(
+                str(resolved["display"]["text"]),
+                scroll=False,
+                duration=float(resolved["display"].get("duration", 3.0)),
+                language=str(resolved["display"].get("language", "en")),
+                font_size=int(resolved["display"].get("font_size", 32)),
+            )
+
+        if play_sound and resolved["sound_chain"]:
+            waited_for = self._play_sound_chain(resolved["sound_chain"])
+
+        self._idle_active = mode == "idle"
+        self._engine_or_create().play(first_expression, float("inf"))
+        return {
+            "name": resolved.get("name"),
+            "builtin": resolved.get("builtin") or None,
+            "persistent": True,
+            "waited_for_s": waited_for,
+            "active_expression": first_expression,
+            "presence_mode": mode,
+        }
 
     def stop(self) -> None:
         self._idle_active = False

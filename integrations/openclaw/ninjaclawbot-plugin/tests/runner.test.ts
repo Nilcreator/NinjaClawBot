@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  alwaysOnEnabled,
   buildCommand,
   buildServeCommand,
   extractPluginConfig,
@@ -33,6 +34,10 @@ test("extractPluginConfig reads the plugin entry config", () => {
     bridgeStartTimeoutMs: 10_000,
     bridgeRequestTimeoutMs: 15_000,
     bridgeShutdownTimeoutMs: 5_000,
+    enableAlwaysOn: true,
+    enableStartupGreeting: true,
+    enableAutoThinking: true,
+    enableShutdownSequence: true,
   });
 });
 
@@ -48,6 +53,10 @@ test("extractPluginConfig supports persistent bridge overrides", () => {
               bridgeStartTimeoutMs: 1000,
               bridgeRequestTimeoutMs: 2000,
               bridgeShutdownTimeoutMs: 3000,
+              enableAlwaysOn: false,
+              enableStartupGreeting: false,
+              enableAutoThinking: false,
+              enableShutdownSequence: false,
             },
           },
         },
@@ -59,6 +68,10 @@ test("extractPluginConfig supports persistent bridge overrides", () => {
   assert.equal(config.bridgeStartTimeoutMs, 1000);
   assert.equal(config.bridgeRequestTimeoutMs, 2000);
   assert.equal(config.bridgeShutdownTimeoutMs, 3000);
+  assert.equal(config.enableAlwaysOn, false);
+  assert.equal(config.enableStartupGreeting, false);
+  assert.equal(config.enableAutoThinking, false);
+  assert.equal(config.enableShutdownSequence, false);
 });
 
 test("buildCommand targets the project-root OpenClaw bridge", () => {
@@ -96,6 +109,10 @@ test("buildServeCommand targets the persistent bridge entrypoint", () => {
     bridgeStartTimeoutMs: 10_000,
     bridgeRequestTimeoutMs: 15_000,
     bridgeShutdownTimeoutMs: 5_000,
+    enableAlwaysOn: true,
+    enableStartupGreeting: true,
+    enableAutoThinking: true,
+    enableShutdownSequence: true,
   });
 
   assert.equal(command.command, "uv");
@@ -109,6 +126,25 @@ test("buildServeCommand targets the persistent bridge entrypoint", () => {
     "/robot",
   ]);
   assert.equal(command.args[6], "openclaw-serve");
+});
+
+test("alwaysOnEnabled requires the persistent bridge and Always On config", () => {
+  assert.equal(
+    alwaysOnEnabled({
+      projectRoot: "/robot",
+      enablePersistentBridge: true,
+      enableAlwaysOn: true,
+    }),
+    true,
+  );
+  assert.equal(
+    alwaysOnEnabled({
+      projectRoot: "/robot",
+      enablePersistentBridge: false,
+      enableAlwaysOn: true,
+    }),
+    false,
+  );
 });
 
 test("parseBridgeOutput can recover JSON from noisy stdout", () => {

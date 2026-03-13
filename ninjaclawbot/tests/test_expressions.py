@@ -49,6 +49,9 @@ class _RecordingDisplay:
     def show_text(self, text: str, **_kwargs) -> None:
         self.events.append(f"display.show_text:{text}")
 
+    def close(self) -> None:
+        self.events.append("display.close")
+
 
 class _RecordingBuzzer:
     def __init__(self, events: list[str]) -> None:
@@ -148,3 +151,22 @@ def test_expression_player_prewarms_text_only_expression_before_sound(monkeypatc
         "display.show_text:HELLO",
         "buzzer.play:happy:0.3:wait",
     ]
+
+
+def test_expression_player_can_set_persistent_presence(monkeypatch) -> None:
+    events: list[str] = []
+    player = ExpressionPlayer(_RecordingDisplay(events), _RecordingBuzzer(events))
+    engine = _FakeEngine(events)
+
+    monkeypatch.setattr(player, "_engine_or_create", lambda: engine)
+
+    result = player.set_presence("thinking")
+
+    assert result["presence_mode"] == "thinking"
+    assert events[:4] == [
+        "display.prewarm",
+        "engine.render_frame:thinking",
+        "display.show_image",
+        "buzzer.play:confusing:0.4:wait",
+    ]
+    assert events[-1] == "engine.play:thinking:inf"

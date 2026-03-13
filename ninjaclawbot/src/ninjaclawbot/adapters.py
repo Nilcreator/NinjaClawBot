@@ -358,6 +358,31 @@ class DisplayAdapter:
         display = self._build_display()
         display.clear()
 
+    def sleep(self) -> None:
+        display = self._build_display()
+        sleep = getattr(display, "sleep", None)
+        if callable(sleep):
+            sleep()
+
+    def off(self) -> None:
+        display = self._build_display()
+        off = getattr(display, "off", None)
+        if callable(off):
+            off()
+
+    def power_down(self) -> None:
+        if self._display is None:
+            return
+        try:
+            self.sleep()
+        except Exception as exc:  # pragma: no cover - defensive cleanup guard
+            log.warning("Display sleep failed: %s", exc)
+        try:
+            self.off()
+        except Exception as exc:  # pragma: no cover - defensive cleanup guard
+            log.warning("Display off failed: %s", exc)
+        self.close()
+
     def health_check(self) -> DeviceHealth:
         display = self._build_display()
         config = self._config or {}

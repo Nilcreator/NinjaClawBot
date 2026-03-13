@@ -10,6 +10,7 @@ from pi5servo.core.endpoint import parse_servo_endpoint
 
 from ninjaclawbot.errors import ActionValidationError
 from ninjaclawbot.expressions.policy import normalize_reply_state
+from ninjaclawbot.presence import normalize_presence_mode
 
 
 class ActionType(StrEnum):
@@ -25,7 +26,9 @@ class ActionType(StrEnum):
     SHOW_EXPRESSION = "show_expression"
     PERFORM_EXPRESSION = "perform_expression"
     SET_IDLE = "set_idle"
+    SET_PRESENCE_MODE = "set_presence_mode"
     STOP_EXPRESSION = "stop_expression"
+    SHUTDOWN_SEQUENCE = "shutdown_sequence"
     READ_DISTANCE = "read_distance"
     LIST_ASSETS = "list_assets"
     STOP_ALL = "stop_all"
@@ -42,7 +45,9 @@ _REQUIRED_PARAMETERS: dict[ActionType, tuple[str, ...]] = {
     ActionType.SHOW_EXPRESSION: (),
     ActionType.PERFORM_EXPRESSION: ("name",),
     ActionType.SET_IDLE: (),
+    ActionType.SET_PRESENCE_MODE: ("mode",),
     ActionType.STOP_EXPRESSION: (),
+    ActionType.SHUTDOWN_SEQUENCE: (),
     ActionType.READ_DISTANCE: (),
     ActionType.LIST_ASSETS: (),
     ActionType.STOP_ALL: (),
@@ -75,6 +80,8 @@ class ActionRequest:
             self._validate_reply()
         elif self.action == ActionType.DISPLAY_TEXT:
             self._validate_text()
+        elif self.action == ActionType.SET_PRESENCE_MODE:
+            self._validate_presence_mode()
         elif self.action == ActionType.LIST_ASSETS:
             self._validate_asset_type()
 
@@ -136,6 +143,9 @@ class ActionRequest:
         asset_type = self.parameters.get("asset_type", "all")
         if asset_type not in {"all", "movements", "expressions"}:
             raise ActionValidationError("asset_type must be one of: all, movements, expressions.")
+
+    def _validate_presence_mode(self) -> None:
+        normalize_presence_mode(self.parameters.get("mode"))
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ActionRequest":

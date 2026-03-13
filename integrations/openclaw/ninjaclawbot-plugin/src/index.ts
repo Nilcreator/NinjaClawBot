@@ -1,5 +1,12 @@
 import { noArgsSchema, moveServosSchema, nameSchema, replySchema } from "./schemas.js";
-import { ensureBridge, runNinjaClawbotAction, shutdownBridge } from "./runner.js";
+import {
+  ensureBridge,
+  runNinjaClawbotAction,
+  runShutdownSequence,
+  runStartupSequence,
+  setPersistentPresenceMode,
+  shutdownBridge,
+} from "./runner.js";
 
 type ToolParams = Record<string, unknown>;
 
@@ -32,6 +39,24 @@ function registerOptionalTool(
   );
 }
 
+function registerLifecycleHook(api: any, eventName: string, handler: () => Promise<void>) {
+  if (typeof api.on !== "function") {
+    return;
+  }
+
+  api.on(eventName, async () => {
+    try {
+      await handler();
+    } catch (error) {
+      console.warn(
+        `[ninjaclawbot-bridge] Lifecycle hook '${eventName}' failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  });
+}
+
 export default function registerNinjaClawbotPlugin(api: any) {
   if (typeof api.registerService === "function") {
     api.registerService({
@@ -49,10 +74,27 @@ export default function registerNinjaClawbotPlugin(api: any) {
         }
       },
       async stop() {
+        await runShutdownSequence(api, "service_stop");
         await shutdownBridge();
       },
     });
   }
+
+  registerLifecycleHook(api, "gateway_start", async () => {
+    const startup = await runStartupSequence(api);
+    if (startup === null) {
+      await setPersistentPresenceMode(api, "idle", "gateway_start");
+    }
+  });
+  registerLifecycleHook(api, "message_received", async () => {
+    await setPersistentPresenceMode(api, "thinking", "message_received");
+  });
+  registerLifecycleHook(api, "agent_end", async () => {
+    await setPersistentPresenceMode(api, "idle", "agent_end");
+  });
+  registerLifecycleHook(api, "gateway_stop", async () => {
+    await runShutdownSequence(api, "gateway_stop");
+  });
 
   registerOptionalTool(
     api,

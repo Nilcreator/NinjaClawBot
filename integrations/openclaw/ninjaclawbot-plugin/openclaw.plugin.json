@@ -41,6 +41,22 @@
         "type": "integer",
         "minimum": 1,
         "description": "Shutdown timeout for the persistent NinjaClawBot bridge in milliseconds."
+      },
+      "enableAlwaysOn": {
+        "type": "boolean",
+        "description": "Enable lifecycle-driven Always On robot presence features. Defaults to true when the persistent bridge is enabled."
+      },
+      "enableStartupGreeting": {
+        "type": "boolean",
+        "description": "Play the automatic greeting and enter idle on gateway start. Defaults to true."
+      },
+      "enableAutoThinking": {
+        "type": "boolean",
+        "description": "Switch the robot into persistent thinking on message_received. Defaults to true."
+      },
+      "enableShutdownSequence": {
+        "type": "boolean",
+        "description": "Run the sleepy shutdown sequence before bridge teardown. Defaults to true."
       }
     },
     "required": ["projectRoot"]

@@ -2,6 +2,95 @@
 
 ## 2026-03-13
 
+### Phase 2.2 And 2.3 Initial Always On Lifecycle Pass
+
+Summary:
+
+- added explicit persistent presence support for `idle`, `thinking`, and
+  `listening`
+- added an explicit `shutdown_sequence` action and runtime path for
+  `sleepy -> display power-down -> cleanup`
+- added display adapter power-down helpers so shutdown can use `sleep()`,
+  `off()`, and then `close()` defensively
+- extended the persistent Python bridge service with:
+  - current presence mode reporting
+  - last lifecycle event reporting
+  - startup sequence handling
+  - presence-mode requests
+  - shutdown-sequence requests
+- registered OpenClaw lifecycle hooks for:
+  - `gateway_start`
+  - `message_received`
+  - `agent_end`
+  - `gateway_stop`
+- added bounded Always On config flags for startup greeting, auto-thinking, and
+  shutdown sequencing
+- updated the OpenClaw skill guidance so the agent does not spam `set_idle`
+  when the lifecycle hooks are active
+- updated the install and developer docs so Raspberry Pi validation now covers
+  startup greeting, automatic thinking, answer-to-idle, and sleepy shutdown
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/actions.py)
+- [ninjaclawbot/src/ninjaclawbot/presence.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/presence.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/expressions/player.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/expressions/player.py)
+- [ninjaclawbot/src/ninjaclawbot/openclaw/service.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/service.py)
+- [ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py)
+- [ninjaclawbot/tests/test_actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_actions.py)
+- [ninjaclawbot/tests/test_executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_executor.py)
+- [ninjaclawbot/tests/test_expressions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_expressions.py)
+- [ninjaclawbot/tests/test_runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_runtime.py)
+- [ninjaclawbot/tests/test_openclaw_bridge.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_openclaw_bridge.py)
+- [integrations/openclaw/ninjaclawbot-plugin/src/runner.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [EnhancementPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/EnhancementPlan.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- Raspberry Pi testing showed that the persistent bridge was warm, but startup
+  greeting, auto-thinking, and sleepy shutdown were still missing because only
+  tool calls had been wired to the runtime
+- the first Telegram message woke the robot correctly because explicit reply
+  tools already worked, but gateway start and stop had no lifecycle-driven
+  robot behavior
+- this pass closes that gap while preserving the plugin-managed bridge now and
+  a future standalone service model later
+
+Lint and test results:
+
+- `cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code library/NinjaClawbot/ninjaclawbot`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml` -> `60 passed`
+- `cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin`
+- `npm run typecheck`
+- `npm test` -> `7 passed`
+
+Raspberry Pi validation status:
+
+- not run yet after this code pass
+- the installation guide now includes the required Telegram-backed validation
+  flow
+- next validation should confirm:
+  - startup greeting then persistent idle
+  - persistent thinking on user message receipt
+  - explicit reply emotion then idle
+  - sleepy shutdown then display power-down
+  - safe rollback by disabling `enableAlwaysOn` if needed
+
 ### Phase 2.1 Plugin-Managed Persistent Bridge Foundation
 
 Summary:

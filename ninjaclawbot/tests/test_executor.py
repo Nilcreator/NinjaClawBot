@@ -21,6 +21,7 @@ class FakeRuntime:
         self.execution_lock = _Lock()
         self.config = NinjaClawbotConfig()
         self.calls = []
+        self.active_expression = None
 
     def health_check(self):
         self.calls.append(("health_check",))
@@ -46,6 +47,7 @@ class FakeRuntime:
 
     def perform_expression(self, definition):
         self.calls.append(("perform_expression", definition))
+        self.active_expression = "idle" if bool(definition.get("idle_reset", False)) else None
         return {
             "name": definition.get("name"),
             "builtin": definition.get("builtin") or None,
@@ -64,14 +66,41 @@ class FakeRuntime:
         self.calls.append(("stop_all",))
 
     def set_idle_expression(self):
+        self.active_expression = "idle"
         self.calls.append(("set_idle_expression",))
+        return {
+            "name": "idle",
+            "builtin": "idle",
+            "persistent": True,
+            "waited_for_s": 0.0,
+            "active_expression": "idle",
+            "presence_mode": "idle",
+        }
+
+    def set_presence_mode(self, mode: str):
+        self.active_expression = mode
+        self.calls.append(("set_presence_mode", mode))
+        return {
+            "name": mode,
+            "builtin": mode,
+            "persistent": True,
+            "waited_for_s": 0.0,
+            "active_expression": mode,
+            "presence_mode": mode,
+        }
 
     def stop_expression(self):
+        self.active_expression = None
         self.calls.append(("stop_expression",))
 
     def list_builtin_expressions(self):
         self.calls.append(("list_builtin_expressions",))
         return ["idle", "greeting", "happy"]
+
+    def shutdown_sequence(self):
+        self.active_expression = None
+        self.calls.append(("shutdown_sequence",))
+        return {"closed": True, "display_powered_down": True}
 
 
 def test_executor_runs_movement_asset_from_store(tmp_path) -> None:
@@ -173,6 +202,28 @@ def test_executor_can_set_idle_and_stop_expression() -> None:
     assert idle_result.status.value == "success"
     assert stop_result.status.value == "success"
     assert runtime.calls == [("set_idle_expression",), ("stop_expression",)]
+
+
+def test_executor_can_set_presence_mode() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute({"action": "set_presence_mode", "parameters": {"mode": "thinking"}})
+
+    assert result.status.value == "success"
+    assert runtime.calls == [("set_presence_mode", "thinking")]
+    assert result.data["presence_mode"] == "thinking"
+
+
+def test_executor_can_run_shutdown_sequence() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute({"action": "shutdown_sequence"})
+
+    assert result.status.value == "success"
+    assert runtime.calls == [("shutdown_sequence",)]
+    assert result.data["closed"] is True
 
 
 def test_executor_runs_builtin_expression_without_saved_asset() -> None:

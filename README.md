@@ -154,6 +154,7 @@ This gives you:
 
 - one clear robot-control boundary
 - one warm runtime reused across OpenClaw tool calls while the gateway is running
+- lifecycle-aware robot presence during the OpenClaw gateway session
 - typed JSON-style action results
 - safer hardware access
 - a shared reply-emotion policy
@@ -201,6 +202,24 @@ Result:
 - the robot looks alive even when it is not actively replying
 - temporary expressions do not stay on screen too long
 
+### Always On lifecycle
+
+With the persistent bridge and Always On lifecycle enabled, the plugin now
+drives these transitions automatically:
+
+- gateway start:
+  - greeting expression
+  - then persistent `idle`
+- user message received:
+  - persistent `thinking`
+- explicit final reply:
+  - emotion from `ninjaclawbot_reply`
+  - then back to `idle`
+- gateway stop:
+  - `sleepy`
+  - display power-down
+  - runtime cleanup
+
 ## Recommended Reading Order
 
 If you are new to the project:
@@ -232,6 +251,7 @@ The current stack supports:
 - standalone `pi5*` usage
 - integrated `ninjaclawbot` usage
 - Stage 1 expression engine and expression tool
-- Stage 2 OpenClaw reply policy, plugin wrapper, and skill wrapper
+- Stage 2 persistent bridge, Always On lifecycle hooks, and sleepy shutdown sequence
 
-The main remaining work is manual Raspberry Pi validation of the complete OpenClaw path.
+The main remaining work is Raspberry Pi validation of the complete Telegram-backed
+OpenClaw path and deeper lifecycle hardening under repeated-message stress.

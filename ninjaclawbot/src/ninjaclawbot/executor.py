@@ -181,11 +181,16 @@ class ActionExecutor:
             definition = self._resolve_expression_definition(str(params["name"]))
             return self._execute_expression_definition(definition), ["display", "buzzer"], []
         if request.action == ActionType.SET_IDLE:
-            self.runtime.set_idle_expression()
-            return {"idle_expression": "idle", "active_expression": "idle"}, ["display"], []
+            result = self.runtime.set_idle_expression()
+            return result, ["display"], []
+        if request.action == ActionType.SET_PRESENCE_MODE:
+            result = self.runtime.set_presence_mode(str(params["mode"]))
+            return result, ["display", "buzzer"], []
         if request.action == ActionType.STOP_EXPRESSION:
             self.runtime.stop_expression()
             return {"stopped": True}, ["display", "buzzer"], []
+        if request.action == ActionType.SHUTDOWN_SEQUENCE:
+            return self.runtime.shutdown_sequence(), ["display", "buzzer", "servo"], []
         if request.action == ActionType.READ_DISTANCE:
             return self.runtime.read_distance(), ["distance"], []
         if request.action == ActionType.LIST_ASSETS:

@@ -595,6 +595,15 @@ ninjaclawbot_entry = entries.setdefault("ninjaclawbot", {})
 ninjaclawbot_entry["enabled"] = True
 ninjaclawbot_config = ninjaclawbot_entry.setdefault("config", {})
 ninjaclawbot_config["projectRoot"] = root
+ninjaclawbot_config["rootDir"] = root
+ninjaclawbot_config["enablePersistentBridge"] = True
+ninjaclawbot_config["bridgeStartTimeoutMs"] = 10000
+ninjaclawbot_config["bridgeRequestTimeoutMs"] = 15000
+ninjaclawbot_config["bridgeShutdownTimeoutMs"] = 5000
+ninjaclawbot_config["enableAlwaysOn"] = True
+ninjaclawbot_config["enableStartupGreeting"] = True
+ninjaclawbot_config["enableAutoThinking"] = True
+ninjaclawbot_config["enableShutdownSequence"] = True
 
 agents = data.setdefault("agents", {})
 agent_list = agents.setdefault("list", [])
@@ -658,7 +667,16 @@ The important NinjaClawBot parts should now look like this:
       "ninjaclawbot": {
         "enabled": true,
         "config": {
-          "projectRoot": "/absolute/path/to/NinjaClawbot"
+          "projectRoot": "/absolute/path/to/NinjaClawbot",
+          "rootDir": "/absolute/path/to/NinjaClawbot",
+          "enablePersistentBridge": true,
+          "bridgeStartTimeoutMs": 10000,
+          "bridgeRequestTimeoutMs": 15000,
+          "bridgeShutdownTimeoutMs": 5000,
+          "enableAlwaysOn": true,
+          "enableStartupGreeting": true,
+          "enableAutoThinking": true,
+          "enableShutdownSequence": true
         }
       }
     }
@@ -700,10 +718,15 @@ fallback path:
       "ninjaclawbot": {
         "config": {
           "projectRoot": "/absolute/path/to/NinjaClawbot",
+          "rootDir": "/absolute/path/to/NinjaClawbot",
           "enablePersistentBridge": true,
           "bridgeStartTimeoutMs": 10000,
           "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000
+          "bridgeShutdownTimeoutMs": 5000,
+          "enableAlwaysOn": true,
+          "enableStartupGreeting": true,
+          "enableAutoThinking": true,
+          "enableShutdownSequence": true
         }
       }
     }
@@ -716,6 +739,10 @@ Notes:
 - leave `enablePersistentBridge` at `true` for the normal OpenClaw-to-NinjaClawBot path
 - set `enablePersistentBridge` to `false` only if you need to force the older per-call bridge path while debugging
 - only raise the timeout values if Raspberry Pi startup or hardware initialization is slower than the defaults
+- leave `enableAlwaysOn` at `true` if you want startup greeting, auto-thinking, and sleepy shutdown
+- set `enableStartupGreeting` to `false` only if you want the gateway to start quietly and move straight to `idle`
+- set `enableAutoThinking` to `false` only if you do not want automatic thinking on every incoming user message
+- set `enableShutdownSequence` to `false` only if you need immediate bridge teardown while debugging
 
 ### 18.3 Full reference template for a new `openclaw.json`
 
@@ -835,7 +862,16 @@ Replace every placeholder with your own real value.
       "ninjaclawbot": {
         "enabled": true,
         "config": {
-          "projectRoot": "/absolute/path/to/NinjaClawbot"
+          "projectRoot": "/absolute/path/to/NinjaClawbot",
+          "rootDir": "/absolute/path/to/NinjaClawbot",
+          "enablePersistentBridge": true,
+          "bridgeStartTimeoutMs": 10000,
+          "bridgeRequestTimeoutMs": 15000,
+          "bridgeShutdownTimeoutMs": 5000,
+          "enableAlwaysOn": true,
+          "enableStartupGreeting": true,
+          "enableAutoThinking": true,
+          "enableShutdownSequence": true
         }
       }
     }
@@ -892,6 +928,13 @@ persistent Python bridge automatically. If that bridge cannot start, the plugin
 falls back to the older one-shot `openclaw-action` path so the tools can still
 run while you debug the persistent mode.
 
+If `enableAlwaysOn` is left enabled, the plugin also tries to:
+
+- show a greeting expression on gateway start
+- enter persistent `idle` automatically after the greeting
+- switch to persistent `thinking` when a user message arrives
+- run a sleepy shutdown sequence before the bridge exits
+
 Check its status:
 
 ```bash
@@ -907,26 +950,111 @@ openclaw gateway
 If you plan to connect OpenClaw to Telegram or another messaging channel, follow
 the channel setup steps from the `NinjaClawAgent` guide you used in Section 16.
 
-## 20. First OpenClaw-to-NinjaClawBot Tests
+## 20. Raspberry Pi Validation Flow
 
-Start with safe robot actions only.
+Use this section after the plugin is configured and the gateway is installed.
 
-Test in this order:
+### 20.1 Safe smoke validation
 
-1. run the OpenClaw tool that maps to `ninjaclawbot_health`
-2. run the OpenClaw tool that maps to `ninjaclawbot_capabilities`
-3. run a greeting reply through `ninjaclawbot_reply`
-4. run `ninjaclawbot_set_idle`
-5. only after that, test saved expressions and saved movements
+Run these commands on the Raspberry Pi:
+
+```bash
+cd /absolute/path/to/NinjaClawbot
+openclaw gateway start
+openclaw gateway status
+```
 
 Expected result:
 
-- OpenClaw can call the plugin tools
-- the plugin calls `ninjaclawbot` from the project root
-- when the persistent bridge is healthy, repeated tool calls reuse one warm runtime
-- if the persistent bridge cannot start, the plugin falls back internally to one-shot calls
-- the robot display and buzzer respond
-- the robot returns to idle when the temporary reply ends
+- the gateway starts successfully
+- the plugin starts one persistent `openclaw-serve` process
+- if `enableAlwaysOn` and `enableStartupGreeting` are `true`, the robot shows a greeting and then enters persistent `idle`
+
+If you want to watch the live gateway log in another terminal, run:
+
+```bash
+openclaw logs --follow
+```
+
+### 20.2 Telegram message validation
+
+After the gateway is running and your Telegram channel is connected:
+
+1. send this exact message to the bot:
+   - `hello`
+2. wait for the robot response
+
+Expected result:
+
+- as soon as the message is received, the robot switches into persistent `thinking`
+- when the final answer is produced, the robot shows the explicit reply emotion chosen by the agent
+- after the answer finishes, the robot returns to persistent `idle`
+
+### 20.3 Repeated-message validation
+
+Send two short messages one after another:
+
+1. `how are you`
+2. `tell me a joke`
+
+Expected result:
+
+- the robot does not flash the display on and off between calls
+- the robot reuses the same persistent bridge session
+- the robot keeps returning to `idle` between finished replies
+
+### 20.4 Shutdown validation
+
+Run:
+
+```bash
+openclaw gateway stop
+openclaw gateway status
+```
+
+Expected result:
+
+- the robot shows `sleepy`
+- after the sleepy expression completes, the display powers down
+- the persistent bridge exits cleanly
+
+### 20.5 Rollback if the lifecycle behavior is wrong
+
+If the explicit reply tools still work but the automatic lifecycle behavior is
+not correct, disable Always On temporarily:
+
+```bash
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+path = Path.home() / ".openclaw" / "openclaw.json"
+with path.open("r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+config = (
+    data.setdefault("plugins", {})
+    .setdefault("entries", {})
+    .setdefault("ninjaclawbot", {})
+    .setdefault("config", {})
+)
+config["enableAlwaysOn"] = False
+
+with path.open("w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+
+print(f"Updated {path}: enableAlwaysOn=false")
+PY
+
+openclaw gateway start
+```
+
+Expected result:
+
+- explicit `ninjaclawbot_*` tools still work
+- startup greeting, auto-thinking, and sleepy shutdown are skipped
+- this gives you a safe fallback while you debug lifecycle behavior
 
 ## 21. Safe First Examples With OpenClaw
 
@@ -999,6 +1127,7 @@ Check:
 - the plugin folder passes `npm run typecheck` and `npm test`
 - `uv run ninjaclawbot list-capabilities` works at the project root
 - if simple tool calls work but persistence does not, check the OpenClaw log for `ninjaclawbot-bridge` warnings because the plugin may have degraded to one-shot fallback
+- if explicit replies work but startup greeting, thinking, or sleepy shutdown do not, check the four Always On flags under `plugins.entries.ninjaclawbot.config`
 
 ## 23. Where To Read More
 

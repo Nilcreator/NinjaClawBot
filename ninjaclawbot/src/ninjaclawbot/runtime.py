@@ -15,6 +15,7 @@ from ninjaclawbot.adapters import (
 from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.expressions.player import ExpressionPlayer
 from ninjaclawbot.locks import ExecutionLock
+from ninjaclawbot.presence import normalize_presence_mode
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +58,12 @@ class NinjaClawbotRuntime:
         if self._expressions is None:
             self._expressions = ExpressionPlayer(self.display, self.buzzer)
         return self._expressions
+
+    @property
+    def active_expression(self) -> str | None:
+        if self._expressions is None:
+            return None
+        return self._expressions.active_expression
 
     def move_servos(
         self,
@@ -113,8 +120,14 @@ class NinjaClawbotRuntime:
     def perform_expression(self, definition: dict[str, Any]) -> dict[str, Any]:
         return self.expressions.perform(definition)
 
-    def set_idle_expression(self) -> None:
-        self.expressions.set_idle()
+    def set_idle_expression(self) -> dict[str, Any]:
+        return self.set_presence_mode("idle")
+
+    def set_presence_mode(self, mode: str) -> dict[str, Any]:
+        normalized = normalize_presence_mode(mode)
+        result = self.expressions.set_presence(normalized, play_sound=normalized != "idle")
+        result["presence_mode"] = normalized
+        return result
 
     def stop_expression(self) -> None:
         self.expressions.stop()
@@ -147,6 +160,19 @@ class NinjaClawbotRuntime:
         except Exception as exc:  # pragma: no cover - defensive cleanup guard
             log.warning("Cleanup step '%s' failed: %s", label, exc)
 
+    def _finalize_close(self, *, power_down_display: bool) -> None:
+        self._safe_cleanup("expressions.stop", self.stop_expression)
+        if power_down_display:
+            self._safe_cleanup("display.power_down", self.display.power_down)
+        else:
+            self._safe_cleanup("display.close", self.display.close)
+        self._safe_cleanup("buzzer.close", self.buzzer.close)
+        self._safe_cleanup("servo.stop", self.servo.stop)
+        if self._expressions is not None:
+            self._safe_cleanup("expressions.close", self._expressions.close)
+        self._safe_cleanup("servo.close", self.servo.close)
+        self._safe_cleanup("distance.close", self.distance.close)
+
     def stop_all(self) -> None:
         # Display cleanup must run before buzzer backend shutdown because both
         # libraries ultimately share the global RPi.GPIO / rpi-lgpio state.
@@ -155,12 +181,26 @@ class NinjaClawbotRuntime:
         self._safe_cleanup("buzzer.close", self.buzzer.close)
         self._safe_cleanup("servo.stop", self.servo.stop)
 
+    def shutdown_sequence(self) -> dict[str, Any]:
+        if self._closed:
+            return {"closed": True, "sleepy_result": None, "display_powered_down": True}
+
+        sleepy_result: dict[str, Any] | None = None
+        try:
+            sleepy_result = self.perform_expression({"builtin": "sleepy", "idle_reset": False})
+        except Exception as exc:  # pragma: no cover - defensive cleanup guard
+            log.warning("Sleepy shutdown expression failed: %s", exc)
+
+        self._closed = True
+        self._finalize_close(power_down_display=True)
+        return {
+            "closed": True,
+            "sleepy_result": sleepy_result,
+            "display_powered_down": True,
+        }
+
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
-        self.stop_all()
-        if self._expressions is not None:
-            self._safe_cleanup("expressions.close", self._expressions.close)
-        self._safe_cleanup("servo.close", self.servo.close)
-        self._safe_cleanup("distance.close", self.distance.close)
+        self._finalize_close(power_down_display=False)

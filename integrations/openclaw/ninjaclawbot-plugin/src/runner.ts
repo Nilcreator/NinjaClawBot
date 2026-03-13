@@ -16,6 +16,10 @@ export interface OpenClawPluginConfig {
   bridgeStartTimeoutMs?: number;
   bridgeRequestTimeoutMs?: number;
   bridgeShutdownTimeoutMs?: number;
+  enableAlwaysOn?: boolean;
+  enableStartupGreeting?: boolean;
+  enableAutoThinking?: boolean;
+  enableShutdownSequence?: boolean;
 }
 
 export interface NinjaClawbotPayload {
@@ -72,6 +76,10 @@ function asPositiveInt(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
 }
 
+export function alwaysOnEnabled(config: OpenClawPluginConfig): boolean {
+  return Boolean(config.enablePersistentBridge && config.enableAlwaysOn);
+}
+
 function configSignature(config: OpenClawPluginConfig): string {
   return JSON.stringify({
     projectRoot: config.projectRoot,
@@ -81,6 +89,10 @@ function configSignature(config: OpenClawPluginConfig): string {
     bridgeStartTimeoutMs: config.bridgeStartTimeoutMs,
     bridgeRequestTimeoutMs: config.bridgeRequestTimeoutMs,
     bridgeShutdownTimeoutMs: config.bridgeShutdownTimeoutMs,
+    enableAlwaysOn: config.enableAlwaysOn,
+    enableStartupGreeting: config.enableStartupGreeting,
+    enableAutoThinking: config.enableAutoThinking,
+    enableShutdownSequence: config.enableShutdownSequence,
   });
 }
 
@@ -118,6 +130,10 @@ export function extractPluginConfig(api: OpenClawPluginApiLike): OpenClawPluginC
       config.bridgeShutdownTimeoutMs,
       DEFAULT_BRIDGE_SHUTDOWN_TIMEOUT_MS,
     ),
+    enableAlwaysOn: asBoolean(config.enableAlwaysOn, true),
+    enableStartupGreeting: asBoolean(config.enableStartupGreeting, true),
+    enableAutoThinking: asBoolean(config.enableAutoThinking, true),
+    enableShutdownSequence: asBoolean(config.enableShutdownSequence, true),
   };
 }
 
@@ -326,6 +342,43 @@ async function runNinjaClawbotActionOneShot(
   });
 }
 
+async function runPersistentBridgeRequest(
+  api: OpenClawPluginApiLike,
+  envelope: BridgeRequestEnvelope,
+  context: string,
+  timeoutMs?: number,
+): Promise<Record<string, unknown> | null> {
+  const config = extractPluginConfig(api);
+  if (!alwaysOnEnabled(config)) {
+    return null;
+  }
+
+  try {
+    await ensureBridge(api);
+    if (!activeBridge) {
+      throw new Error("Persistent ninjaclawbot bridge is unavailable.");
+    }
+
+    const response = await sendBridgeRequest(
+      activeBridge,
+      envelope,
+      timeoutMs ?? config.bridgeRequestTimeoutMs ?? DEFAULT_BRIDGE_REQUEST_TIMEOUT_MS,
+    );
+    if (!response.ok) {
+      throw new Error(response.error ?? `${context} failed.`);
+    }
+    return response.data ?? {};
+  } catch (error) {
+    console.warn(
+      `[ninjaclawbot-bridge] ${context}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    await shutdownBridge();
+    return null;
+  }
+}
+
 export async function ensureBridge(api: OpenClawPluginApiLike): Promise<void> {
   const config = extractPluginConfig(api);
   if (!config.enablePersistentBridge) {
@@ -362,7 +415,8 @@ export async function shutdownBridge(): Promise<void> {
     return;
   }
 
-  const shutdownTimeout = client.config.bridgeShutdownTimeoutMs ?? DEFAULT_BRIDGE_SHUTDOWN_TIMEOUT_MS;
+  const shutdownTimeout =
+    client.config.bridgeShutdownTimeoutMs ?? DEFAULT_BRIDGE_SHUTDOWN_TIMEOUT_MS;
   try {
     await sendBridgeRequest(client, { type: "shutdown" }, shutdownTimeout);
   } catch {
@@ -371,6 +425,89 @@ export async function shutdownBridge(): Promise<void> {
 
   if (!client.exited) {
     client.child.kill("SIGTERM");
+  }
+}
+
+export async function runStartupSequence(api: OpenClawPluginApiLike) {
+  const config = extractPluginConfig(api);
+  if (!alwaysOnEnabled(config) || !config.enableStartupGreeting) {
+    return null;
+  }
+
+  return runPersistentBridgeRequest(api, { type: "startup_sequence" }, "Startup sequence failed");
+}
+
+export async function setPersistentPresenceMode(
+  api: OpenClawPluginApiLike,
+  mode: "idle" | "thinking" | "listening",
+  lifecycleEvent: string,
+) {
+  const config = extractPluginConfig(api);
+  if (!alwaysOnEnabled(config)) {
+    return null;
+  }
+  if (mode === "thinking" && !config.enableAutoThinking) {
+    return null;
+  }
+
+  return runPersistentBridgeRequest(
+    api,
+    {
+      type: "set_presence_mode",
+      payload: { mode, lifecycle_event: lifecycleEvent },
+    },
+    `Presence update '${mode}' failed`,
+  );
+}
+
+export async function runShutdownSequence(
+  api: OpenClawPluginApiLike,
+  lifecycleEvent = "gateway_stop",
+) {
+  const config = extractPluginConfig(api);
+  if (!alwaysOnEnabled(config) || !config.enableShutdownSequence) {
+    return null;
+  }
+
+  return runPersistentBridgeRequest(
+    api,
+    {
+      type: "shutdown_sequence",
+      payload: { lifecycle_event: lifecycleEvent },
+    },
+    "Shutdown sequence failed",
+    config.bridgeShutdownTimeoutMs ?? DEFAULT_BRIDGE_SHUTDOWN_TIMEOUT_MS,
+  );
+}
+
+export async function readBridgeStatus(api: OpenClawPluginApiLike) {
+  const config = extractPluginConfig(api);
+  if (!config.enablePersistentBridge) {
+    return null;
+  }
+
+  try {
+    await ensureBridge(api);
+    if (!activeBridge) {
+      throw new Error("Persistent ninjaclawbot bridge is unavailable.");
+    }
+    const response = await sendBridgeRequest(
+      activeBridge,
+      { type: "status" },
+      config.bridgeRequestTimeoutMs ?? DEFAULT_BRIDGE_REQUEST_TIMEOUT_MS,
+    );
+    if (!response.ok) {
+      throw new Error(response.error ?? "Bridge status request failed.");
+    }
+    return response.data ?? {};
+  } catch (error) {
+    console.warn(
+      `[ninjaclawbot-bridge] Bridge status failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    await shutdownBridge();
+    return null;
   }
 }
 
