@@ -516,6 +516,8 @@ Backend rule:
 - keep the high-level motion model, easing, calibration, and command parsing independent from the low-level pulse generator
 - keep optional advanced external controller support through the `pca9685` backend
 - `pwm_pio` remains a planned backend placeholder and is not a production runtime yet
+- the current branch intentionally hides `pwm_pio` from the user-facing CLI so only supported backends are selectable
+- if an older `servo.json` still names `pwm_pio`, the CLI now fails fast with a compatibility message instructing the user to switch back to `hardware_pwm`, `dfr0566`, or `pca9685`
 
 DFR0566 endpoint rule:
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib
 from unittest.mock import MagicMock
 
+import click
+import pytest
 from click.testing import CliRunner
 
 from pi5servo.cli._common import format_endpoint_label, parse_pin_list, resolve_backend_settings
@@ -82,6 +84,18 @@ def test_resolve_backend_settings_accepts_dfr0566_bus_override(tmp_path) -> None
     assert backend_name == "dfr0566"
     assert kwargs["bus_id"] == 3
     assert kwargs["address"] == 0x12
+
+
+def test_resolve_backend_settings_rejects_pwm_pio_backend(tmp_path) -> None:
+    """The placeholder pwm_pio backend should be rejected with a clear CLI error."""
+    config_path = tmp_path / "servo.json"
+    manager = ConfigManager(config_path)
+    manager.set_backend_config("pwm_pio", {})
+    manager.save()
+    manager.load()
+
+    with pytest.raises(click.ClickException, match="pwm_pio"):
+        resolve_backend_settings(manager)
 
 
 def test_parse_pin_list_supports_explicit_endpoints() -> None:

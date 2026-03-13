@@ -26,7 +26,7 @@ If you want advanced developer details, read [DevelopmentGuide.md](DevelopmentGu
   - passive buzzer control
   - notes, songs, and emotion sounds
 - [`pi5servo`](pi5servo/README.md)
-  - servo control for Raspberry Pi header PWM, DFR0566 HAT PWM, and optional PCA9685
+  - servo control for Raspberry Pi hardware PWM (`GPIO12/13/18/19`), DFR0566 HAT PWM, and optional PCA9685
   - calibration and interactive servo tools
 - [`pi5disp`](pi5disp/README.md)
   - ST7789V display control

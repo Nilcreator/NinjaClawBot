@@ -14,12 +14,12 @@ BACKEND_CHOICES = (
     "auto",
     "hardware_pwm",
     "rp1_hardware_pwm",
-    "pwm_pio",
     "dfr0566",
     "pca9685",
     "pigpio",
 )
 LEGACY_BACKENDS = {"pigpio", "legacy"}
+UNSUPPORTED_BACKENDS = {"pwm_pio"}
 
 
 def _parse_int(value: str | int) -> int:
@@ -180,6 +180,12 @@ def resolve_backend_settings(
     """Merge backend settings from config metadata with CLI overrides."""
     stored = manager.get_backend_config()
     resolved_name = str(backend_name or stored.get("name") or "auto").lower()
+    if resolved_name in UNSUPPORTED_BACKENDS:
+        raise click.ClickException(
+            "The 'pwm_pio' backend is not available on this branch of pi5servo. "
+            "Use 'hardware_pwm' for GPIO12/13/18/19, 'dfr0566' for hat_pwm1..4, "
+            "or 'pca9685' for an external PWM controller."
+        )
     kwargs = dict(stored.get("kwargs", {}))
 
     if "pin_channel_map" in kwargs:

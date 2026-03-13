@@ -6,6 +6,9 @@ A lightweight, physics-based servo control library for SG90 and MG90S style serv
 
 The default target is **header-connected servos on Raspberry Pi 5** using hardware-backed PWM. The library also supports the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) for I2C-managed PWM servo channels, plus an optional `pca9685` backend for other advanced external controller setups.
 
+> [!IMPORTANT]
+> On the current `clawbotV1_alpha` branch, native GPIO servo output is limited to the Pi 5 hardware PWM pins `GPIO12`, `GPIO13`, `GPIO18`, and `GPIO19`. DFR0566 digital ports can only be used for servo signal when they break out one of those supported native GPIO pins. Arbitrary DFR0566 digital-pin servo output is not available on this branch.
+
 ## 🔀 Connection Models
 
 `pi5servo` needs to distinguish two different servo signal paths when the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) is involved:
@@ -14,6 +17,7 @@ The default target is **header-connected servos on Raspberry Pi 5** using hardwa
    - the signal wire is driven by the Raspberry Pi itself
    - this includes a servo plugged directly into the Pi header
    - this also includes a servo plugged into a DFR0566 **digital** port, because those ports are still Raspberry Pi GPIO breakouts
+   - on this branch, that native GPIO path is currently limited to `GPIO12`, `GPIO13`, `GPIO18`, and `GPIO19`
 
 2. **DFR0566 HAT PWM servo**
    - the signal wire is driven by one of the HAT's 4 PWM channels
@@ -68,6 +72,9 @@ The default header-connected backend is `hardware_pwm`. It is intended for these
 
 > [!IMPORTANT]
 > **Only use pins that are enabled in your Pi 5 firmware overlay.** The library can map all four default PWM-capable pins, but your `/boot/firmware/config.txt` setup decides which ones are actually active on the board.
+
+> [!NOTE]
+> `pwm_pio` is intentionally not exposed in the current branch CLI because that backend is still a planned placeholder here. If you see an old `servo.json` that still names `pwm_pio`, switch it back to `hardware_pwm`, `dfr0566`, or `pca9685`.
 
 ---
 
