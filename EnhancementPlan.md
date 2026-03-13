@@ -1,445 +1,285 @@
-# NinjaClawBot Expression And OpenClaw Enhancement Plan
-
-Date: 2026-03-12
+# NinjaClawBot Enhancement Plan
 
-## Table Of Contents
-
-- [Purpose](#purpose)
-- [Scope](#scope)
-- [Audit Sources](#audit-sources)
-- [Legacy Expression Audit Summary](#legacy-expression-audit-summary)
-- [Current `ninjaclawbot` Gap Summary](#current-ninjaclawbot-gap-summary)
-- [Refined Target Architecture](#refined-target-architecture)
-- [First-Class Expression Engine](#first-class-expression-engine)
-- [Persistent Idle Policy](#persistent-idle-policy)
-- [Reply-Emotion Policy Layer](#reply-emotion-policy-layer)
-- [Built-In Expression Catalog](#built-in-expression-catalog)
-- [Expression Asset Model Extension](#expression-asset-model-extension)
-- [Expression-Tool Enhancement Direction](#expression-tool-enhancement-direction)
-- [Official OpenClaw Plugin Tool Wrapper](#official-openclaw-plugin-tool-wrapper)
-- [OpenClaw Skill Wrapper](#openclaw-skill-wrapper)
-- [Recommended OpenClaw Behavior Rules](#recommended-openclaw-behavior-rules)
-- [Stage 1: Expression-Tool Enhancement](#stage-1-expression-tool-enhancement)
-- [Stage 1 Mandatory Raspberry Pi Validation](#stage-1-mandatory-raspberry-pi-validation)
-- [Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper](#stage-2-openclaw-reply-policy-plugin-tool-and-skill-wrapper)
-- [Stage 2 Mandatory Raspberry Pi Validation](#stage-2-mandatory-raspberry-pi-validation)
-- [Quality Gates](#quality-gates)
-- [Recommended Implementation Order](#recommended-implementation-order)
-- [References](#references)
-- [Current Status](#current-status)
-
-## Purpose
-
-This document records the complete refined enhancement plan for the next stage of the NinjaClawBot integration layer.
-
-The goal is to extend the rebuilt `ninjaclawbot` package so it can:
+Updated: 2026-03-13
 
-- provide a first-class animated face and sound expression engine
-- preserve a persistent `idle` face while the robot waits for user input
-- map reply intent and emotion into suitable face and sound reactions
-- let manual users create, preview, and trigger richer expressions from `expression-tool`
-- expose an official, typed, OpenClaw-facing tool wrapper as the only approved robot-control surface for the OpenClaw AI agent
-- ship an OpenClaw skill that teaches the agent when and how to use the robot expression and action tools correctly
-
-This plan is intentionally separate from `developmentPlan.md`, which remains the primary migration and integration record for the Pi 5 driver libraries and the base `ninjaclawbot` rebuild.
+This document now tracks the enhancement work in two stages:
 
-## Scope
-
-In scope:
-
-- audit of the legacy NinjaRobotV5 facial and sound expression implementation
-- design of a richer expression engine for the current Pi 5 stack
-- extension of `ninjaclawbot` expression assets and expression tooling
-- OpenClaw plugin tool wrapper design
-- OpenClaw skill-wrapper design
-- phased implementation planning, quality gates, and Raspberry Pi validation planning
-
-Out of scope for the first enhancement pass:
-
-- reintroducing legacy web server transport, BLE, ngrok, or `SafeExecutor`
-- direct raw driver access from OpenClaw
-- replacing the current standalone `pi5*` driver package boundaries
-
-## Audit Sources
-
-Legacy NinjaRobotV5 code reviewed:
-
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/facial_expressions.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/robot_sound.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/web_server.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/ninja_agent.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/api_wrappers.py`
-
-Current NinjaClawBot code reviewed:
-
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
-- `ninjaclawbot/src/ninjaclawbot/__main__.py`
-
-OpenClaw primary-source research:
-
-- official Raspberry Pi runtime docs
-- official tool and plugin docs
-- official skill docs
-
-## Legacy Expression Audit Summary
+- Stage 1: completed foundation work kept as a concise reference
+- Stage 2: planned seamless OpenClaw agent integration and richer Always On robot reactions
 
-The legacy NinjaRobotV5 expression system is more capable than the current `ninjaclawbot` expression layer.
+## Stage 1: Completed Foundation Reference
 
-Important legacy behaviors:
+Status: Done
 
-1. `AnimatedFaces` is a real expression engine.
-   - It is not just a text display helper.
-   - It renders procedural faces at about 60 FPS in a background thread.
-   - It uses shared drawing primitives for a consistent visual identity.
+### Purpose
 
-2. The legacy face catalog is already broad.
-   - Available names include `idle`, `happy`, `laughing`, `sad`, `cry`, `angry`, `surprising`, `sleepy`, `speaking`, `shy`, `scary`, `exciting`, and `confusing`.
-   - The style is consistent because expressions are built from shared eye, eyebrow, mouth, blush, and punctuation logic.
+Stage 1 established the modern `ninjaclawbot` foundation on top of the Pi 5 driver libraries and created the first approved OpenClaw control boundary.
 
-3. The legacy sound system is emotion-based and sequence-based.
-   - `RobotSoundPlayer` reuses the emotion sound catalog from the buzzer package.
-   - Legacy playback is blocking and sequential, which made orchestration simple and deterministic.
+### Key Features Delivered
 
-4. The legacy orchestration model already supports waiting-state and reaction-state behavior.
-   - The old web server starts `idle` when waiting.
-   - Greeting triggers `happy` face plus sound, then returns to `idle`.
-   - Action plans can use `face_chain` and `sound_chain`.
-   - Post-action reset restores `idle`.
+- built-in animated facial expression engine
+- built-in sound-expression catalog and orchestration
+- persistent `idle` behavior owned by `ninjaclawbot`
+- richer expression asset model and `expression-tool` preview workflow
+- reply-emotion policy for OpenClaw-facing responses
+- official `ninjaclawbot` OpenClaw plugin wrapper
+- official `ninjaclawbot_control` OpenClaw skill wrapper
 
-5. The old AI agent prompt already encoded emotion mapping examples.
-   - Greeting should use `happy`.
-   - Thinking or uncertainty should use a confused or thinking expression.
-   - Speaking responses should transition into a speaking face.
+### Development Stages Completed
 
-## Current `ninjaclawbot` Gap Summary
+1. Expression contract and built-in catalog foundation
+2. First-class animated face engine
+3. Built-in sound-expression engine
+4. Persistent idle policy and expression orchestration
+5. `expression-tool` enhancement
+6. Reply-emotion policy layer
+7. Official OpenClaw plugin tool wrapper
+8. OpenClaw skill wrapper
 
-The current `ninjaclawbot` implementation supports saved expressions, but it does not yet provide a complete expression engine.
+### Stage 1 Implementation Plan Status
 
-Current limitations:
+- Phase 1: Expression contract and catalog foundation. Status: Done.
+- Phase 2: First-class animated face engine. Status: Done.
+- Phase 3: Built-in sound-expression engine. Status: Done.
+- Phase 4: Persistent idle policy and expression orchestration. Status: Done.
+- Phase 5: `expression-tool` enhancement. Status: Done.
+- Phase 6: Reply-emotion policy layer. Status: Done.
+- Phase 7: Official OpenClaw plugin tool wrapper. Status: Done.
+- Phase 8: OpenClaw skill wrapper. Status: Done.
 
-- expressions are mostly `display.text` plus a simple `sound` block
-- there is no built-in animated face renderer
-- there is no persistent `idle` face manager
-- there is no `face_chain` concept
-- there is no reply-emotion policy
-- `expression-tool` cannot browse or trigger a built-in face catalog
-- there is no official OpenClaw plugin tool wrapper yet
-- there is no OpenClaw skill that teaches expression-selection policy
+### Stage 1 Reference Outcome
 
-## Refined Target Architecture
+Stage 1 delivered the expression/runtime layer and the initial OpenClaw integration surface now present in the repository. The next work is not a rebuild of that foundation. The next work is to make the existing integration seamless, lifecycle-aware, and robust during real OpenClaw gateway operation.
 
-The next enhancement should introduce two coordinated layers:
+## Stage 2: Seamless OpenClaw Agent Integration And Always On Reactions
 
-1. A richer `ninjaclawbot` expression layer.
-   - built-in face engine
-   - built-in sound expression catalog
-   - expression player and idle manager
-   - richer expression assets
-   - expression-tool support
+Status: Planned
 
-2. A strict OpenClaw-facing wrapper layer.
-   - official plugin agent tool
-   - JSON-schema request/response surface
-   - OpenClaw skill that teaches correct use of the wrapper
-   - no raw `pi5*` driver access from OpenClaw
+### Stage 2 Purpose
 
-High-level structure:
+Stage 2 is focused on making NinjaClawBot behave like a continuously present robot companion when used through OpenClaw.
 
-```text
-OpenClaw Agent
-  -> OpenClaw skill
-  -> OpenClaw plugin tool (typed JSON schema)
-  -> ninjaclawbot executor
-  -> expression/movement/runtime policy
-  -> pi5disp / pi5buzzer / pi5servo / pi5vl53l0x
-```
+The main goal is to move from a one-action-per-process bridge to a gateway-aware lifecycle model that:
 
-## First-Class Expression Engine
-
-The plan must explicitly include a first-class expression engine, not just richer JSON assets.
-
-Required capabilities:
-
-- procedural face rendering on the ST7789V display
-- consistent shared style primitives
-- smooth frame-based animation
-- named built-in expressions
-- expression preview and playback
-- controlled stop and replacement behavior
-- deterministic face reset to `idle` after temporary reactions
-
-Recommended module split:
-
-- `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/primitives.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/sounds.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
+- reacts automatically when the OpenClaw gateway starts
+- keeps the robot visibly alive while the agent is waiting
+- switches into a deliberate thinking state when a query arrives
+- expresses the emotion of the final answer consistently
+- shuts down cleanly with a sleepy reaction, display-off step, and runtime cleanup
 
-Design rule:
+### Stage 2 Key Features
 
-- the face engine should reuse the legacy minimalist visual language
-- the animation quality should improve through smoother interpolation, better blink timing, livelier speaking motion, and clearer emotion separation
-
-## Persistent Idle Policy
-
-The refined plan must include a persistent `idle` policy as a first-class runtime concern.
-
-Required behavior:
-
-- when no action is running, the robot should show `idle`
-- temporary expressions should replace `idle`
-- after a non-idle face or expression completes, the runtime should restore `idle`
-- startup should move into `idle` once the display runtime is ready
-- shutdown should stop the active face loop cleanly
-
-Implementation rule:
-
-- `idle` state should be managed by `ninjaclawbot`, not by OpenClaw directly
-- OpenClaw should request temporary reactions or explicit mode changes, but the runtime should own the idle fallback
-
-## Reply-Emotion Policy Layer
-
-The refined plan must include a dedicated reply-emotion policy layer for OpenClaw.
-
-Purpose:
-
-- map conversational situations to robot expression choices
-- keep emotion-selection rules centralized and testable
-- avoid forcing OpenClaw to construct face and sound chains manually for every reply
-
-Recommended policy outputs:
-
-- `face_chain`
-- `sound_chain`
-- `response_mode`
-- `idle_reset`
-- optional `priority`
-
-Minimum required conversational states:
-
-- greeting
-- confirmation
-- success
-- speaking
-- thinking
-- confusing
-- asking_clarification
-- warning
-- error
-- sad
-- sleepy
-
-Example mappings:
-
-- greeting -> `happy` face plus `happy` sound, then `idle`
-- asking_clarification -> `confusing` face plus `confusing` sound, then `idle`
-- cannot_answer -> `confusing` or `sad` reaction, then `idle`
-- normal reply -> `speaking`
-- task complete -> `success` or `excited`
-
-## Built-In Expression Catalog
-
-Recommended first built-in catalog:
-
-- `idle`
-- `greeting`
-- `happy`
-- `excited`
-- `success`
-- `speaking`
-- `listening`
-- `thinking`
-- `confusing`
-- `curious`
-- `surprised`
-- `sad`
-- `crying`
-- `angry`
-- `warning`
-- `error`
-- `sleepy`
-- `shy`
-- `scary`
-
-Catalog design rules:
-
-- keep the same visual language across all expressions
-- make each expression distinct enough for quick human recognition
-- preserve legacy names where practical for backward familiarity
-- add aliases only when the meaning is clear and stable
-
-## Expression Asset Model Extension
-
-The current expression asset format is too narrow. It should be extended to support both built-in expression usage and fully composed custom expressions.
-
-Recommended asset shape:
-
-```json
-{
-  "name": "greeting_happy",
-  "description": "Warm greeting reaction",
-  "builtin": "greeting",
-  "display": {
-    "text": "Hello",
-    "scroll": false,
-    "duration": 2.0,
-    "language": "en",
-    "font_size": 32
-  },
-  "face_chain": [
-    { "name": "happy", "duration": 2.0 },
-    { "name": "speaking", "duration": 1.5 }
-  ],
-  "sound_chain": [
-    { "name": "happy" }
-  ],
-  "idle_reset": true
-}
-```
-
-Extension rules:
-
-- keep compatibility with the current simple `display` plus `sound` format where reasonable
-- validate names and durations strictly
-- normalize built-in references at save time
-- keep the file format human-editable
-
-## Expression-Tool Enhancement Direction
-
-The expression-tool should become both an authoring tool and a live test console.
-
-Required new capabilities:
-
-- list built-in expressions
-- preview built-in expressions immediately
-- create a custom asset from a built-in base
-- compose `face_chain` and `sound_chain`
-- preview a saved expression without leaving the tool
-- stop the current expression and return to `idle`
-
-Recommended menu growth:
-
-- list expressions
-- list built-in expressions
-- preview built-in expression
-- create expression
-- edit expression
-- show expression
-- run expression
-- delete expression
-- set idle
-- stop active expression
-- exit
-
-## Official OpenClaw Plugin Tool Wrapper
-
-The refined plan must include an official OpenClaw plugin agent tool, not only a local CLI.
-
-Recommended wrapper design:
-
-- one plugin tool namespace for NinjaClawBot actions
-- optional tool registration with explicit allowlisting
-- JSON-schema parameters
-- typed structured results from `ninjaclawbot`
-
-Recommended tool surface:
-
-- `ninjaclawbot.perform_reply`
-- `ninjaclawbot.perform_expression`
-- `ninjaclawbot.perform_movement`
-- `ninjaclawbot.health_check`
-- `ninjaclawbot.list_capabilities`
-- `ninjaclawbot.set_idle`
-- `ninjaclawbot.stop_all`
-
-Design rule:
-
-- OpenClaw should prefer `perform_reply` for normal conversational behavior
-- lower-level actions stay available, but the preferred path should preserve emotion policy and idle policy automatically
-
-Why plugin tool over shell-only integration:
-
-- structured schema validation
-- explicit allowlist control
-- clearer agent behavior
-- easier testing
-- safer than exposing raw shell commands or direct driver calls
-
-## OpenClaw Skill Wrapper
-
-The refined plan must also include a dedicated OpenClaw skill.
-
-Purpose:
-
-- teach the agent when to use `perform_reply` versus lower-level actions
-- teach the emotion mapping policy
-- teach the idle requirement
-- provide examples and guardrails
-
-Skill requirements:
-
-- explain that the robot should show `idle` while waiting for user input
-- explain that OpenClaw must not call raw `pi5*` tools directly
-- explain the preferred action flow
-- include emotion mapping examples
-- include uncertainty and clarification behavior examples
-
-## Recommended OpenClaw Behavior Rules
-
-The skill and wrapper should explicitly encode these rules:
-
-1. While waiting for user input, keep the robot in `idle`.
-2. For greetings, use a happy face and happy sound.
-3. For normal answers, use a speaking face and keep transitions smooth.
-4. For uncertainty, clarification requests, or missing answers, use `confusing`.
-5. For warnings or problems, use `warning` or `error`.
-6. After temporary reactions, return to `idle` unless another action is immediately running.
-7. Do not call raw `pi5disp`, `pi5buzzer`, `pi5servo`, or `pi5vl53l0x` commands from OpenClaw.
-8. Use the `ninjaclawbot` plugin tool as the single robot-control boundary.
-
-## Stage 1: Expression-Tool Enhancement
-
-Stage 1 covers phases 1 through 5 from the earlier version of this plan.
-
-Stage 1 goal:
-
-- build a reliable expression engine
-- add varied built-in facial and sound expressions
-- make `expression-tool` the main manual console for previewing and testing built-in expressions on Raspberry Pi
-
-Stage 1 includes:
-
-- expression contract and catalog foundation
-- first-class animated face engine
-- built-in sound expression engine
-- persistent idle policy and expression orchestration
-- expression-tool enhancement
-
-### Phase 1: Expression Contract And Catalog Foundation
+- automatic greeting expression on OpenClaw gateway startup
+- automatic transition to persistent `idle` after startup greeting
+- automatic `thinking` reaction on incoming user query
+- answer-state emotion rendering through the existing reply policy surface
+- graceful shutdown sequence with `sleepy`, display power-down, and pipeline cleanup
+- deeper plugin integration with OpenClaw lifecycle hooks instead of tool-only usage
+- service-based runtime persistence so `idle` can remain active between agent actions
+
+### Stage 2 Part 1: Detailed Implementation Plan
+
+This section is the first part of Stage 2 by design. It is the execution plan for the Always On OpenClaw integration work.
+
+#### Phase 2.1: Persistent Lifecycle Runtime Service
 
 Objective:
 
-- extend the expression asset model and add a built-in expression catalog contract
+- add a long-lived `ninjaclawbot` service that owns one `NinjaClawbotRuntime`
+- keep one `ExpressionPlayer` alive across OpenClaw events
+- centralize lifecycle commands for `startup`, `idle`, `thinking`, `reply`, and `shutdown`
 
 Files or modules likely to change:
 
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-- `ninjaclawbot/src/ninjaclawbot/actions.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- new `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `ninjaclawbot/src/ninjaclawbot/adapters.py`
+- new `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- new `ninjaclawbot/src/ninjaclawbot/openclaw/ipc.py`
+- new `ninjaclawbot/tests/test_openclaw_service.py`
+
+Classes, functions, or interfaces to preserve:
+
+- `ActionExecutor`
+- `NinjaClawbotRuntime`
+- existing action names such as `perform_reply`, `perform_expression`, `set_idle`, and `stop_all`
+- existing CLI tool bridge payload shape for compatibility
+
+Design notes:
+
+- the new service should wrap the current runtime instead of bypassing it
+- the current one-shot CLI path should remain available for manual use and fallback
+- no `pi5*` driver public API changes should be required in this phase
 
 Lint and validation:
 
-- `uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests`
+- `uv run python -m compileall ninjaclawbot/src ninjaclawbot/tests`
 - `uv run ruff check ninjaclawbot/src ninjaclawbot/tests`
 - `uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests`
 - `uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml`
+
+Manual Raspberry Pi validation required:
+
+- start the service manually without OpenClaw and confirm it initializes once
+- trigger startup behavior and verify greeting runs once
+- verify `idle` stays visible for at least 30 seconds without the runtime closing
+- confirm clean shutdown leaves no stuck display or buzzer state
+
+Hardware risk:
+
+- medium
+
+Documentation updates required:
+
+- `EnhancementPlan.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+- `InstallationGuide.md`
+
+#### Phase 2.2: OpenClaw Plugin Lifecycle Hook Integration
+
+Objective:
+
+- upgrade the OpenClaw plugin from a tool-only process launcher into a service-aware client
+- register lifecycle hooks so NinjaClawBot reacts automatically during the OpenClaw gateway loop
+
+Files or modules likely to change:
+
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+- optional new plugin-side lifecycle helper files
+
+Interfaces to preserve:
+
+- existing tool names such as `ninjaclawbot_reply`, `ninjaclawbot_set_idle`, and `ninjaclawbot_stop_all`
+- existing plugin config keys `projectRoot`, `rootDir`, and `uvCommand` unless an additive extension is required
+
+Design notes:
+
+- preferred hook coverage: `gateway_start`, `message_received`, and `gateway_stop`
+- `message_sent` should be used only when it clearly helps avoid missed transitions
+- the plugin should call the persistent service where available and keep the current bridge as fallback only if needed
+
+Lint and validation:
+
+- `npm run typecheck` in `integrations/openclaw/ninjaclawbot-plugin`
+- `npm test` in `integrations/openclaw/ninjaclawbot-plugin`
+- rerun the Phase 2.1 Python validation gate
+
+Manual Raspberry Pi validation required:
+
+- start the OpenClaw gateway and confirm automatic greeting then `idle`
+- send a user message and confirm the thinking transition occurs before the final reply
+- stop the OpenClaw gateway and confirm the shutdown hook fires reliably
+
+Hardware risk:
+
+- low to medium
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+- `InstallationGuide.md`
+
+#### Phase 2.3: Reply And State Coordination
+
+Objective:
+
+- connect OpenClaw lifecycle events and the existing reply policy into one consistent behavior model
+- ensure the robot shows the correct temporary state and then returns to the correct persistent state
+
+Files or modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
+- `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/executor.py`
+- new lifecycle controller modules under `ninjaclawbot/src/ninjaclawbot/openclaw/`
+- `ninjaclawbot/tests/test_policy.py`
+- `ninjaclawbot/tests/test_executor.py`
+
+Interfaces to preserve:
+
+- `perform_reply` as the main answer-expression API
+- existing reply-state names already shipped in the plugin schema
+- current built-in expressions unless additive improvements are required
+
+Design notes:
+
+- gateway startup should trigger `greeting` and then `idle`
+- incoming query should trigger `thinking`
+- final answer should be expressed through the existing reply-state mechanism
+- shutdown should trigger `sleepy` without automatically bouncing back to `idle`
+- if needed, add an explicit lifecycle-aware override instead of overloading normal reply behavior
+
+Lint and validation:
+
+- same Python validation gate as Phase 2.1
+- targeted tests for lifecycle state transitions
+- tests ensuring shutdown expression does not reset to `idle`
+
+Manual Raspberry Pi validation required:
+
+- verify greeting then idle on startup
+- verify `thinking -> answer emotion -> idle` on greeting, normal answer, clarification, success, warning, and error cases
+- verify `sleepy -> display off -> cleanup` on gateway stop
+
+Hardware risk:
+
+- medium
+
+Documentation updates required:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+
+#### Phase 2.4: Config, Safety, And Documentation Hardening
+
+Objective:
+
+- remove integration rough edges discovered during the audit
+- document the lifecycle model, fallback path, safety boundaries, and Pi validation steps clearly
+
+Files or modules likely to change:
+
+- `ninjaclawbot/src/ninjaclawbot/adapters.py`
+- `pi5disp/src/pi5disp/cli/_common.py` or an equivalent display-construction path if needed
+- `integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+- `InstallationGuide.md`
+
+Interfaces to preserve:
+
+- standalone `pi5*` package boundaries
+- current driver public entry points
+- current manual `ninjaclawbot` CLI usage
+
+Design notes:
+
+- make display config honor `--root-dir` consistently during integrated runtime usage
+- document the service path and the one-shot fallback path separately
+- make shutdown and recovery instructions explicit for Raspberry Pi operators
+
+Lint and validation:
+
+- rerun the `ninjaclawbot` validation gate
+- rerun affected `pi5disp` tests if display config loading changes
+- rerun plugin typecheck and tests
+
+Manual Raspberry Pi validation required:
+
+- verify the configured display file used by `ninjaclawbot` is the root-level config
+- restart the OpenClaw gateway multiple times and confirm no stale service or socket remains
+- verify `ninjaclawbot_stop_all` still works as the emergency fallback
 
 Hardware risk:
 
@@ -451,388 +291,80 @@ Documentation updates required:
 - `README.md`
 - `DevelopmentGuide.md`
 - `DevelopmentLog.md`
+- `InstallationGuide.md`
 
-### Phase 2: First-Class Animated Face Engine
+### Stage 2 Part 2: Target OpenClaw Behavior
 
-Objective:
+The intended Stage 2 user-facing behavior is:
 
-- implement the procedural face engine and shared drawing primitives
+1. Startup
+   - when the OpenClaw gateway starts, NinjaClawBot is initialized automatically
+   - the robot performs a greeting expression with face and sound
+   - after the greeting, the robot moves into persistent `idle`
 
-Files or modules likely to change:
+2. Idle waiting
+   - while the OpenClaw agent is waiting for a user query, the robot remains in `idle`
+   - `idle` is owned by `ninjaclawbot`, not manually retriggered after every tool call
 
-- new `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
-- new `ninjaclawbot/src/ninjaclawbot/expressions/primitives.py`
-- new `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+3. Query received
+   - when a user query arrives, the robot shows `thinking`
+   - the thinking state stays active while the agent is working
 
-Lint and validation:
+4. Answer delivery
+   - when the final answer is ready, the robot shows the matching answer emotion
+   - after the answer reaction completes, the robot returns to `idle`
 
-- same package-local gate
-- expression-render tests
-- animation-loop lifecycle tests
+5. Shutdown
+   - when the OpenClaw gateway stops, the robot shows `sleepy`
+   - after the expression completes, the display is turned off and the runtime is cleaned up
 
-Hardware risk:
+### Stage 2 Part 3: Feasibility Summary
 
-- high
+Stage 2 is feasible on top of the existing repository, but it is not a small reply-schema-only change.
 
-Documentation updates required:
+The main architectural fact is that the current OpenClaw plugin is still one-shot:
 
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
+- each plugin tool invocation spawns a fresh `ninjaclawbot` process
+- the current CLI closes the runtime after every action
+- a truly persistent `idle` state cannot survive across OpenClaw tool calls in the current model
 
-### Phase 3: Built-In Sound Expression Engine
+Because of that, the robust solution is:
 
-Objective:
+- a persistent `ninjaclawbot` lifecycle service
+- OpenClaw lifecycle hooks in the plugin
+- controlled coordination between startup, thinking, answer, idle, and shutdown states
 
-- expand sound expressions into a richer, coordinated emotion catalog
+### Stage 2 Validation Gate
 
-Files or modules likely to change:
+Stage 2 should not be considered complete until Raspberry Pi validation passes with a real OpenClaw gateway session.
 
-- new `ninjaclawbot/src/ninjaclawbot/expressions/sounds.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
+Required validation groups:
 
-Lint and validation:
+- safe smoke tests
+- plugin and lifecycle communication tests
+- conversational state-transition tests
+- shutdown and recovery tests
 
-- same package-local gate
-- sequence-duration tests
-- playback ordering tests
+Expected outcomes:
 
-Hardware risk:
+- the robot greets automatically on gateway start
+- the robot stays in `idle` while waiting
+- the robot shows `thinking` on incoming query
+- the robot shows the correct answer emotion and returns to `idle`
+- the robot shuts down with `sleepy`, powers off the display, and cleans up safely
 
-- medium
+Rollback path:
 
-Documentation updates required:
+- disable the lifecycle hook integration in the plugin
+- fall back to the current one-shot `ninjaclawbot` plugin tools
+- use `ninjaclawbot_stop_all` if runtime behavior becomes unsafe
 
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
+### Research Basis
 
-### Phase 4: Persistent Idle Policy And Expression Orchestration
+Stage 2 planning is based on:
 
-Objective:
+- the existing `ninjaclawbot` runtime, expression, and OpenClaw plugin code in this repository
+- official OpenClaw plugin documentation
+- official OpenClaw agent-loop lifecycle documentation
+- official OpenClaw prompting documentation for `BOOT.md` and callbacks
 
-- add `idle` state ownership, `face_chain`, `sound_chain`, and deterministic reset behavior
-
-Files or modules likely to change:
-
-- new `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-
-Lint and validation:
-
-- same package-local gate
-- state-transition tests
-- idle-restore tests
-
-Hardware risk:
-
-- high
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-
-### Phase 5: Expression-Tool Enhancement
-
-Objective:
-
-- upgrade `expression-tool` into a full authoring and live-preview console
-
-Files or modules likely to change:
-
-- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-
-Lint and validation:
-
-- same package-local gate
-- CLI tests
-- asset round-trip tests
-
-Hardware risk:
-
-- medium
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-
-## Stage 1 Mandatory Raspberry Pi Validation
-
-Stage 1 must not be considered complete until manual Raspberry Pi validation passes.
-
-### Safe smoke tests
-
-- `uv sync --extra dev`
-- `uv run ninjaclawbot health-check`
-- `uv run ninjaclawbot expression-tool`
-- confirm clean exit after `Goodbye!`
-
-### Device communication tests
-
-- verify the display can render built-in expressions
-- verify the buzzer can play full emotion sequences
-- verify `idle` can start and stop cleanly
-
-### Expression behavior tests
-
-- preview `idle`, `happy`, `speaking`, `confusing`, and `sleepy`
-- preview at least one new vivid positive emotion and one new vivid negative emotion
-- run a saved built-in expression from `expression-tool`
-- run `perform-expression` from the command line
-- verify temporary reactions return to `idle`
-
-### Expected outcomes
-
-- the face engine renders smoothly without obvious frame tearing
-- the built-in facial expressions are visually distinct and consistent
-- sound expressions match the intended emotion
-- `expression-tool` can manually trigger and preview the built-in expressions reliably
-- no GPIO cleanup traceback appears on exit
-
-### Rollback steps
-
-- stop the running command
-- power down before rewiring display or buzzer hardware
-- remove or restore the changed expression asset files if a test asset is invalid
-- return to the last validated root environment with `uv sync --extra dev`
-
-## Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper
-
-Stage 2 covers phases 6 through 8 from the earlier version of this plan.
-
-Stage 2 goal:
-
-- establish robust communication between OpenClaw and NinjaClawBot
-- encode explicit reply-emotion behavior and idle behavior
-- ensure OpenClaw uses only the approved `ninjaclawbot` control surface
-
-Stage 2 includes:
-
-- reply-emotion policy layer
-- official OpenClaw plugin tool
-- OpenClaw skill wrapper
-
-### Phase 6: Reply-Emotion Policy Layer
-
-Objective:
-
-- implement reply-state to expression mapping for OpenClaw-facing reply behavior
-
-Files or modules likely to change:
-
-- new `ninjaclawbot/src/ninjaclawbot/expressions/reply_policy.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/src/ninjaclawbot/actions.py`
-
-Lint and validation:
-
-- same package-local gate
-- policy mapping tests
-- structured reply tests
-
-Hardware risk:
-
-- medium
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-
-### Phase 7: Official OpenClaw Plugin Tool
-
-Objective:
-
-- implement an official OpenClaw plugin tool with JSON-schema parameters
-
-Files or modules likely to change:
-
-- new OpenClaw plugin directory in the repo
-- plugin manifest or config files
-- tool schema and handler files
-- `README.md`
-
-Lint and validation:
-
-- root Python gate where applicable
-- plugin-local smoke tests
-- schema validation tests
-
-Hardware risk:
-
-- medium
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-
-### Phase 8: OpenClaw Skill Wrapper
-
-Objective:
-
-- create a skill that teaches the robot behavior rules, emotion mapping, and tool usage
-
-Files or modules likely to change:
-
-- new OpenClaw `SKILL.md`
-- optional supporting examples or templates
-
-Lint and validation:
-
-- markdown review
-- wrapper example review
-- manual OpenClaw prompt-path review
-
-Hardware risk:
-
-- low
-
-Documentation updates required:
-
-- `README.md`
-- `DevelopmentGuide.md`
-- `DevelopmentLog.md`
-
-## Stage 2 Mandatory Raspberry Pi Validation
-
-Stage 2 must not be considered complete until OpenClaw-driven manual Raspberry Pi validation passes.
-
-### Safe smoke tests
-
-- start the OpenClaw agent on the Raspberry Pi
-- confirm the OpenClaw plugin tool is enabled and allowlisted
-- confirm the OpenClaw skill is loaded
-- confirm the robot returns to `idle` after startup
-
-### Device communication tests
-
-- OpenClaw triggers a built-in expression through the plugin tool
-- OpenClaw requests a movement through the plugin tool
-- OpenClaw requests `health_check` and receives structured results
-
-### Reply policy tests
-
-- greeting prompt should trigger `happy`
-- clarification prompt should trigger `confusing`
-- no-answer case should trigger `confusing` or `sad`
-- normal response should trigger `speaking`
-- waiting state should restore `idle`
-
-### Expected outcomes
-
-- OpenClaw uses the approved wrapper instead of raw `pi5*` functions
-- emotion selection matches the documented policy
-- the reply behavior is consistent across repeated prompts
-- the robot returns to `idle` after temporary reactions
-
-### Rollback steps
-
-- disable the OpenClaw plugin tool or remove it from the allowlist
-- remove or disable the OpenClaw skill wrapper if behavior is incorrect
-- fall back to manual `ninjaclawbot` CLI usage from the project root
-- restore the last validated Stage 1 expression behavior before retrying Stage 2
-
-## Quality Gates
-
-Default gate for every implementation phase:
-
-```bash
-uv run python -m compileall conftest.py ninjaclawbot/src ninjaclawbot/tests
-uv run ruff check ninjaclawbot/src ninjaclawbot/tests
-uv run ruff format --check ninjaclawbot/src ninjaclawbot/tests
-uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
-```
-
-Additional root smoke checks after interface or wrapper changes:
-
-```bash
-uv run ninjaclawbot --help
-uv run ninjaclawbot expression-tool
-uv run ninjaclawbot perform-expression <name>
-```
-
-## Recommended Implementation Order
-
-Recommended order:
-
-1. Stage 1:
-   - Phase 1: expression contract and catalog foundation
-   - Phase 2: first-class animated face engine
-   - Phase 3: sound expression engine
-   - Phase 4: persistent idle policy and orchestration
-   - Phase 5: expression-tool enhancement
-2. Stage 1 mandatory Raspberry Pi validation
-3. Stage 2:
-   - Phase 6: reply-emotion policy layer
-   - Phase 7: OpenClaw plugin tool
-   - Phase 8: OpenClaw skill wrapper
-4. Stage 2 mandatory Raspberry Pi validation
-
-This order is deliberate:
-
-- Stage 1 should stabilize the manual expression layer before any OpenClaw integration starts
-- the plugin wrapper should not be built before the expression engine and reply policy exist
-- the skill should teach the final tool surface, not an unstable intermediate one
-- `idle` policy must live in `ninjaclawbot` before OpenClaw instructions can depend on it
-
-## References
-
-Legacy code references:
-
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/facial_expressions.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/robot_sound.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/web_server.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/ninja_agent.py`
-- `NinjaRobotV5_bak/ninja_core/src/ninja_core/api_wrappers.py`
-
-Current NinjaClawBot references:
-
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
-
-OpenClaw research references:
-
-- official Raspberry Pi runtime documentation
-- official tool documentation
-- official plugin agent tool documentation
-- official skill documentation
-
-## Current Status
-
-Current state:
-
-- Stage 1 expression-engine and `expression-tool` work has been implemented
-- Stage 2 reply policy, OpenClaw plugin wrapper, and OpenClaw skill wrapper have been implemented in the repository
-- the remaining Stage 2 blocker is manual Raspberry Pi validation with a real OpenClaw agent session
-- the refined plan now explicitly includes:
-  - a first-class expression engine
-  - a persistent idle policy
-  - a reply-emotion policy layer
-  - an official OpenClaw plugin tool
-  - an OpenClaw skill wrapper with behavior rules and examples
-- the work is now explicitly split into:
-  - Stage 1: Expression-Tool Enhancement
-  - Stage 2: OpenClaw Reply Policy, Plugin Tool, And Skill Wrapper
-- each stage now has a mandatory Raspberry Pi validation gate before the next stage begins
-
-Next implementation decision needed:
-
-- run the Stage 2 Raspberry Pi validation checklist and capture pass or failure details in `DevelopmentLog.md`
