@@ -195,3 +195,17 @@ def test_openclaw_action_closes_executor_runtime(tmp_path: Path, monkeypatch) ->
     assert result.exit_code == 0
     assert len(created) == 1
     assert created[0].runtime.closed is True
+
+
+def test_openclaw_serve_delegates_to_stdio_bridge(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    calls: list[Path] = []
+
+    def fake_serve(root_dir: str) -> None:
+        calls.append(Path(root_dir))
+
+    monkeypatch.setattr("ninjaclawbot.__main__.serve_stdio", fake_serve)
+    result = runner.invoke(cli, ["--root-dir", str(tmp_path), "openclaw-serve"])
+
+    assert result.exit_code == 0
+    assert calls == [tmp_path]

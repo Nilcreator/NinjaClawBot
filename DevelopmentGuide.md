@@ -74,13 +74,15 @@ Current responsibilities:
 - a reply-emotion policy for OpenClaw-facing conversational replies
 - interactive `movement-tool` and `expression-tool`
 - CLI actions for `health-check`, `list-assets`, `list-capabilities`, `move-servos`, `perform-movement`, `perform-expression`, `perform-reply`, `set-idle`, and JSON `run-action`
-- a machine-facing `openclaw-action` bridge used only by the official OpenClaw plugin
+- a hidden `openclaw-serve` stdio bridge that keeps one runtime alive for the official OpenClaw plugin background service
+- a hidden one-shot `openclaw-action` bridge kept for compatibility and fallback
 - safe failure reporting when hardware is unavailable or not calibrated yet
+- reusable service-core modules under `ninjaclawbot.openclaw` so future standalone launch modes can reuse the same bridge/runtime ownership logic
 
 Important rule:
 
 - external AI assistants should call `ninjaclawbot`, not the raw `pi5*` drivers directly
-- OpenClaw should call the official plugin wrapper, not invoke `ninjaclawbot` shell commands directly
+- OpenClaw should call the official plugin wrapper, which now prefers the plugin-managed persistent bridge and falls back to the one-shot bridge only when needed
 
 ## ninjaclawbot File Layout
 
@@ -95,6 +97,8 @@ Main package layout:
 - `ninjaclawbot/src/ninjaclawbot/assets.py`
 - `ninjaclawbot/src/ninjaclawbot/runtime.py`
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
@@ -313,9 +317,13 @@ If the OpenClaw plugin does not work:
 - verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
 - verify `plugins.entries.ninjaclawbot.enabled` is `true`
 - verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
+- verify `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is not disabled if you expect persistent idle and lifecycle-aware behavior
+- restore the default bridge timeouts if `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` were tuned too aggressively
 - verify the target agent allowlist contains the `ninjaclawbot_*` tool names
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
+- if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path
+- for developer-only bridge debugging, the plugin-managed service starts the hidden command `uv run ninjaclawbot --root-dir <root> openclaw-serve`
 - expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
 
 ### Expression startup responsiveness

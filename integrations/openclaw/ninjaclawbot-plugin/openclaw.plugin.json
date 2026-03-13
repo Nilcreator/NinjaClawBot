@@ -22,6 +22,25 @@
         "type": "string",
         "minLength": 1,
         "description": "Command used to invoke uv. Defaults to 'uv'."
+      },
+      "enablePersistentBridge": {
+        "type": "boolean",
+        "description": "Enable the persistent NinjaClawBot bridge managed by the plugin. Defaults to true."
+      },
+      "bridgeStartTimeoutMs": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Startup timeout for the persistent NinjaClawBot bridge in milliseconds."
+      },
+      "bridgeRequestTimeoutMs": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Per-request timeout for the persistent NinjaClawBot bridge in milliseconds."
+      },
+      "bridgeShutdownTimeoutMs": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Shutdown timeout for the persistent NinjaClawBot bridge in milliseconds."
       }
     },
     "required": ["projectRoot"]

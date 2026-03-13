@@ -1,5 +1,5 @@
 import { noArgsSchema, moveServosSchema, nameSchema, replySchema } from "./schemas.js";
-import { runNinjaClawbotAction } from "./runner.js";
+import { ensureBridge, runNinjaClawbotAction, shutdownBridge } from "./runner.js";
 
 type ToolParams = Record<string, unknown>;
 
@@ -33,6 +33,27 @@ function registerOptionalTool(
 }
 
 export default function registerNinjaClawbotPlugin(api: any) {
+  if (typeof api.registerService === "function") {
+    api.registerService({
+      id: "ninjaclawbot-bridge",
+      name: "NinjaClawBot Bridge",
+      async start() {
+        try {
+          await ensureBridge(api);
+        } catch (error) {
+          console.warn(
+            `[ninjaclawbot-bridge] Persistent bridge startup failed, one-shot fallback remains available: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
+      },
+      async stop() {
+        await shutdownBridge();
+      },
+    });
+  }
+
   registerOptionalTool(
     api,
     "ninjaclawbot_reply",

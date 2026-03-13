@@ -1,5 +1,80 @@
 # Development Log
 
+## 2026-03-13
+
+### Phase 2.1 Plugin-Managed Persistent Bridge Foundation
+
+Summary:
+
+- added a reusable `ninjaclawbot.openclaw` service core that keeps one
+  `ActionExecutor` and `NinjaClawbotRuntime` alive across multiple requests
+- added a hidden `ninjaclawbot openclaw-serve` stdio bridge for a long-lived
+  plugin-managed Python process
+- kept the existing hidden `openclaw-action` one-shot bridge for compatibility
+  and fallback
+- refactored the OpenClaw plugin runner so it prefers the persistent bridge,
+  reuses it across tool calls, and degrades safely to the one-shot path if the
+  bridge fails to start or exits unexpectedly
+- registered an OpenClaw plugin background service that starts and stops the
+  persistent bridge with the gateway lifecycle
+- extended the plugin manifest config schema with persistent bridge timeout and
+  enable/disable settings
+- added regression coverage for the persistent bridge protocol, service-core
+  reuse, CLI delegation, and plugin runner command building
+- updated the root project documentation so the OpenClaw architecture and setup
+  guides now describe the persistent bridge plus one-shot fallback model
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/src/ninjaclawbot/openclaw/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/__init__.py)
+- [ninjaclawbot/src/ninjaclawbot/openclaw/service.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/service.py)
+- [ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py)
+- [ninjaclawbot/tests/test_cli_tools.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_cli_tools.py)
+- [ninjaclawbot/tests/test_openclaw_bridge.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_openclaw_bridge.py)
+- [integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json)
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/src/runner.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the previous OpenClaw path spawned a fresh `uv run ninjaclawbot ...` process
+  for every tool call and closed the runtime after each command
+- that model could not support later lifecycle-aware presence features such as
+  persistent idle, startup greeting, or shutdown cleanup
+- Phase 2.1 establishes the persistent transport and runtime ownership layer
+  first, while keeping a safe fallback path and preserving flexibility for a
+  future standalone daemon mode
+
+Lint and test results:
+
+- `cd integrations/openclaw/ninjaclawbot-plugin`
+- `npm run typecheck`
+- `npm test` -> `5 passed`
+- `cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code library/NinjaClawbot/ninjaclawbot`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml` -> `52 passed`
+- root CLI smoke:
+  - `uv run ninjaclawbot --help`
+
+Raspberry Pi validation status:
+
+- not run yet
+- still required before depending on this bridge for real hardware sessions
+- next Pi checks should confirm the plugin starts one warm bridge on gateway
+  startup, repeated OpenClaw calls reuse it, and fallback still works if the
+  bridge is disabled or killed
+- no Always On lifecycle hooks were added yet in this phase, so startup
+  greeting, thinking presence, and shutdown reaction still remain for later
+  phases
+
 ## 2026-03-12
 
 ### OpenClaw Installation Guide Correction

@@ -628,6 +628,10 @@ What this command does:
 - adds the NinjaClawBot tool names to the `main` agent allow list
 - keeps your existing personal settings in the same file
 
+By default, the plugin now prefers a persistent NinjaClawBot bridge while the
+OpenClaw gateway is running. You do not need extra config to enable that basic
+mode.
+
 ### 18.2 Check the updated config
 
 Open the file to confirm the result:
@@ -682,6 +686,36 @@ The important NinjaClawBot parts should now look like this:
   }
 }
 ```
+
+### Optional persistent bridge settings
+
+The plugin-managed persistent bridge is enabled by default. Add these fields
+only if you want to tune timeouts or temporarily force the older one-shot
+fallback path:
+
+```json
+{
+  "plugins": {
+    "entries": {
+      "ninjaclawbot": {
+        "config": {
+          "projectRoot": "/absolute/path/to/NinjaClawbot",
+          "enablePersistentBridge": true,
+          "bridgeStartTimeoutMs": 10000,
+          "bridgeRequestTimeoutMs": 15000,
+          "bridgeShutdownTimeoutMs": 5000
+        }
+      }
+    }
+  }
+}
+```
+
+Notes:
+
+- leave `enablePersistentBridge` at `true` for the normal OpenClaw-to-NinjaClawBot path
+- set `enablePersistentBridge` to `false` only if you need to force the older per-call bridge path while debugging
+- only raise the timeout values if Raspberry Pi startup or hardware initialization is slower than the defaults
 
 ### 18.3 Full reference template for a new `openclaw.json`
 
@@ -853,6 +887,11 @@ Start the OpenClaw gateway service:
 openclaw gateway start
 ```
 
+When the gateway starts, the NinjaClawBot plugin now tries to start a
+persistent Python bridge automatically. If that bridge cannot start, the plugin
+falls back to the older one-shot `openclaw-action` path so the tools can still
+run while you debug the persistent mode.
+
 Check its status:
 
 ```bash
@@ -884,6 +923,8 @@ Expected result:
 
 - OpenClaw can call the plugin tools
 - the plugin calls `ninjaclawbot` from the project root
+- when the persistent bridge is healthy, repeated tool calls reuse one warm runtime
+- if the persistent bridge cannot start, the plugin falls back internally to one-shot calls
 - the robot display and buzzer respond
 - the robot returns to idle when the temporary reply ends
 
@@ -952,9 +993,12 @@ Check:
 - the plugin path in the config is correct
 - `plugins.entries.ninjaclawbot.enabled` is `true`
 - the plugin `projectRoot` points to the NinjaClawBot project root
+- `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is still `true` if you expect persistent idle behavior
+- any custom `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` values are not set too low
 - the OpenClaw agent allowlist includes the `ninjaclawbot_*` tool names
 - the plugin folder passes `npm run typecheck` and `npm test`
 - `uv run ninjaclawbot list-capabilities` works at the project root
+- if simple tool calls work but persistence does not, check the OpenClaw log for `ninjaclawbot-bridge` warnings because the plugin may have degraded to one-shot fallback
 
 ## 23. Where To Read More
 

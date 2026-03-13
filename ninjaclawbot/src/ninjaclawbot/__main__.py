@@ -12,6 +12,7 @@ from ninjaclawbot.cli.common import create_executor, extract_movement_data, pars
 from ninjaclawbot.cli.expression_tool import expression_tool
 from ninjaclawbot.cli.movement_tool import movement_tool
 from ninjaclawbot.expressions.policy import list_reply_states
+from ninjaclawbot.openclaw.bridge import serve_stdio
 
 
 def _execute_and_print(root_dir: str, payload: ActionRequest | dict[str, Any]) -> None:
@@ -86,6 +87,14 @@ def openclaw_action(ctx: click.Context, payload: str) -> None:
 
     request = ActionRequest.from_dict(json.loads(payload))
     _execute_and_print(ctx.obj["root_dir"], request)
+
+
+@cli.command("openclaw-serve", hidden=True)
+@click.pass_context
+def openclaw_serve(ctx: click.Context) -> None:
+    """Persistent stdio bridge for the OpenClaw plugin service."""
+
+    serve_stdio(ctx.obj["root_dir"])
 
 
 @cli.command("move-servos")

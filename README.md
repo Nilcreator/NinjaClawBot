@@ -145,16 +145,19 @@ Instead, the flow is:
 ```text
 OpenClaw agent
   -> NinjaClawBot OpenClaw plugin
-  -> ninjaclawbot action bridge
+  -> plugin-managed persistent ninjaclawbot bridge
+  -> ninjaclawbot runtime / action executor
   -> pi5* hardware libraries
 ```
 
 This gives you:
 
 - one clear robot-control boundary
+- one warm runtime reused across OpenClaw tool calls while the gateway is running
 - typed JSON-style action results
 - safer hardware access
 - a shared reply-emotion policy
+- a one-shot `openclaw-action` fallback path if the persistent bridge is unavailable
 
 For the exact OpenClaw setup and plugin configuration steps, use
 [InstallationGuide.md](InstallationGuide.md).
