@@ -330,12 +330,13 @@ If the OpenClaw plugin does not work:
 - verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
 - verify `plugins.entries.ninjaclawbot.config.uvCommand` is the absolute result of `command -v uv` on the Raspberry Pi if the gateway log shows `spawn uv ENOENT`
 - verify `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is not disabled if you expect persistent idle and lifecycle-aware behavior
-- verify `plugins.entries.ninjaclawbot.config.enableAlwaysOn` is not disabled if you expect startup greeting, auto-thinking, and sleepy shutdown
-- verify `plugins.entries.ninjaclawbot.config.enableStartupGreeting`, `enableAutoThinking`, and `enableShutdownSequence` match the behavior you expect
+- do not rely on optional `enableAlwaysOn`-style config keys unless the installed OpenClaw build accepts them; the validated Raspberry Pi path now uses `hooks.internal.boot-md` plus workspace `BOOT.md`
 - verify `openclaw hooks list --verbose` shows `ninjaclawbot` lifecycle hook entries; if they do not appear, startup greeting and sleepy shutdown cannot fire even when the bridge is healthy
+- verify `boot-md` is enabled and that the workspace `BOOT.md` file exists if you expect a startup greeting on the current validated Raspberry Pi setup
 - restore the default bridge timeouts if `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` were tuned too aggressively
 - verify the target agent allowlist contains the `ninjaclawbot_*` tool names
 - start a new chat session after plugin or skill changes so the OpenClaw session prompt picks up the latest NinjaClawBot skill snapshot
+- verify the workspace `AGENTS.md` contains the NinjaClawBot reply policy if the model keeps answering with plain text instead of calling `ninjaclawbot_reply`
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path

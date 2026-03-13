@@ -1,51 +1,78 @@
 # NinjaClawBot Installation Guide
 
-This guide is the **single source of truth** for installing, setting up, calibrating, and testing the full NinjaClawBot project on a Raspberry Pi 5.
+This guide walks you through the full Raspberry Pi 5 setup for **NinjaClawBot**
+from a clean machine to a working OpenClaw-connected robot.
 
-Use this guide if you want to:
+The goal is simple:
 
-- install the whole project from scratch
-- set up the `pi5*` hardware libraries correctly
-- calibrate the robot before integrated use
-- test `ninjaclawbot` from the project root
-- connect NinjaClawBot to the OpenClaw agent
+- install the project on Raspberry Pi
+- wire and test the hardware safely
+- connect NinjaClawBot to OpenClaw
+- enable the validated startup -> reply -> power-off behavior
 
-If you want a shorter project overview, read [README.md](README.md).
+This guide is written for non-developers too. If a short technical term is used,
+the explanation is written next to it in simple words.
 
-If you want advanced developer details, read [DevelopmentGuide.md](DevelopmentGuide.md).
+If you want the short project overview, read [README.md](README.md).
 
-## 1. What You Need
+If you want developer internals, read [DevelopmentGuide.md](DevelopmentGuide.md).
+
+## 1. What You Will Build
+
+At the end of this guide, your Raspberry Pi should be able to do this:
+
+- show a startup greeting when OpenClaw starts
+- show a reply expression when OpenClaw answers a Telegram message
+- return to idle after the reply
+- show a sleepy expression and power down the display when OpenClaw stops
+
+The validated OpenClaw setup used by this guide includes:
+
+- OpenClaw gateway on the Raspberry Pi
+- Telegram channel enabled
+- NinjaClawBot plugin enabled
+- internal `boot-md` hook enabled
+- workspace `BOOT.md` for startup greeting
+- workspace `AGENTS.md` for reliable reply-tool behavior
+
+## 2. What You Need
 
 Before you start, make sure you have:
 
 - a Raspberry Pi 5
 - Raspberry Pi OS Bookworm or newer
 - internet access
-- a keyboard, screen, or remote shell access
-- the NinjaClawBot repository
-- the robot hardware you want to use
+- a keyboard and screen, or SSH (remote terminal access)
+- the hardware you plan to use
 
-Optional hardware covered by this guide:
+Optional hardware supported by this project:
 
-- passive buzzer for [`pi5buzzer`](pi5buzzer/README.md)
-- hobby servos for [`pi5servo`](pi5servo/README.md)
-- ST7789V SPI display (small SPI screen) for [`pi5disp`](pi5disp/README.md)
-- VL53L0X Time-of-Flight sensor (laser distance sensor) for [`pi5vl53l0x`](pi5vl53l0x/README.md)
-- DFRobot Raspberry Pi IO Expansion HAT (DFR0566) if you want HAT-based servo control
+- a passive buzzer for [`pi5buzzer`](pi5buzzer/README.md)
+- servos for [`pi5servo`](pi5servo/README.md)
+- an ST7789V SPI display
+- a VL53L0X distance sensor
+- a DFR0566 Raspberry Pi IO Expansion HAT if you want HAT-based servo control
 
-## 2. Safety Before Powering Hardware
+## 3. Safety First
 
-Please read these simple safety rules first:
+Please read this before wiring anything:
 
-- power off the Raspberry Pi before rewiring GPIO (general-purpose input/output), SPI (display bus), or I2C (sensor bus) hardware
-- use **external servo power** for real servo testing
-- keep a **common ground** (shared electrical ground) between the Raspberry Pi and external servo power
+- power off the Raspberry Pi before rewiring GPIO pins
+- use **external power** for real servo testing
+- keep a **common ground** between the Raspberry Pi and the servo power supply
 - start with **one servo only** for the first movement test
-- keep servo arms free from obstacles during calibration
+- keep the servo arm free so it cannot hit anything during calibration
 
-## 3. Update the Raspberry Pi
+Short explanations:
 
-This makes sure the operating system is current before installing tools.
+- `GPIO`: the Raspberry Pi control pins
+- `SPI`: the fast pin bus used by many small displays
+- `I2C`: the two-wire bus used by small sensors and HATs
+- `PWM`: a timed signal used to control servo position
+
+## 4. Update the Raspberry Pi
+
+Run:
 
 ```bash
 sudo apt update
@@ -53,11 +80,11 @@ sudo apt full-upgrade -y
 sudo reboot
 ```
 
-After reboot, log in again.
+After the Pi reboots, log in again.
 
-## 4. Install System Packages
+## 5. Install Basic System Packages
 
-These packages support Python builds and Raspberry Pi hardware tools.
+These packages are needed for building Python libraries and checking hardware.
 
 ```bash
 sudo apt update
@@ -70,24 +97,24 @@ sudo apt install -y \
   i2c-tools
 ```
 
-What these are for:
+What they do:
 
-- `git`: downloads the repository
+- `git`: downloads and updates the repository
 - `curl`: downloads installers
 - `python3-dev`: Python build support
 - `build-essential`: compiler tools
-- `swig`: needed if a low-level library must build from source
-- `i2c-tools`: used to test I2C devices such as the VL53L0X and DFR0566
+- `swig`: helper tool sometimes needed for native bindings
+- `i2c-tools`: checks I2C devices such as the distance sensor or HAT
 
-## 5. Enable Raspberry Pi Interfaces
+## 6. Enable Raspberry Pi Interfaces
 
-NinjaClawBot uses:
+NinjaClawBot can use:
 
 - `SPI` for the display
-- `I2C` for the VL53L0X and DFR0566 HAT
-- `PWM` (pulse-width modulation, a timed signal used for servo control) for direct header-connected servos
+- `I2C` for the distance sensor or HAT
+- `PWM` for direct servo control from the Pi header
 
-Open the Raspberry Pi setup tool:
+Open the Raspberry Pi setup menu:
 
 ```bash
 sudo raspi-config
@@ -98,11 +125,15 @@ Enable:
 1. `Interface Options` -> `SPI` -> `Yes`
 2. `Interface Options` -> `I2C` -> `Yes`
 
-Exit the tool.
+Then reboot:
 
-## 6. Enable PWM for Direct Raspberry Pi Servo Pins
+```bash
+sudo reboot
+```
 
-If you plan to drive servos from the Raspberry Pi header directly, add a PWM overlay (firmware setting that enables hardware PWM pins).
+## 7. Optional: Enable Direct PWM Pins for Header Servos
+
+Do this only if you plan to drive servos directly from Raspberry Pi GPIO pins.
 
 Open:
 
@@ -110,92 +141,113 @@ Open:
 sudo nano /boot/firmware/config.txt
 ```
 
-For GPIO 12 and GPIO 13, add:
+Add this line:
 
 ```ini
 dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4
 ```
 
-Save the file and reboot:
+Save, exit, and reboot:
 
 ```bash
 sudo reboot
 ```
 
-If you use only the DFR0566 HAT PWM outputs, this step is not required for those HAT PWM channels.
+If you use only the DFR0566 HAT outputs, you can skip this step.
 
-## 7. Install `uv`
+## 8. Install `uv`
 
-`uv` is the project’s Python package manager and virtual-environment tool.
+`uv` is the Python environment manager used by this project.
 
-Install it with:
+Install it:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-Then load it into the shell:
-
-```bash
 source "$HOME/.local/bin/env"
 ```
 
-Check that it works:
+Check it:
 
 ```bash
-uv --help
+command -v uv
+uv --version
 ```
 
 Expected result:
 
-- a help screen appears
+- the first command prints a full path such as `/home/YOUR_USERNAME/.local/bin/uv`
+- the second command prints a version number
 
-## 8. Install Node.js for OpenClaw
+If `command -v uv` prints nothing, stop here and fix that first.
 
-OpenClaw needs Node.js 22.12.0 or newer.
+## 9. Install Node.js and OpenClaw
 
-Check your current version:
+OpenClaw needs Node.js.
+
+Check whether Node.js is already available:
 
 ```bash
 node --version
 npm --version
 ```
 
-If Node.js is missing or too old, install Node.js 22 LTS (long-term support) before continuing.
+If Node.js is missing or too old, install OpenClaw first by following the
+current official guide, then come back here:
 
-## 9. Clone the NinjaClawBot Repository
+- [OpenClaw Quickstart](https://docs.openclaw.ai/start/quickstart)
+
+At the end of the OpenClaw setup, you should already have:
+
+- the `openclaw` command
+- a working `~/.openclaw/openclaw.json`
+- your own login, model, Telegram, and gateway secrets already configured
+
+Important:
+
+- do **not** paste your own secrets into this repository
+- do **not** replace the whole `openclaw.json` with an example from the internet
+- this guide patches your existing `openclaw.json` safely instead
+
+## 10. Clone NinjaClawBot
+
+Clone the repository to your home folder:
 
 ```bash
+cd ~
 git clone https://github.com/Nilcreator/NinjaClawBot.git
-cd NinjaClawBot/"Code library"/NinjaClawbot
+cd ~/NinjaClawBot
 ```
 
-From this point on, **stay in the project root** unless a step tells you otherwise.
-
-## 10. Install the Full Project From the Root
-
-This is the main install step for the whole project.
+From here onward, this guide assumes the project root is:
 
 ```bash
+~/NinjaClawBot
+```
+
+## 11. Install the Python Environment
+
+Install the full project from the root:
+
+```bash
+cd ~/NinjaClawBot
 uv sync --extra dev
 ```
 
 This installs:
 
 - `ninjaclawbot`
-- `pi5buzzer[pi]`
-- `pi5servo[pi]`
-- `pi5disp[pi]`
-- `pi5vl53l0x[pi]`
+- `pi5buzzer`
+- `pi5servo`
+- `pi5disp`
+- `pi5vl53l0x`
 - development tools such as `pytest` and `ruff`
 
-You do **not** need to install each `pi5*` library separately when using the full project.
-
-## 11. Verify the Root Environment
+## 12. Verify the Basic Environment
 
 Run:
 
 ```bash
+cd ~/NinjaClawBot
 uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5vl53l0x; print('imports-ok')"
 uv run ninjaclawbot --help
 uv run pi5servo --help
@@ -206,48 +258,41 @@ uv run pi5vl53l0x --help
 
 Expected result:
 
-- the first command prints `imports-ok`
+- `imports-ok` is printed
 - all help commands work
 
-## 12. Wire the Hardware
+## 13. Wire the Hardware
 
-This guide does not repeat every wiring table in full. Use the dedicated library READMEs for detailed wiring:
+Use the dedicated library READMEs for wiring details:
 
 - buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
 - servo: [pi5servo/README.md](pi5servo/README.md)
 - display: [pi5disp/README.md](pi5disp/README.md)
 - distance sensor: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
 
-Important notes:
+Useful first-test notes:
 
-- `pi5servo` direct PWM works best on Raspberry Pi GPIO 12 and GPIO 13 for first tests
-- if you use the DFR0566 HAT PWM outputs:
-  - physical `PWM0` = `hat_pwm1`
-  - physical `PWM1` = `hat_pwm2`
-  - physical `PWM2` = `hat_pwm3`
-  - physical `PWM3` = `hat_pwm4`
-- the VL53L0X should appear at I2C address `0x29`
-- the DFR0566 HAT should appear at I2C address `0x10` unless you changed it
+- direct servo testing works best on GPIO 12 and GPIO 13
+- the VL53L0X usually appears at I2C address `0x29`
+- the DFR0566 HAT usually appears at I2C address `0x10`
 
-## 13. Initialize and Calibrate the `pi5*` Libraries
+## 14. Create the Hardware Config Files
 
-Do these steps in order.
+Do these steps from the project root.
 
-### 13.1 Servo setup (`pi5servo`) - required
+### 14.1 Servo setup
 
-Servo calibration is the most important setup step for real robot motion.
-
-Check the servo backend first:
+Check the backend:
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5servo status --no-probe --pins 12,13
 ```
 
-Calibrate the direct Raspberry Pi header servos:
+Calibrate a direct Pi servo:
 
 ```bash
 uv run pi5servo calib 12
-uv run pi5servo calib 13
 ```
 
 Or use the interactive tool:
@@ -259,52 +304,34 @@ uv run pi5servo servo-tool
 Expected result:
 
 - `servo.json` is created in the project root
-- calibrated values are saved
-- the servos move safely during calibration
+- calibration values are saved
 
-If you use the DFR0566 HAT:
-
-```bash
-ls /dev/i2c-1
-sudo i2cdetect -y 1
-uv run pi5servo status --backend dfr0566 --pins hat_pwm1 --address 0x10 --bus-id 1
-```
-
-Expected result:
-
-- `/dev/i2c-1` exists
-- `i2cdetect` shows `10`
-- the status command reports the DFR0566 path correctly
-
-### 13.2 Buzzer setup (`pi5buzzer`) - recommended
-
-Initialize the buzzer pin:
+### 14.2 Buzzer setup
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5buzzer init 17
 ```
 
 Expected result:
 
-- `buzzer.json` is created in the project root
-- the buzzer plays a short test sound
+- `buzzer.json` is created
+- a short test tone plays
 
-### 13.3 Display setup (`pi5disp`) - recommended
-
-Initialize the display settings:
+### 14.3 Display setup
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5disp init --defaults
 ```
 
 Expected result:
 
-- `display.json` is created in the project root
-- default display settings are saved
+- `display.json` is created
 
-### 13.4 Distance sensor setup (`pi5vl53l0x`) - recommended if you use the sensor
+### 14.4 Distance sensor setup
 
-Confirm the sensor is visible:
+Check the I2C bus:
 
 ```bash
 ls /dev/i2c-1
@@ -313,111 +340,68 @@ sudo i2cdetect -y 1
 
 Expected result:
 
-- `29` appears in the `i2cdetect` output
+- the sensor address `29` appears if the VL53L0X is connected
 
-Run a quick test:
+Optional quick test:
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5vl53l0x test
 ```
 
-If you want offset calibration (distance correction):
+## 15. Test the Hardware Libraries
+
+### 15.1 Buzzer
 
 ```bash
-uv run pi5vl53l0x calibrate --distance 200 --count 10
-```
-
-Expected result:
-
-- `vl53l0x.json` is created in the project root if you run calibration
-
-## 14. Test Each `pi5*` Library From the Project Root
-
-### 14.1 Test the buzzer
-
-```bash
+cd ~/NinjaClawBot
 uv run pi5buzzer info --health-check
 uv run pi5buzzer beep 440 0.3
 ```
 
-Expected result:
-
-- health information is printed
-- the buzzer plays one short tone
-
-### 14.2 Test the display
+### 15.2 Display
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5disp info
 uv run pi5disp clear
 uv run pi5disp text "HELLO"
 ```
 
-Expected result:
-
-- the display responds without error
-- the screen clears
-- the text appears
-
-### 14.3 Test the distance sensor
+### 15.3 Distance sensor
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5vl53l0x status
 uv run pi5vl53l0x get --count 5 --interval 0.5
 ```
 
-Expected result:
+### 15.4 Servo
 
-- the driver reports sensor status
-- repeated distance readings appear
-
-### 14.4 Test the servos
-
-Start with one servo only if this is your first motion test.
+Start with one servo only:
 
 ```bash
+cd ~/NinjaClawBot
 uv run pi5servo move 12 center
 uv run pi5servo move 12 min
 uv run pi5servo move 12 max
 ```
 
-Expected result:
-
-- the servo moves correctly to each position
-
-For two direct GPIO servos:
-
-```bash
-uv run pi5servo move 12 center
-uv run pi5servo move 13 center
-uv run pi5servo cmd "F_12:30/13:-30"
-uv run pi5servo cmd "F_12:0/13:0"
-```
-
-Expected result:
-
-- both servos move
-- both servos return to center
-
-## 15. Test `ninjaclawbot` From the Project Root
+## 16. Test `ninjaclawbot` Locally
 
 Run the safe checks first:
 
 ```bash
+cd ~/NinjaClawBot
 uv run ninjaclawbot health-check
 uv run ninjaclawbot list-assets
 uv run ninjaclawbot list-capabilities
 ```
 
-Expected result:
-
-- the robot returns structured JSON
-- connected hardware shows `available: true`
-- the project reports supported actions, reply states, and built-in expressions
-
-Test the expression engine:
+Then test expressions:
 
 ```bash
+cd ~/NinjaClawBot
 uv run ninjaclawbot perform-expression idle
 uv run ninjaclawbot perform-expression greeting
 uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
@@ -426,146 +410,57 @@ uv run ninjaclawbot set-idle
 
 Expected result:
 
-- built-in expressions run correctly
-- reply-state policy chooses the correct face and sound
-- `set-idle` starts the idle face
+- built-in expressions run
+- sound and face outputs work
+- idle works
 
-Test the tools:
+## 17. Find the Real Paths You Need
 
-```bash
-uv run ninjaclawbot movement-tool
-uv run ninjaclawbot expression-tool
-```
+These are the three important paths:
 
-Expected result:
+- project root
+- plugin folder
+- `uv` executable
 
-- both interactive tools open correctly
-- leaving `expression-tool` returns to the shell cleanly
-
-## 16. Install OpenClaw
-
-For the complete, step-by-step OpenClaw installation process, follow the
-dedicated `NinjaClawAgent` guide:
-
-- [NinjaClawAgent README](https://github.com/Nilcreator/NinjaClawAgent/blob/main/README.md)
-
-That guide covers:
-
-- Raspberry Pi system setup
-- Node.js (JavaScript runtime) installation
-- OpenClaw installation
-- OpenClaw onboarding
-- the main OpenClaw configuration file setup
-
-After you finish the OpenClaw installation in that guide, return here to connect
-OpenClaw to NinjaClawBot.
-
-## 17. Find the Real NinjaClawBot Paths and Back Up OpenClaw
-
-You need two real paths from your Raspberry Pi:
-
-- the NinjaClawBot project root path
-- the NinjaClawBot OpenClaw plugin folder path
-
-Important path rule:
-
-- the plugin folder is inside the **NinjaClawBot** project
-- it is **not** inside the separate `NinjaClawAgent` repository
-
-### 17.1 If you already know where NinjaClawBot is
-
-Move into the NinjaClawBot folder:
+Run:
 
 ```bash
-cd /path/to/NinjaClawbot
-```
-
-Print the real project root path:
-
-```bash
-pwd
-```
-
-Print the real plugin folder path:
-
-```bash
-realpath integrations/openclaw/ninjaclawbot-plugin
-```
-
-### 17.2 If you do not know where NinjaClawBot is
-
-Search your home folder:
-
-```bash
-find ~ -type d \( -name NinjaClawbot -o -name NinjaClawBot \) 2>/dev/null
-```
-
-Then move into the correct folder and run:
-
-```bash
-pwd
-realpath integrations/openclaw/ninjaclawbot-plugin
-```
-
-### 17.3 Save the paths in shell variables
-
-After you are inside the NinjaClawBot project root, run:
-
-```bash
+cd ~/NinjaClawBot
 export NINJACLAWBOT_ROOT="$(pwd)"
 export NINJACLAWBOT_PLUGIN="$(realpath integrations/openclaw/ninjaclawbot-plugin)"
 export NINJACLAWBOT_UV="$(command -v uv)"
-echo "$NINJACLAWBOT_ROOT"
-echo "$NINJACLAWBOT_PLUGIN"
-echo "$NINJACLAWBOT_UV"
+printf '%s\n%s\n%s\n' "$NINJACLAWBOT_ROOT" "$NINJACLAWBOT_PLUGIN" "$NINJACLAWBOT_UV"
 ```
 
 Expected result:
 
-- the first line is the full NinjaClawBot project root path
-- the second line is the full NinjaClawBot plugin folder path
-- the third line is the full absolute path to the `uv` binary
+- the first line is your project root
+- the second line is your plugin folder
+- the third line is the full path to `uv`
 
-If the third line is empty, OpenClaw will not be able to start the
-NinjaClawBot bridge. Install `uv` first or locate the real absolute path before
-continuing.
+## 18. Back Up the OpenClaw Config
 
-Official `uv` install docs:
-
-- [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
-- [uv installer options](https://docs.astral.sh/uv/reference/installer/)
-
-### 17.4 Find and back up the OpenClaw configuration file
-
-Typical Raspberry Pi path:
-
-- `~/.openclaw/openclaw.json`
-
-OpenClaw normally uses this file directly. Some OpenClaw versions also support
-helper subcommands for config inspection, but you do not need them for this
-guide.
-
-Back up the current file before changing it:
+Back up your existing config before changing anything:
 
 ```bash
 cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.backup.$(date +%Y%m%d-%H%M%S)
 ```
 
-## 18. Add the NinjaClawBot Plugin to the OpenClaw Configuration File
+## 19. Patch `openclaw.json` Safely
 
-### 18.1 Recommended: patch the existing OpenClaw config safely
+This is the most important OpenClaw setup step.
 
-The command below updates your current `openclaw.json` without removing your
-existing OpenClaw settings such as:
+The command below:
 
-- login settings
-- model settings
-- Telegram settings
-- gateway settings
+- keeps your existing secrets
+- keeps your existing model settings
+- keeps your existing Telegram settings
+- adds the validated NinjaClawBot integration settings
 
-Run this from the Raspberry Pi terminal after Section 17:
+Run:
 
 ```bash
+cd ~/NinjaClawBot
 python3 - <<'PY'
 import json
 import os
@@ -587,10 +482,37 @@ tool_names = [
     "ninjaclawbot_set_idle",
     "ninjaclawbot_stop",
     "ninjaclawbot_stop_all",
+    "ninjaclawbot",
 ]
 
-with config_path.open("r", encoding="utf-8") as handle:
-    data = json.load(handle)
+with config_path.open("r", encoding="utf-8") as f:
+    data = json.load(f)
+
+agents = data.setdefault("agents", {})
+defaults = agents.setdefault("defaults", {})
+defaults.setdefault("workspace", str(Path.home() / ".openclaw" / "workspace"))
+
+agent_list = agents.setdefault("list", [])
+main_agent = next((item for item in agent_list if item.get("id") == "main"), None)
+if main_agent is None:
+    main_agent = {"id": "main"}
+    agent_list.append(main_agent)
+
+tools = main_agent.setdefault("tools", {})
+allow = tools.setdefault("allow", [])
+for name in tool_names:
+    if name not in allow:
+        allow.append(name)
+
+hooks = data.setdefault("hooks", {}).setdefault("internal", {})
+hooks["enabled"] = True
+hook_entries = hooks.setdefault("entries", {})
+hook_entries.setdefault("boot-md", {})["enabled"] = True
+
+skills = data.setdefault("skills", {})
+skills.setdefault("install", {}).setdefault("nodeManager", "npm")
+skill_entries = skills.setdefault("entries", {})
+skill_entries.setdefault("ninjaclawbot_control", {})["enabled"] = True
 
 plugins = data.setdefault("plugins", {})
 plugin_allow = plugins.setdefault("allow", [])
@@ -604,8 +526,12 @@ if plugin not in paths:
     paths.append(plugin)
 
 entries = plugins.setdefault("entries", {})
+entries.setdefault("telegram", {}).setdefault("enabled", True)
+
 ninjaclawbot_entry = entries.setdefault("ninjaclawbot", {})
 ninjaclawbot_entry["enabled"] = True
+ninjaclawbot_entry.pop("hooks", None)
+
 ninjaclawbot_config = ninjaclawbot_entry.setdefault("config", {})
 ninjaclawbot_config["projectRoot"] = root
 ninjaclawbot_config["rootDir"] = root
@@ -615,210 +541,40 @@ ninjaclawbot_config["bridgeStartTimeoutMs"] = 10000
 ninjaclawbot_config["bridgeRequestTimeoutMs"] = 15000
 ninjaclawbot_config["bridgeShutdownTimeoutMs"] = 5000
 
-agents = data.setdefault("agents", {})
-agent_list = agents.setdefault("list", [])
-main_agent = next((item for item in agent_list if item.get("id") == "main"), None)
-if main_agent is None:
-    main_agent = {"id": "main"}
-    agent_list.append(main_agent)
+for unsupported_key in (
+    "enableAlwaysOn",
+    "enableStartupGreeting",
+    "enableAutoThinking",
+    "enableShutdownSequence",
+):
+    ninjaclawbot_config.pop(unsupported_key, None)
 
-tools = main_agent.setdefault("tools", {})
-allow = tools.setdefault("allow", [])
-for tool_name in tool_names:
-    if tool_name not in allow:
-        allow.append(tool_name)
-
-with config_path.open("w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
+with config_path.open("w", encoding="utf-8") as f:
+    json.dump(data, f, indent=2)
+    f.write("\n")
 
 print(f"Updated {config_path}")
-print(f"projectRoot = {root}")
-print(f"pluginPath = {plugin}")
-print(f"uvCommand = {uv_command}")
+print(json.dumps({
+    "workspace": defaults.get("workspace"),
+    "hooks": data.get("hooks", {}),
+    "skills": data.get("skills", {}),
+    "ninjaclawbot": data.get("plugins", {}).get("entries", {}).get("ninjaclawbot", {})
+}, indent=2))
 PY
 ```
 
-What this command does:
+## 20. What the Important Parts of `openclaw.json` Should Look Like
 
-- adds trusted plugin ids to `plugins.allow`
-- adds the NinjaClawBot plugin folder path to `plugins.load.paths`
-- enables the `ninjaclawbot` plugin entry
-- sets the plugin `projectRoot`
-- adds the NinjaClawBot tool names to the `main` agent allow list
-- keeps your existing personal settings in the same file
+Your exact file will include your own secrets and extra settings.
 
-By default, the plugin now prefers a persistent NinjaClawBot bridge while the
-OpenClaw gateway is running. You do not need extra config to enable that basic
-mode.
-
-### 18.2 Check the updated config
-
-Open the file to confirm the result:
-
-```bash
-nano ~/.openclaw/openclaw.json
-```
-
-The important NinjaClawBot parts should now look like this:
+The important parts should look roughly like this:
 
 ```json
 {
-  "plugins": {
-    "allow": [
-      "telegram",
-      "ninjaclawbot"
-    ],
-    "load": {
-      "paths": [
-        "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
-      ]
-    },
-    "entries": {
-      "ninjaclawbot": {
-        "enabled": true,
-        "config": {
-          "projectRoot": "/absolute/path/to/NinjaClawbot",
-          "rootDir": "/absolute/path/to/NinjaClawbot",
-          "uvCommand": "/absolute/path/to/uv",
-          "enablePersistentBridge": true,
-          "bridgeStartTimeoutMs": 10000,
-          "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000
-        }
-      }
-    }
-  },
-  "agents": {
-    "list": [
-      {
-        "id": "main",
-        "tools": {
-          "allow": [
-            "ninjaclawbot_reply",
-            "ninjaclawbot_perform_expression",
-            "ninjaclawbot_perform_movement",
-            "ninjaclawbot_move_servos",
-            "ninjaclawbot_read_distance",
-            "ninjaclawbot_health",
-            "ninjaclawbot_capabilities",
-            "ninjaclawbot_set_idle",
-            "ninjaclawbot_stop",
-            "ninjaclawbot_stop_all"
-          ]
-        }
-      }
-    ]
-  }
-}
-```
-
-### Optional persistent bridge settings
-
-The plugin-managed persistent bridge is enabled by default. Add these fields
-only if you want to tune timeouts or temporarily force the older one-shot
-fallback path:
-
-```json
-{
-  "plugins": {
-    "entries": {
-      "ninjaclawbot": {
-        "config": {
-          "projectRoot": "/absolute/path/to/NinjaClawbot",
-          "rootDir": "/absolute/path/to/NinjaClawbot",
-          "uvCommand": "/absolute/path/to/uv",
-          "enablePersistentBridge": true,
-          "bridgeStartTimeoutMs": 10000,
-          "bridgeRequestTimeoutMs": 15000,
-          "bridgeShutdownTimeoutMs": 5000
-        }
-      }
-    }
-  }
-}
-```
-
-Notes:
-
-- leave `enablePersistentBridge` at `true` for the normal OpenClaw-to-NinjaClawBot path
-- set `uvCommand` to the absolute result of `command -v uv` on Raspberry Pi; this avoids `spawn uv ENOENT` when OpenClaw runs with a narrower `PATH`
-- set `enablePersistentBridge` to `false` only if you need to force the older per-call bridge path while debugging
-- only raise the timeout values if Raspberry Pi startup or hardware initialization is slower than the defaults
-- the lifecycle-driven Always On behavior defaults to enabled in the current NinjaClawBot plugin code, so you do not need extra config fields for startup greeting, auto-thinking, or sleepy shutdown
-- if OpenClaw reports `must NOT have additional properties` for `enableAlwaysOn`, `enableStartupGreeting`, `enableAutoThinking`, or `enableShutdownSequence`, the gateway is validating against an older or different `ninjaclawbot` plugin manifest than the one in this repository
-- in that case, remove those four fields from `openclaw.json`, verify `plugins.load.paths` points to the intended local plugin folder, and refresh or relink the local plugin before trying the optional lifecycle flags again
-
-### Optional lifecycle flags
-
-Add these fields only after you have confirmed that the Raspberry Pi is loading
-the updated local `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
-from this repository:
-
-```json
-{
-  "plugins": {
-    "entries": {
-      "ninjaclawbot": {
-        "config": {
-          "enableAlwaysOn": true,
-          "enableStartupGreeting": true,
-          "enableAutoThinking": true,
-          "enableShutdownSequence": true
-        }
-      }
-    }
-  }
-}
-```
-
-Notes:
-
-- these flags are optional because the current plugin code defaults them to `true`
-- if your Raspberry Pi still rejects them, keep them out of `openclaw.json`; that does not disable the feature in the updated plugin code
-- a validation error here means your Pi is still resolving an older or stale plugin copy
-
-### 18.3 Full reference template for a new `openclaw.json`
-
-Use this only if you are building a new OpenClaw config file from scratch.
-
-If you already have a working OpenClaw setup, use the patch command in
-Section 18.1 instead so you do not lose your current settings.
-
-Replace every placeholder with your own real value.
-
-```json
-{
-  "auth": {
-    "profiles": {
-      "YOUR_AUTH_PROFILE_NAME": {
-        "provider": "openai-codex",
-        "mode": "oauth"
-      }
-    }
-  },
-  "models": {
-    "providers": {
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "apiKey": "YOUR_MODEL_PROVIDER_API_KEY_OR_LOCAL_TAG",
-        "api": "openai-completions",
-        "models": [
-          {
-            "id": "YOUR_MODEL_ID",
-            "name": "YOUR_MODEL_NAME"
-          }
-        ]
-      }
-    }
-  },
   "agents": {
     "defaults": {
       "model": {
         "primary": "openai-codex/gpt-5.3-codex"
-      },
-      "models": {
-        "openai-codex/gpt-5.3-codex": {}
       },
       "workspace": "/home/YOUR_USERNAME/.openclaw/workspace"
     },
@@ -836,17 +592,22 @@ Replace every placeholder with your own real value.
             "ninjaclawbot_capabilities",
             "ninjaclawbot_set_idle",
             "ninjaclawbot_stop",
-            "ninjaclawbot_stop_all"
+            "ninjaclawbot_stop_all",
+            "ninjaclawbot"
           ]
         }
       }
     ]
   },
-  "commands": {
-    "native": "auto",
-    "nativeSkills": "auto",
-    "restart": true,
-    "ownerDisplay": "raw"
+  "hooks": {
+    "internal": {
+      "enabled": true,
+      "entries": {
+        "boot-md": {
+          "enabled": true
+        }
+      }
+    }
   },
   "channels": {
     "telegram": {
@@ -854,10 +615,7 @@ Replace every placeholder with your own real value.
       "dmPolicy": "pairing",
       "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
       "groupPolicy": "allowlist",
-      "streaming": false,
-      "network": {
-        "autoSelectFamily": false
-      }
+      "streaming": false
     }
   },
   "gateway": {
@@ -867,17 +625,17 @@ Replace every placeholder with your own real value.
     "auth": {
       "mode": "token",
       "token": "YOUR_OPENCLAW_GATEWAY_TOKEN"
-    },
-    "tailscale": {
-      "mode": "off",
-      "resetOnExit": false
     }
   },
   "skills": {
     "install": {
       "nodeManager": "npm"
     },
-    "entries": {}
+    "entries": {
+      "ninjaclawbot_control": {
+        "enabled": true
+      }
+    }
   },
   "plugins": {
     "allow": [
@@ -886,7 +644,7 @@ Replace every placeholder with your own real value.
     ],
     "load": {
       "paths": [
-        "/absolute/path/to/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin"
+        "/home/YOUR_USERNAME/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin"
       ]
     },
     "entries": {
@@ -896,9 +654,9 @@ Replace every placeholder with your own real value.
       "ninjaclawbot": {
         "enabled": true,
         "config": {
-          "projectRoot": "/absolute/path/to/NinjaClawbot",
-          "rootDir": "/absolute/path/to/NinjaClawbot",
-          "uvCommand": "/absolute/path/to/uv",
+          "projectRoot": "/home/YOUR_USERNAME/NinjaClawBot",
+          "rootDir": "/home/YOUR_USERNAME/NinjaClawBot",
+          "uvCommand": "/home/YOUR_USERNAME/.local/bin/uv",
           "enablePersistentBridge": true,
           "bridgeStartTimeoutMs": 10000,
           "bridgeRequestTimeoutMs": 15000,
@@ -906,149 +664,177 @@ Replace every placeholder with your own real value.
         }
       }
     }
-  },
-  "tools": {
-    "media": {
-      "audio": {
-        "enabled": true,
-        "maxBytes": 20971520,
-        "scope": {
-          "default": "deny",
-          "rules": [
-            {
-              "action": "allow",
-              "match": {
-                "chatType": "direct"
-              }
-            }
-          ]
-        },
-        "models": [
-          {
-            "type": "cli",
-            "command": "/home/YOUR_USERNAME/.local/bin/whisper",
-            "args": [
-              "--model",
-              "base",
-              "--language",
-              "zh",
-              "--output_format",
-              "txt",
-              "--output_dir",
-              "/tmp",
-              "{{MediaPath}}"
-            ]
-          }
-        ]
-      }
-    }
   }
 }
 ```
 
-## 19. Start OpenClaw
+Do **not** paste real tokens from somebody else.
 
-Start the OpenClaw gateway service:
+Use your own:
+
+- `YOUR_TELEGRAM_BOT_TOKEN`
+- `YOUR_OPENCLAW_GATEWAY_TOKEN`
+- your own local paths
+
+## 21. Create the Startup and Reply Instruction Files
+
+These two files are part of the validated setup.
+
+### 21.1 Create `BOOT.md`
+
+This file tells OpenClaw what to do on gateway startup.
+
+Run:
+
+```bash
+export OPENCLAW_WORKSPACE="$(
+python3 - <<'PY'
+import json
+from pathlib import Path
+
+cfg = json.load((Path.home() / ".openclaw" / "openclaw.json").open("r", encoding="utf-8"))
+agents = cfg.get("agents", {}).get("list", [])
+main = next((a for a in agents if a.get("id") == "main"), {})
+workspace = main.get("workspace") or cfg.get("agents", {}).get("defaults", {}).get("workspace") or str(Path.home() / ".openclaw" / "workspace")
+print(Path(workspace).expanduser())
+PY
+)"
+mkdir -p "$OPENCLAW_WORKSPACE"
+cat > "$OPENCLAW_WORKSPACE/BOOT.md" <<'EOF'
+## NinjaClawBot Startup
+
+At gateway startup, call `ninjaclawbot_reply` exactly once with:
+- `text`: `NinjaClawBot is online.`
+- `reply_state`: `greeting`
+- `display_text`: `HELLO`
+
+Do not send a visible chat reply for this startup task.
+After the tool call, reply with `NO_REPLY`.
+EOF
+```
+
+### 21.2 Create or update `AGENTS.md`
+
+This file gives the main reply rule in plain language.
+
+Run:
+
+```bash
+python3 - <<'PY'
+from pathlib import Path
+import os
+
+path = Path(os.environ["OPENCLAW_WORKSPACE"]) / "AGENTS.md"
+block = """
+## NinjaClawBot Reply Policy
+
+When replying to users in Telegram or other chat channels:
+- always use `ninjaclawbot_reply` for the final visible answer
+- choose the closest `reply_state` for the tone of the answer
+- do not send a plain text-only final answer unless `ninjaclawbot_reply` fails
+- after normal replies, let the lifecycle return the robot to idle
+""".lstrip()
+
+existing = path.read_text(encoding="utf-8") if path.exists() else ""
+marker = "## NinjaClawBot Reply Policy"
+if marker not in existing:
+    if existing and not existing.endswith("\n"):
+        existing += "\n"
+    existing += ("\n" if existing else "") + block
+    path.write_text(existing, encoding="utf-8")
+
+print(path)
+print(path.read_text(encoding="utf-8"))
+PY
+```
+
+## 22. Run OpenClaw Health Checks
+
+Run:
+
+```bash
+openclaw doctor --fix
+openclaw hooks enable boot-md
+openclaw hooks info boot-md
+openclaw skills list --eligible | grep -iE 'ninjaclawbot_control|ninjaclawbot' || true
+openclaw hooks list --verbose | grep -iE 'boot-md|ninjaclawbot|message_received|agent_end|gateway_stop' || true
+openclaw plugins info ninjaclawbot
+```
+
+Expected result:
+
+- `doctor` succeeds
+- `boot-md` is enabled
+- `ninjaclawbot_control` shows as eligible
+- NinjaClawBot hooks appear in the hook list
+- the plugin shows as loaded from your local project path
+
+## 23. Start OpenClaw
+
+Start the gateway:
 
 ```bash
 openclaw gateway start
-```
-
-When the gateway starts, the NinjaClawBot plugin now tries to start a
-persistent Python bridge automatically. If that bridge cannot start, the plugin
-falls back to the older one-shot `openclaw-action` path so the tools can still
-run while you debug the persistent mode.
-
-If `enableAlwaysOn` is left enabled, the plugin also tries to:
-
-- show a greeting expression on gateway start
-- enter persistent `idle` automatically after the greeting
-- switch to persistent `thinking` when a user message arrives
-- run a sleepy shutdown sequence before the bridge exits
-
-Check its status:
-
-```bash
 openclaw gateway status
 ```
 
-If you want to run OpenClaw in the foreground and watch the live log output, use:
+If you want a reliable live log without gateway pairing issues, do **not**
+depend on `openclaw logs --follow`. Use the raw log file instead:
 
 ```bash
-openclaw gateway
+tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)"
 ```
 
-If you plan to connect OpenClaw to Telegram or another messaging channel, follow
-the channel setup steps from the `NinjaClawAgent` guide you used in Section 16.
+## 24. Final Validation
 
-## 20. Raspberry Pi Validation Flow
+This is the simplest full validation flow for the working build.
 
-Use this section after the plugin is configured and the gateway is installed.
+### 24.1 Startup validation
 
-### 20.1 Safe smoke validation
-
-Run these commands on the Raspberry Pi:
+Run:
 
 ```bash
-cd /absolute/path/to/NinjaClawbot
-openclaw gateway start
-openclaw gateway status
+openclaw gateway restart
 ```
 
-Expected result:
-
-- the gateway starts successfully
-- the plugin starts one persistent `openclaw-serve` process
-- if `enableAlwaysOn` and `enableStartupGreeting` are `true`, the robot shows a greeting and then enters persistent `idle`
-
-If you want to watch the live gateway log in another terminal, run:
+Then watch the raw log file:
 
 ```bash
-openclaw logs --follow
-```
-
-Also verify that the plugin lifecycle hooks are actually registered:
-
-```bash
-openclaw hooks list --verbose | grep -iE 'ninjaclawbot|gateway_start|message_received|agent_end|gateway_stop' || true
+tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)"
 ```
 
 Expected result:
 
-- entries for the NinjaClawBot plugin lifecycle hooks appear in the hook list
-- if no NinjaClawBot hook entries appear, the gateway will not trigger startup greeting or sleepy shutdown even if the bridge is healthy
+- the startup greeting appears once
+- the robot then returns to idle
 
-### 20.2 Telegram message validation
+### 24.2 Telegram reply validation
 
-After the gateway is running and your Telegram channel is connected:
+Start a fresh session in Telegram:
 
-1. start a fresh Telegram chat session so OpenClaw rebuilds the session prompt:
-   - `/new`
-2. send this exact message to the bot:
-   - `hello`
-3. wait for the robot response
+```text
+/new
+```
 
-Expected result:
+Then send:
 
-- as soon as the message is received, the robot switches into persistent `thinking`
-- when the final answer is produced, the robot shows the explicit reply emotion chosen by the agent
-- after the answer finishes, the robot returns to persistent `idle`
-- the gateway log should show the `ninjaclawbot_reply` tool call during the answer path
-
-### 20.3 Repeated-message validation
-
-Send two short messages one after another:
-
-1. `how are you`
-2. `tell me a joke`
+```text
+hello
+```
 
 Expected result:
 
-- the robot does not flash the display on and off between calls
-- the robot reuses the same persistent bridge session
-- the robot keeps returning to `idle` between finished replies
+- the robot shows a reply expression
+- the answer is not text-only anymore
+- after the reply, the robot returns to idle
 
-### 20.4 Shutdown validation
+If you want to confirm the tool call from the Pi terminal, run:
+
+```bash
+grep -iE 'ninjaclawbot_reply|ninjaclawbot_perform_expression|tools' "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)" | tail -n 30
+```
+
+### 24.3 Shutdown validation
 
 Run:
 
@@ -1057,136 +843,106 @@ openclaw gateway stop
 openclaw gateway status
 ```
 
-If shutdown behavior is missing, inspect the hook list again before debugging the
-Python side:
-
-```bash
-openclaw hooks list --verbose | grep -iE 'ninjaclawbot|gateway_stop' || true
-```
-
 Expected result:
 
-- the robot shows `sleepy`
-- after the sleepy expression completes, the display powers down
-- the persistent bridge exits cleanly
+- the robot shows the sleepy expression once
+- the display powers down after the sleepy expression finishes
 
-### 20.5 Rollback if the lifecycle behavior is wrong
+## 25. Troubleshooting
 
-If the explicit reply tools still work but the automatic lifecycle behavior is
-not correct, disable Always On temporarily:
+### 25.1 `spawn uv ENOENT`
+
+Meaning:
+
+- OpenClaw cannot find `uv`
+
+Fix:
 
 ```bash
-python3 - <<'PY'
-import json
-from pathlib import Path
-
-path = Path.home() / ".openclaw" / "openclaw.json"
-with path.open("r", encoding="utf-8") as handle:
-    data = json.load(handle)
-
-config = (
-    data.setdefault("plugins", {})
-    .setdefault("entries", {})
-    .setdefault("ninjaclawbot", {})
-    .setdefault("config", {})
-)
-config["enableAlwaysOn"] = False
-
-with path.open("w", encoding="utf-8") as handle:
-    json.dump(data, handle, indent=2)
-    handle.write("\n")
-
-print(f"Updated {path}: enableAlwaysOn=false")
-PY
-
-openclaw gateway start
+command -v uv
 ```
 
-Expected result:
+Then confirm `plugins.entries.ninjaclawbot.config.uvCommand` matches that full
+path.
 
-- explicit `ninjaclawbot_*` tools still work
-- startup greeting, auto-thinking, and sleepy shutdown are skipped
-- this gives you a safe fallback while you debug lifecycle behavior
+### 25.2 `openclaw logs --follow` says pairing required
 
-## 21. Safe First Examples With OpenClaw
+Meaning:
 
-Good first examples:
+- your gateway CLI session is not authenticated for that log command
 
-- greeting the user
-  - OpenClaw should use `reply_state: "greeting"`
-- asking for clarification
-  - OpenClaw should use `reply_state: "asking_clarification"`
-- saying it cannot answer
-  - OpenClaw should use `reply_state: "cannot_answer"` or `reply_state: "confusing"`
-- task completed
-  - OpenClaw should use `reply_state: "success"`
+Use this instead:
 
-Avoid these until basic tests pass:
+```bash
+tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)"
+```
 
-- direct servo movement through OpenClaw
-- repeated movement loops
-- mixed movement plus expression plus sound sequences
-
-## 22. Troubleshooting
-
-### `uv sync --extra dev` fails
+### 25.3 Startup greeting does not appear
 
 Check:
 
-- internet connection
-- `uv` is installed
-- Python build packages were installed in Step 4
+```bash
+openclaw hooks info boot-md
+cat "$OPENCLAW_WORKSPACE/BOOT.md"
+```
 
-### Servo does not move
+If `BOOT.md` is missing or empty, recreate it from Section 21.1.
 
-Check:
+### 25.4 Replies are still text-only
 
-- `servo.json` exists
-- the servo was calibrated
-- PWM overlay was added for direct GPIO servo control
-- servo power is connected correctly
-- if using DFR0566 PWM, check `i2cdetect -y 1` for `10`
+Run:
 
-### Display does not show anything
+```bash
+cat "$OPENCLAW_WORKSPACE/AGENTS.md"
+grep -iE 'ninjaclawbot_reply|tool' "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)" | tail -n 30
+```
 
-Check:
+Then:
 
-- SPI is enabled
-- `display.json` exists
-- the display wiring matches the `pi5disp` guide
-- `uv run pi5disp info` works from the project root
+- start a fresh Telegram session with `/new`
+- try again
 
-### Distance sensor is not found
+If `ninjaclawbot_reply` never appears in the log, the model is still ignoring
+the tool instruction and the next repo-side hardening step is needed.
 
-Check:
+### 25.5 `git pull` fails because of `__pycache__` files
 
-- I2C is enabled
-- `i2cdetect -y 1` shows `29`
-- the sensor is wired for 3.3V logic
+Run:
 
-### OpenClaw cannot use NinjaClawBot
+```bash
+cd ~/NinjaClawBot
+git ls-files | grep '/__pycache__/.*\.pyc$' | xargs -r git restore --
+find ninjaclawbot/src -type d -name __pycache__ -prune -exec rm -rf {} +
+git ls-files | grep '/__pycache__/.*\.pyc$' | xargs -r git restore --
+git pull
+```
 
-Check:
+## 26. What to Keep Private
 
-- OpenClaw is installed
-- `plugins.allow` contains `ninjaclawbot`
-- the plugin path in the config is correct
-- `plugins.entries.ninjaclawbot.enabled` is `true`
-- the plugin `projectRoot` points to the NinjaClawBot project root
-- `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is still `true` if you expect persistent idle behavior
-- any custom `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` values are not set too low
-- the OpenClaw agent allowlist includes the `ninjaclawbot_*` tool names
-- the plugin folder passes `npm run typecheck` and `npm test`
-- `uv run ninjaclawbot list-capabilities` works at the project root
-- if simple tool calls work but persistence does not, check the OpenClaw log for `ninjaclawbot-bridge` warnings because the plugin may have degraded to one-shot fallback
-- if explicit replies work but startup greeting, thinking, or sleepy shutdown do not, check the four Always On flags under `plugins.entries.ninjaclawbot.config`
+Never publish these values:
 
-## 23. Where To Read More
+- Telegram bot token
+- OpenClaw gateway token
+- pairing codes
+- API keys
+- any OAuth session data
 
-- project overview: [README.md](README.md)
-- advanced developer guide: [DevelopmentGuide.md](DevelopmentGuide.md)
-- buzzer details: [pi5buzzer/README.md](pi5buzzer/README.md)
-- servo details: [pi5servo/README.md](pi5servo/README.md)
-- display details: [pi5disp/README.md](pi5disp/README.md)
-- distance sensor details: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
-- enhancement roadmap: [EnhancementPlan.md](EnhancementPlan.md)
+If you share your `openclaw.json` with someone, replace secrets with placeholders
+such as:
+
+- `YOUR_TELEGRAM_BOT_TOKEN`
+- `YOUR_OPENCLAW_GATEWAY_TOKEN`
+- `YOUR_API_KEY`
+
+## 27. Quick Success Checklist
+
+You are done when all of these are true:
+
+- `uv` works
+- the hardware libraries work locally
+- `ninjaclawbot` expressions work locally
+- OpenClaw loads the NinjaClawBot plugin
+- `boot-md` is enabled
+- the startup greeting appears
+- the Telegram reply shows a robot expression
+- the shutdown sleepy powers down the display

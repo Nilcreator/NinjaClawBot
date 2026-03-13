@@ -106,6 +106,7 @@ For the detailed OpenClaw installation itself, use the linked
 
 - commands to find the real NinjaClawBot project root and plugin folder paths
 - a safe copy-paste command to patch `~/.openclaw/openclaw.json`
+- the validated `BOOT.md` and workspace `AGENTS.md` setup for startup greeting and reply expressions
 - a full reference OpenClaw config template with placeholders
 
 ## What Files Are Created At Runtime

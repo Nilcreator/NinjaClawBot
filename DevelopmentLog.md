@@ -2,6 +2,59 @@
 
 ## 2026-03-13
 
+### Installation Guide Rewrite For The Validated OpenClaw Build
+
+Summary:
+
+- rewrote the entire Raspberry Pi installation guide in plain language instead
+  of continuing to patch older sections
+- aligned the guide with the final validated OpenClaw configuration shape used
+  on Raspberry Pi
+- replaced personal values in the example configuration with placeholders
+- documented the validated OpenClaw workspace files:
+  - `BOOT.md` for startup greeting
+  - `AGENTS.md` for reply-tool behavior
+- replaced the old validation section with a simpler copy-paste flow for:
+  - startup greeting
+  - Telegram reply expressions
+  - sleepy shutdown and display power-down
+- added troubleshooting steps for:
+  - `uv` path issues
+  - local log access when `openclaw logs --follow` is blocked by pairing
+  - `git pull` failures caused by tracked `__pycache__` files
+
+Files changed:
+
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the project now has a validated Raspberry Pi + OpenClaw path, but the old
+  installation guide had grown into a mixture of historical workarounds and
+  partially outdated instructions
+- the user asked for a from-scratch guide that non-developers can follow
+  without guessing which pieces are still current
+- the attached final `openclaw.json` showed the stable configuration shape that
+  should now be treated as the reference
+
+Validation:
+
+- documentation rewrite only
+- manual source review against the validated `openclaw.json`
+- official OpenClaw docs cross-check for:
+  - internal hooks / `boot-md`
+  - agent workspace files
+  - skills and plugin configuration
+
+Raspberry Pi validation status:
+
+- already validated externally by the user for the final startup -> reply ->
+  power-off path
+- the rewritten guide now reflects that validated flow directly
+
 ### OpenClaw Lifecycle Hook Registration Fix
 
 Summary:
