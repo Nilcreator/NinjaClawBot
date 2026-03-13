@@ -179,7 +179,7 @@ Purpose:
 
 Follow the official OpenClaw setup guide first:
 
-- [OpenClaw Quickstart](https://docs.openclaw.ai/start/quickstart)
+- [OpenClaw Quickstart](https://github.com/Nilcreator/NinjaClawAgent/blob/main/README.md)
 
 When you come back to this guide, you should already have:
 
