@@ -1,291 +1,337 @@
 # NinjaClawBot
 
-NinjaClawBot is a Raspberry Pi 5 robot software stack.
-
-It combines:
+## Quick Links
 
-- standalone Pi 5 hardware libraries
-- a high-level robot-control layer called `ninjaclawbot`
-- an official OpenClaw plugin and skill wrapper
+- [English](#english)
+- [日本語](#日本語)
+- [繁體中文](#繁體中文)
+- [Installation Guide](InstallationGuide.md)
+- [Development Guide](DevelopmentGuide.md)
+- Library READMEs:
+  - [ninjaclawbot](ninjaclawbot/README.md)
+  - [pi5servo](pi5servo/README.md)
+  - [pi5disp](pi5disp/README.md)
+  - [pi5buzzer](pi5buzzer/README.md)
+  - [pi5vl53l0x](pi5vl53l0x/README.md)
+- OpenClaw plugin:
+  - [Plugin folder](integrations/openclaw/ninjaclawbot-plugin)
+  - [Plugin skill](integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
+- Archive:
+  - [backup/README.md](backup/README.md)
 
-The project is designed so that:
-
-- each `pi5*` library still works on its own
-- `ninjaclawbot` reuses those libraries instead of duplicating driver logic
-- external AI assistants such as OpenClaw use the `ninjaclawbot` control boundary instead of calling raw hardware drivers directly
-
-If you want the full install and setup path, read [InstallationGuide.md](InstallationGuide.md).
+---
 
-If you want advanced developer details, read [DevelopmentGuide.md](DevelopmentGuide.md).
+## English
 
-## What The Project Contains
+### What NinjaClawBot is
 
-### 1. Standalone hardware libraries
-
-- [`pi5buzzer`](pi5buzzer/README.md)
-  - passive buzzer control
-  - notes, songs, and emotion sounds
-- [`pi5servo`](pi5servo/README.md)
-  - servo control for Raspberry Pi header PWM, DFR0566 HAT PWM, and optional PCA9685
-  - calibration and interactive servo tools
-- [`pi5disp`](pi5disp/README.md)
-  - ST7789V display control
-  - text, images, animation demos, and display tools
-- [`pi5vl53l0x`](pi5vl53l0x/README.md)
-  - VL53L0X distance sensor support
-  - testing and offset calibration
-
-### 2. Integrated robot layer
-
-- [`ninjaclawbot`](ninjaclawbot/README.md)
-  - saved movement assets
-  - saved expression assets
-  - animated face and sound expression engine
-  - `movement-tool`
-  - `expression-tool`
-  - structured action results for external callers
+NinjaClawBot is a Raspberry Pi 5 robot software workspace.
 
-### 3. OpenClaw integration
+It gives you:
 
-- `integrations/openclaw/ninjaclawbot-plugin`
-  - official OpenClaw plugin
-  - official OpenClaw skill wrapper
-  - typed `ninjaclawbot_*` tools for robot control
+- standalone Pi 5 hardware libraries for servo, buzzer, display, and distance sensor
+- one integrated robot layer called `ninjaclawbot`
+- an official OpenClaw plugin for chat-driven robot behavior
+- guided setup tools so you can calibrate and test hardware step by step
 
-## Project Layout
-
-```text
-NinjaClawbot/
-├── pyproject.toml
-├── uv.lock
-├── README.md
-├── InstallationGuide.md
-├── DevelopmentGuide.md
-├── DevelopmentLog.md
-├── EnhancementPlan.md
-├── developmentPlan.md
-├── pi5buzzer/
-├── pi5servo/
-├── pi5disp/
-├── pi5vl53l0x/
-├── ninjaclawbot/
-├── integrations/
-│   └── openclaw/
-│       └── ninjaclawbot-plugin/
-└── NinjaRobotV5_bak/
-```
-
-## How You Install And Run It
-
-The project is **root-first**.
-
-That means:
-
-- install from the project root
-- keep shared config files at the project root
-- run `uv run ...` commands from the project root
+The current validated build supports this real-world flow:
 
-Main install command:
+- OpenClaw starts
+- the robot shows a startup greeting
+- the robot waits in an idle face
+- when the user sends a message, the robot reacts
+- OpenClaw replies with both:
+  - robot expression on Raspberry Pi
+  - visible text reply in Telegram
+- when OpenClaw stops, the robot shows a sleepy shutdown and powers the display off
 
-```bash
-uv sync --extra dev
-```
+### Main parts of the project
 
-This installs:
+#### Standalone hardware libraries
 
-- `ninjaclawbot`
-- all `pi5*` libraries
-- the development tools used by this project
+- [pi5servo](pi5servo/README.md): servo control and calibration
+- [pi5disp](pi5disp/README.md): SPI display driver and display tool
+- [pi5buzzer](pi5buzzer/README.md): buzzer tones and emotion sounds
+- [pi5vl53l0x](pi5vl53l0x/README.md): VL53L0X distance sensor driver and sensor tool
 
-For the full step-by-step process, including Raspberry Pi setup, hardware interface setup, calibration, and OpenClaw connection, read [InstallationGuide.md](InstallationGuide.md).
+These can be tested on their own before you use the full robot layer.
 
-For the detailed OpenClaw installation itself, use the linked
-`NinjaClawAgent` guide from [InstallationGuide.md](InstallationGuide.md).
+#### Integrated robot layer
 
-`InstallationGuide.md` also includes:
+- [ninjaclawbot](ninjaclawbot/README.md)
 
-- the shortest interactive-tool-first Raspberry Pi setup path
-- commands to find the real NinjaClawBot project root and plugin folder paths
-- a safe copy-paste command to patch `~/.openclaw/openclaw.json`
-- the validated `BOOT.md` and workspace `AGENTS.md` setup for startup greeting and reply expressions
-- an appendix with troubleshooting and alternative commands for each setup stage
-- a full reference OpenClaw config template with placeholders
-- a local test step that now includes both `expression-tool` and
-  `movement-tool`
+This layer combines all hardware libraries into one robot-facing interface.
 
-## What Files Are Created At Runtime
+It provides:
 
-When you use the project from the root, these files are created there:
+- structured actions
+- saved movement and expression assets
+- `movement-tool`
+- `expression-tool`
+- reply-state based expressions such as `greeting`, `thinking`, `success`, and `sleepy`
+- health checks and diagnostics-friendly output
 
-- `servo.json`
-- `buzzer.json`
-- `display.json`
-- `vl53l0x.json`
-- `ninjaclawbot_data/movements/*.json`
-- `ninjaclawbot_data/expressions/*.json`
+#### OpenClaw integration
 
-## Main Root Commands
-
-These are the most important root-level commands:
-
-```bash
-uv run ninjaclawbot health-check
-uv run ninjaclawbot list-assets
-uv run ninjaclawbot list-capabilities
-uv run ninjaclawbot perform-expression idle
-uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
-uv run ninjaclawbot set-idle
-uv run ninjaclawbot movement-tool
-uv run ninjaclawbot expression-tool
-```
-
-For the full testing order, read [InstallationGuide.md](InstallationGuide.md).
-
-## How It Works With OpenClaw
-
-OpenClaw should not call the raw `pi5*` driver commands directly.
-
-Instead, the flow is:
-
-```text
-OpenClaw agent
-  -> NinjaClawBot OpenClaw plugin
-  -> plugin-managed persistent ninjaclawbot bridge
-  -> ninjaclawbot runtime / action executor
-  -> pi5* hardware libraries
-```
-
-This gives you:
-
-- one clear robot-control boundary
-- one warm runtime reused across OpenClaw tool calls while the gateway is running
-- lifecycle-aware robot presence during the OpenClaw gateway session
-- service-side arbitration so duplicate low-priority lifecycle updates do not replay forever
-- typed JSON-style action results
-- safer hardware access
-- a shared reply-emotion policy
-- a one-shot `openclaw-action` fallback path if the persistent bridge is unavailable
-
-For the exact OpenClaw setup and plugin configuration steps, use
-[InstallationGuide.md](InstallationGuide.md).
-
-For troubleshooting or release checks, use the OpenClaw tool
-`ninjaclawbot_diagnostics`. It reports:
-
-- persistent bridge health
-- degraded or one-shot fallback state
-- current service presence mode
-- startup and lifecycle state, including whether startup is being tracked through
-  the Python service or through the validated `boot-md` + workspace `BOOT.md`
-  path
-- deployment readiness hints for `BOOT.md`, `AGENTS.md`, allowlists, and skill enablement
-
-## OpenClaw Examples
-
-### Greeting
-
-OpenClaw can use the `ninjaclawbot_reply` tool with a greeting reply state.
-
-Result:
-
-- the robot shows a greeting face
-- the buzzer plays the matching sound
-- the user still receives the normal visible chat reply
-- the robot returns to idle after the greeting
-
-### Clarifying question
-
-OpenClaw can use `reply_state: "asking_clarification"`.
-
-Result:
-
-- the robot shows a confused or thinking-style face
-- the reply feels more natural when the agent needs more information
-
-### Successful task completion
-
-OpenClaw can use `reply_state: "success"` after it completes a robot task.
-
-Result:
-
-- the robot shows a more positive completion expression
-- the user gets both spoken-style and visual feedback
-
-### Waiting for the next user message
-
-OpenClaw should keep the robot on idle while waiting.
-
-Result:
-
-- the robot looks alive even when it is not actively replying
-- temporary expressions do not stay on screen too long
-
-### Always On lifecycle
-
-With the persistent bridge and Always On lifecycle enabled, the plugin now
-drives these transitions automatically:
-
-- gateway start:
-  - greeting expression
-  - then persistent `idle`
-- user message received:
-  - persistent `thinking`
-- explicit final reply:
-  - emotion from `ninjaclawbot_reply`
-  - then normal visible chat reply to the user
-  - then back to `idle`
-- gateway stop:
-  - `sleepy`
-  - display power-down
-
-Operator note:
-
-- `openclaw hooks list --verbose` should show NinjaClawBot lifecycle hooks when
-  the plugin is loaded correctly
-- after changing plugin or skill behavior, start a fresh chat session so the
-  OpenClaw prompt picks up the latest NinjaClawBot skill snapshot
-- `ninjaclawbot` now reads the root-level `display.json` file directly instead
-  of silently using the package-local `pi5disp` default config
-- old clones that still contain tracked `__pycache__` files should update once
-  and then keep those files ignored; the repository now ignores Python cache
-  artifacts by default
-
-## Recommended Reading Order
-
-If you are new to the project:
-
-1. [InstallationGuide.md](InstallationGuide.md)
-2. [`ninjaclawbot/README.md`](ninjaclawbot/README.md)
-3. the hardware library README files you actually use
-
-Recommended hardware library docs:
-
-- [`pi5buzzer/README.md`](pi5buzzer/README.md)
-- [`pi5servo/README.md`](pi5servo/README.md)
-- [`pi5disp/README.md`](pi5disp/README.md)
-- [`pi5vl53l0x/README.md`](pi5vl53l0x/README.md)
-
-If you are developing the project:
-
+- [InstallationGuide.md](InstallationGuide.md)
 - [DevelopmentGuide.md](DevelopmentGuide.md)
-- [DevelopmentLog.md](DevelopmentLog.md)
-- [EnhancementPlan.md](EnhancementPlan.md)
-- [developmentPlan.md](developmentPlan.md)
+- [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin)
 
-## Current Status
+The validated OpenClaw setup is hybrid:
 
-The current stack supports:
+- plugin-managed persistent bridge and shutdown
+- `boot-md` plus workspace `BOOT.md` for startup greeting
+- workspace `AGENTS.md`, skill enablement, and tool allowlist for reliable reply behavior
 
-- root-level installation
-- root-level calibration and testing
-- standalone `pi5*` usage
-- integrated `ninjaclawbot` usage
-- Stage 1 expression engine and expression tool
-- Stage 2 persistent bridge, Always On lifecycle hooks, and sleepy shutdown sequence
-- Phase 2.4 service-side lifecycle dedupe, root-level display-config loading,
-  and repository cache-file hygiene
-- Phase 2.5 operator-facing diagnostics, deployment readiness inspection, and
-  repository hygiene release checks
+### Quick start
 
-The main remaining work is final Raspberry Pi validation and extended recovery
-testing on top of the new diagnostics path.
+If you want to build your own robot from scratch:
+
+1. Follow [InstallationGuide.md](InstallationGuide.md).
+2. Use the guided tools:
+   - `uv run pi5servo servo-tool`
+   - `uv run pi5buzzer buzzer-tool`
+   - `uv run pi5disp display-tool`
+   - `uv run pi5vl53l0x sensor-tool`
+3. Test the integrated layer:
+   - `uv run ninjaclawbot health-check`
+   - `uv run ninjaclawbot expression-tool`
+   - `uv run ninjaclawbot movement-tool`
+4. Connect OpenClaw and run the final validation steps in the installation guide.
+
+### Where to read next
+
+- New builder or operator:
+  - [InstallationGuide.md](InstallationGuide.md)
+- Developer working on code:
+  - [DevelopmentGuide.md](DevelopmentGuide.md)
+- Working on one hardware library only:
+  - [pi5servo/README.md](pi5servo/README.md)
+  - [pi5disp/README.md](pi5disp/README.md)
+  - [pi5buzzer/README.md](pi5buzzer/README.md)
+  - [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- Need old planning or change history:
+  - [backup/README.md](backup/README.md)
+
+### Current status
+
+The Stage 2 OpenClaw integration plan is implemented and validated on Raspberry Pi.
+
+That includes:
+
+- persistent bridge reuse
+- startup greeting
+- idle / thinking / reply / sleepy lifecycle
+- reply-state driven robot expressions
+- Telegram text reply plus robot reaction
+- diagnostics through `ninjaclawbot_diagnostics`
+
+---
+
+## 日本語
+
+### NinjaClawBot とは
+
+NinjaClawBot は、Raspberry Pi 5 向けのロボット制御ワークスペースです。
+
+このプロジェクトには、次のものが含まれます。
+
+- サーボ、ブザー、表示ディスプレイ、距離センサー用の単体ライブラリ
+- それらをまとめて扱う統合レイヤー `ninjaclawbot`
+- OpenClaw 用の公式プラグイン
+- 初心者でも順番に試せる対話型セットアップツール
+
+現在の検証済みビルドでは、次の流れが動作します。
+
+- OpenClaw を起動
+- ロボットが起動あいさつを表示
+- 待機中はアイドル表情
+- ユーザーがメッセージを送るとロボットが反応
+- OpenClaw は次の両方を返す
+  - Raspberry Pi 上のロボット表情
+  - Telegram 上の通常テキスト返信
+- OpenClaw 停止時は sleepy 表情を表示してから画面を消灯
+
+### プロジェクトの主な構成
+
+#### 単体ハードウェアライブラリ
+
+- [pi5servo](pi5servo/README.md): サーボ制御とキャリブレーション
+- [pi5disp](pi5disp/README.md): SPI ディスプレイドライバ
+- [pi5buzzer](pi5buzzer/README.md): ブザー音と感情サウンド
+- [pi5vl53l0x](pi5vl53l0x/README.md): VL53L0X 距離センサー
+
+#### 統合ロボットレイヤー
+
+- [ninjaclawbot](ninjaclawbot/README.md)
+
+この層は、各ライブラリをひとつのロボット制御インターフェースにまとめます。
+
+主な機能:
+
+- 構造化アクション
+- モーションと表情アセット
+- `movement-tool`
+- `expression-tool`
+- `greeting`、`thinking`、`success`、`sleepy` などの返信状態ベースの表情
+- ヘルスチェックと診断出力
+
+#### OpenClaw 連携
+
+- [InstallationGuide.md](InstallationGuide.md)
+- [DevelopmentGuide.md](DevelopmentGuide.md)
+- [Plugin folder](integrations/openclaw/ninjaclawbot-plugin)
+
+検証済みの OpenClaw 構成はハイブリッド方式です。
+
+- プラグイン管理の永続ブリッジと停止処理
+- 起動あいさつは `boot-md` とワークスペース `BOOT.md`
+- 返信動作はワークスペース `AGENTS.md`、スキル有効化、ツール許可リストで安定化
+
+### クイックスタート
+
+自分で最初から構築したい場合:
+
+1. [InstallationGuide.md](InstallationGuide.md) を順番に進める
+2. 対話型ツールを使う
+   - `uv run pi5servo servo-tool`
+   - `uv run pi5buzzer buzzer-tool`
+   - `uv run pi5disp display-tool`
+   - `uv run pi5vl53l0x sensor-tool`
+3. 統合レイヤーを確認する
+   - `uv run ninjaclawbot health-check`
+   - `uv run ninjaclawbot expression-tool`
+   - `uv run ninjaclawbot movement-tool`
+4. 最後に OpenClaw を接続して、インストールガイドの最終検証を行う
+
+### 次に読むべき資料
+
+- 組み立てや導入をしたい人:
+  - [InstallationGuide.md](InstallationGuide.md)
+- 開発者向け:
+  - [DevelopmentGuide.md](DevelopmentGuide.md)
+- 個別ライブラリだけを触りたい人:
+  - [pi5servo/README.md](pi5servo/README.md)
+  - [pi5disp/README.md](pi5disp/README.md)
+  - [pi5buzzer/README.md](pi5buzzer/README.md)
+  - [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- 過去の計画や履歴を見たい人:
+  - [backup/README.md](backup/README.md)
+
+### 現在の状態
+
+Stage 2 の OpenClaw 連携計画は、Raspberry Pi 上で実装・検証済みです。
+
+含まれる内容:
+
+- 永続ブリッジの再利用
+- 起動あいさつ
+- idle / thinking / reply / sleepy のライフサイクル
+- reply_state に基づくロボット表情
+- Telegram テキスト返信とロボット反応の両立
+- `ninjaclawbot_diagnostics` による診断
+
+---
+
+## 繁體中文
+
+### NinjaClawBot 是什麼
+
+NinjaClawBot 是一個為 Raspberry Pi 5 設計的機器人軟體工作區。
+
+它包含：
+
+- 可獨立使用的硬體函式庫，負責伺服馬達、蜂鳴器、顯示器與距離感測器
+- 一個整合層 `ninjaclawbot`
+- 一個給 OpenClaw 使用的官方外掛
+- 讓初學者也能一步一步完成設定的互動式工具
+
+目前已驗證的版本可以完成這樣的流程：
+
+- 啟動 OpenClaw
+- 機器人顯示啟動問候表情
+- 等待時維持 idle 表情
+- 使用者送出訊息後，機器人做出反應
+- OpenClaw 同時回覆：
+  - Raspberry Pi 上的機器人表情
+  - Telegram 裡的正常文字回覆
+- 停止 OpenClaw 時，機器人顯示 sleepy 表情，之後關閉螢幕
+
+### 專案的主要組成
+
+#### 獨立硬體函式庫
+
+- [pi5servo](pi5servo/README.md): 伺服馬達控制與校正
+- [pi5disp](pi5disp/README.md): SPI 顯示器驅動
+- [pi5buzzer](pi5buzzer/README.md): 蜂鳴器音效與情緒聲音
+- [pi5vl53l0x](pi5vl53l0x/README.md): VL53L0X 距離感測器
+
+#### 整合機器人層
+
+- [ninjaclawbot](ninjaclawbot/README.md)
+
+這一層把所有硬體函式庫整合成一個統一的機器人控制介面。
+
+主要功能：
+
+- 結構化動作
+- 動作與表情資產
+- `movement-tool`
+- `expression-tool`
+- 依據回覆狀態使用的表情，例如 `greeting`、`thinking`、`success`、`sleepy`
+- 健康檢查與診斷輸出
+
+#### OpenClaw 整合
+
+- [InstallationGuide.md](InstallationGuide.md)
+- [DevelopmentGuide.md](DevelopmentGuide.md)
+- [Plugin folder](integrations/openclaw/ninjaclawbot-plugin)
+
+目前驗證成功的 OpenClaw 架構是混合模式：
+
+- 由外掛管理的持久橋接程序與關閉流程
+- 啟動問候由 `boot-md` 與工作區 `BOOT.md` 負責
+- 回覆行為透過工作區 `AGENTS.md`、技能啟用與工具允許清單來穩定運作
+
+### 快速開始
+
+如果你想從零開始自己建立機器人：
+
+1. 先按照 [InstallationGuide.md](InstallationGuide.md) 操作
+2. 使用互動式工具完成設定
+   - `uv run pi5servo servo-tool`
+   - `uv run pi5buzzer buzzer-tool`
+   - `uv run pi5disp display-tool`
+   - `uv run pi5vl53l0x sensor-tool`
+3. 測試整合層
+   - `uv run ninjaclawbot health-check`
+   - `uv run ninjaclawbot expression-tool`
+   - `uv run ninjaclawbot movement-tool`
+4. 最後接上 OpenClaw，依照安裝指南完成最終驗證
+
+### 下一步建議閱讀
+
+- 想要安裝與部署：
+  - [InstallationGuide.md](InstallationGuide.md)
+- 想要開發或修改程式：
+  - [DevelopmentGuide.md](DevelopmentGuide.md)
+- 只想查看單一硬體函式庫：
+  - [pi5servo/README.md](pi5servo/README.md)
+  - [pi5disp/README.md](pi5disp/README.md)
+  - [pi5buzzer/README.md](pi5buzzer/README.md)
+  - [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- 想查看舊的規劃與開發歷史：
+  - [backup/README.md](backup/README.md)
+
+### 目前狀態
+
+Stage 2 的 OpenClaw 整合已經完成，並在 Raspberry Pi 上驗證通過。
+
+包含：
+
+- 持久橋接程序重用
+- 啟動問候
+- idle / thinking / reply / sleepy 生命週期
+- 依 reply_state 驅動的機器人表情
+- Telegram 文字回覆與機器人反應同時生效
+- `ninjaclawbot_diagnostics` 診斷工具

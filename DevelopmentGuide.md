@@ -1,249 +1,278 @@
 # NinjaClawBot Development Guide
 
-## Scope
+## Quick Links
 
-This guide records the current developer workflow for the standalone Pi 5 driver libraries and the rebuilt integration layer:
+- [Project summary](#project-summary)
+- [Repository map](#repository-map)
+- [Library guides](#library-guides)
+- [Validated runtime model](#validated-runtime-model)
+- [ninjaclawbot package map](#ninjaclawbot-package-map)
+- [OpenClaw plugin map](#openclaw-plugin-map)
+- [Action surface](#action-surface)
+- [Main commands](#main-commands)
+- [Runtime files](#runtime-files)
+- [Development workflow](#development-workflow)
+- [Validation gates](#validation-gates)
+- [Raspberry Pi validation](#raspberry-pi-validation)
+- [Troubleshooting shortcuts](#troubleshooting-shortcuts)
 
-- `pi5buzzer`
-- `pi5servo`
-- `pi5disp`
-- `pi5vl53l0x`
-- `ninjaclawbot`
+## Project Summary
 
-The detailed migration and backend strategy lives in [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md).
+This repository contains the full NinjaClawBot software workspace.
 
-The main user-facing installation and Raspberry Pi setup path now lives in [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md).
+Think of it in three layers:
 
-That guide now follows an interactive-tool-first path for first-time setup:
+1. standalone Raspberry Pi 5 hardware libraries
+2. the integrated robot layer `ninjaclawbot`
+3. the OpenClaw integration layer
 
-- `pi5servo servo-tool`
-- `pi5buzzer buzzer-tool`
-- `pi5disp init` plus `pi5disp display-tool`
-- `pi5vl53l0x sensor-tool`
+If you only need a hardware driver, open the matching library README first.
+If you need the full robot behavior, start from `ninjaclawbot`.
+If you need chat-driven behavior, start from the OpenClaw plugin and the root installation guide.
 
-It also ends with an appendix that groups troubleshooting and alternative
-commands by setup stage, so the main path stays shorter for non-developer users.
+## Repository Map
 
-Use the documents this way:
+Top-level folders you will work with most often:
 
-- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md) for the project overview
-- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md) for step-by-step setup, calibration, testing, and OpenClaw connection
-- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md) for advanced development and validation details
+- [ninjaclawbot](ninjaclawbot): integrated robot package
+- [pi5servo](pi5servo): servo driver and calibration tooling
+- [pi5disp](pi5disp): display driver and display tooling
+- [pi5buzzer](pi5buzzer): buzzer driver and sound tooling
+- [pi5vl53l0x](pi5vl53l0x): distance sensor driver and sensor tooling
+- [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin): official OpenClaw plugin
+- [ninjaclawbot_data](ninjaclawbot_data): saved movement and expression assets
+- [InstallationGuide.md](InstallationGuide.md): end-user deployment guide
+- [README.md](README.md): project introduction
+- [backup/README.md](backup/README.md): archived plans and logs
 
-## Root Workspace Workflow
+Root workspace facts:
 
-The repository root is now the main install and execution location.
+- the root `pyproject.toml` installs the whole workspace in one step
+- `uv sync --extra dev` from the repository root is the normal install path
+- root tests cover all Python libraries together
 
-Main rule:
+## Library Guides
 
-- run `uv sync --extra dev` from the project root
-- run `uv run ...` commands from the project root
-- keep shared runtime files at the project root
+Use these first if you are touching one hardware area only:
 
-Root-managed runtime files:
+- Servo: [pi5servo/README.md](pi5servo/README.md)
+- Display: [pi5disp/README.md](pi5disp/README.md)
+- Buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
+- Distance sensor: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- Integrated robot layer: [ninjaclawbot/README.md](ninjaclawbot/README.md)
 
-- `servo.json`
-- `buzzer.json`
-- `display.json`
-- `vl53l0x.json`
-- `ninjaclawbot_data/movements/*.json`
-- `ninjaclawbot_data/expressions/*.json`
+What each README is best for:
 
-Why this matters:
+- `pi5servo`: endpoint model, calibration, backend selection, safe movement testing
+- `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
+- `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
+- `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
+- `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
 
-- the standalone `pi5*` packages still work inside their own folders
-- the integrated `ninjaclawbot` environment now uses the same code and the same root-level config files
-- users no longer need to install `ninjaclawbot` first and then manually install each driver package into the same environment
+## Validated Runtime Model
 
-## Agentic Workflow
+The final validated build is hybrid. That matters for future development.
 
-The source of truth for agent-led implementation work is:
+### What owns what
 
-- [.agents/skills/ninjaclawbot-implementation/SKILL.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/.agents/skills/ninjaclawbot-implementation/SKILL.md)
+- Standalone driver libraries own direct hardware behavior
+- `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
+- the OpenClaw plugin owns the persistent bridge and the operator-facing tool surface
+- startup greeting is validated through:
+  - OpenClaw internal `boot-md`
+  - workspace `BOOT.md`
+- reply reliability is validated through:
+  - workspace `AGENTS.md`
+  - enabled `ninjaclawbot_control` skill
+  - tool allowlist in `openclaw.json`
+- shutdown is validated through the plugin-managed persistent bridge
 
-That skill requires the following workflow:
+### What this means in practice
 
-1. Audit the legacy `pi0*` driver before planning.
-2. Plan one `pi5*` library migration phase at a time.
-3. Wait for user approval before coding.
-4. Keep each `pi5*` library standalone-first and preserve optional future integration hooks.
-5. Pass the quality gate before advancing to the next phase.
-6. Produce a manual Raspberry Pi 5 validation checklist after each migrated library.
-7. Update developer documentation and the development log before closing the task.
+- do not assume the Python service `startup_sequence()` is the only startup path
+- do not assume plugin config alone makes replies work
+- when debugging reply behavior, always check:
+  - allowlist
+  - skill
+  - workspace `AGENTS.md`
+- when debugging startup greeting, always check:
+  - `boot-md`
+  - workspace `BOOT.md`
+  - `ninjaclawbot_diagnostics`
 
-## ninjaclawbot Integration Layer
+## ninjaclawbot Package Map
 
-The new [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot) package is the high-level robot control layer for future OpenClaw integration and standalone operator control.
+Main source folder:
 
-Current responsibilities:
+- [ninjaclawbot/src/ninjaclawbot](ninjaclawbot/src/ninjaclawbot)
 
-- adapter-based composition of `pi5servo`, `pi5disp`, `pi5buzzer`, and `pi5vl53l0x`
-- structured action validation and structured result reporting
-- persistent movement and expression assets under `ninjaclawbot_data/`
-- a first-class expression engine with animated built-in faces, sound chains, and idle orchestration
-- a reply-emotion policy for OpenClaw-facing conversational replies
-- interactive `movement-tool` and `expression-tool`
-- CLI actions for `health-check`, `list-assets`, `list-capabilities`, `move-servos`, `perform-movement`, `perform-expression`, `perform-reply`, `set-idle`, and JSON `run-action`
-- machine-facing JSON actions for `set_presence_mode` and `shutdown_sequence`
-- a hidden `openclaw-serve` stdio bridge that keeps one runtime alive for the official OpenClaw plugin background service
-- a hidden one-shot `openclaw-action` bridge kept for compatibility and fallback
-- an operator-facing OpenClaw diagnostics tool that merges:
-  - bridge health
-  - service state
-  - deployment readiness
-  - recovery hints
-- a persistent presence contract for `idle`, `thinking`, and `listening`
-- an explicit `shutdown_sequence` contract for sleepy -> display power-down -> cleanup
-- OpenClaw lifecycle-hook orchestration for `gateway_start`, `message_received`, `agent_end`, and `gateway_stop`
-- service-core lifecycle arbitration so repeated low-priority updates such as
-  duplicate `thinking` or fallback `idle` can be coalesced or suppressed
-- safe failure reporting when hardware is unavailable or not calibrated yet
-- reusable service-core modules under `ninjaclawbot.openclaw` so future standalone launch modes can reuse the same bridge/runtime ownership logic
+Important modules:
+
+- [actions.py](ninjaclawbot/src/ninjaclawbot/actions.py)
+  - stable machine action names
+  - request validation
+  - required parameter checks
+- [executor.py](ninjaclawbot/src/ninjaclawbot/executor.py)
+  - dispatches validated actions into runtime operations
+- [runtime.py](ninjaclawbot/src/ninjaclawbot/runtime.py)
+  - owns adapters, lifecycle cleanup, and runtime state
+- [adapters.py](ninjaclawbot/src/ninjaclawbot/adapters.py)
+  - bridges `ninjaclawbot` to the standalone `pi5*` libraries
+- [assets.py](ninjaclawbot/src/ninjaclawbot/assets.py)
+  - saved movement and expression asset loading
+- [presence.py](ninjaclawbot/src/ninjaclawbot/presence.py)
+  - persistent presence modes: `idle`, `thinking`, `listening`
+- [locks.py](ninjaclawbot/src/ninjaclawbot/locks.py)
+  - runtime execution locking and overlap protection
+- [config.py](ninjaclawbot/src/ninjaclawbot/config.py)
+  - root-level config paths and runtime path resolution
+- [results.py](ninjaclawbot/src/ninjaclawbot/results.py)
+  - structured action results
+- [errors.py](ninjaclawbot/src/ninjaclawbot/errors.py)
+  - typed runtime and validation errors
+
+### CLI modules
+
+- [__main__.py](ninjaclawbot/src/ninjaclawbot/__main__.py)
+  - main CLI entrypoint
+  - commands such as `health-check`, `perform-reply`, `run-action`, `openclaw-serve`
+- [cli/common.py](ninjaclawbot/src/ninjaclawbot/cli/common.py)
+  - shared CLI helpers
+- [cli/expression_tool.py](ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
+  - interactive expression preview and management
+- [cli/movement_tool.py](ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py)
+  - interactive movement preview and management
+
+### Expression system
+
+- [expressions/catalog.py](ninjaclawbot/src/ninjaclawbot/expressions/catalog.py)
+  - built-in expression definitions
+- [expressions/faces.py](ninjaclawbot/src/ninjaclawbot/expressions/faces.py)
+  - built-in face frames
+- [expressions/sounds.py](ninjaclawbot/src/ninjaclawbot/expressions/sounds.py)
+  - built-in sound patterns
+- [expressions/policy.py](ninjaclawbot/src/ninjaclawbot/expressions/policy.py)
+  - reply-state mapping such as `greeting`, `thinking`, `success`, `error`
+- [expressions/player.py](ninjaclawbot/src/ninjaclawbot/expressions/player.py)
+  - expression playback, presence mode, idle reset, and shutdown sequencing
+
+### OpenClaw bridge internals
+
+- [openclaw/service.py](ninjaclawbot/src/ninjaclawbot/openclaw/service.py)
+  - persistent Python bridge service
+  - service-side arbitration and dedupe
+- [openclaw/bridge.py](ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py)
+  - stdio request/response bridge transport
+
+## OpenClaw Plugin Map
+
+Plugin folder:
+
+- [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin)
+
+Important files:
+
+- [src/index.ts](integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+  - registers plugin lifecycle hooks and tool definitions
+- [src/runner.ts](integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+  - bridge management
+  - deployment inspection
+  - diagnostics generation
+- [src/schemas.ts](integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts)
+  - tool parameter schemas
+- [openclaw.plugin.json](integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json)
+  - plugin metadata and config schema
+- [skills/ninjaclawbot_control/SKILL.md](integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
+  - OpenClaw skill guidance for tool use
 
 Important rule:
 
-- external AI assistants should call `ninjaclawbot`, not the raw `pi5*` drivers directly
-- OpenClaw should call the official plugin wrapper, which now prefers the plugin-managed persistent bridge and falls back to the one-shot bridge only when needed
+- `ninjaclawbot_reply` animates the robot first
+- OpenClaw should still send the normal visible text reply to the user after that tool call
 
-## ninjaclawbot File Layout
+## Action Surface
 
-Main package layout:
+The machine action surface is defined in [actions.py](ninjaclawbot/src/ninjaclawbot/actions.py).
 
-- `ninjaclawbot/src/ninjaclawbot/actions.py`
-- `ninjaclawbot/src/ninjaclawbot/results.py`
-- `ninjaclawbot/src/ninjaclawbot/errors.py`
-- `ninjaclawbot/src/ninjaclawbot/presence.py`
-- `ninjaclawbot/src/ninjaclawbot/config.py`
-- `ninjaclawbot/src/ninjaclawbot/locks.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/assets.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
-- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/catalog.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/faces.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/policy.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
-- `ninjaclawbot/src/ninjaclawbot/expressions/sounds.py`
-- `ninjaclawbot/src/ninjaclawbot/__main__.py`
-- `ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py`
-- `ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py`
+### Stable action names
 
-OpenClaw wrapper layout:
+- `health_check`
+- `list_capabilities`
+- `move_servos`
+- `perform_movement`
+- `perform_reply`
+- `display_text`
+- `play_sound`
+- `show_expression`
+- `perform_expression`
+- `set_idle`
+- `set_presence_mode`
+- `stop_expression`
+- `shutdown_sequence`
+- `read_distance`
+- `list_assets`
+- `stop_all`
 
-- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
-- `integrations/openclaw/ninjaclawbot-plugin/package.json`
-- `integrations/openclaw/ninjaclawbot-plugin/tsconfig.json`
-- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md`
-- `integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+### Required parameters
 
-Generated user asset paths:
+| Action | Required parameters | Notes |
+| --- | --- | --- |
+| `move_servos` | `targets` | `per_servo_speeds` is optional; valid speed values are `S`, `M`, `F` |
+| `perform_movement` | `name` | runs a saved movement asset |
+| `perform_reply` | `text`, `reply_state` | optional `display_text`, `idle_reset`, `sound_enabled` |
+| `display_text` | `text` | plain display output |
+| `perform_expression` | `name` | saved or built-in expression name |
+| `set_presence_mode` | `mode` | valid modes: `idle`, `thinking`, `listening` |
+| `list_assets` | none | optional `asset_type`: `all`, `movements`, `expressions` |
+| all others above | none | no required parameters |
 
-- `ninjaclawbot_data/movements`
-- `ninjaclawbot_data/expressions`
+### Reply states
 
-Important config note:
+Canonical reply states currently include:
 
-- the integrated `DisplayAdapter` prefers the root-level `display.json`
-  referenced by `NinjaClawbotConfig.display_config_path`
-- if that root file does not exist yet, it falls back to the standalone
-  `pi5disp` package config so users who tested the display with `display-tool`
-  first do not get a broken `expression-tool` experience
-- if `ninjaclawbot` behavior does not match the standalone `pi5disp` test you
-  just ran, verify the root project `display.json` file before debugging the
-  display driver itself
+- `greeting`
+- `confirmation`
+- `success`
+- `speaking`
+- `listening`
+- `thinking`
+- `confusing`
+- `asking_clarification`
+- `cannot_answer`
+- `warning`
+- `error`
+- `sad`
+- `sleepy`
+- `curious`
 
-## Required Files To Review During Driver Work
+Aliases such as `hello`, `reply`, `done`, and `clarify` are normalized in [expressions/policy.py](ninjaclawbot/src/ninjaclawbot/expressions/policy.py).
 
-Always review:
+## Main Commands
 
-- [developmentPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/developmentPlan.md)
-- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
-- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
-- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
-
-For the selected legacy library, inspect:
-
-- `NinjaRobotV5_bak/pi0buzzer`
-- `NinjaRobotV5_bak/pi0servo`
-- `NinjaRobotV5_bak/pi0disp`
-- `NinjaRobotV5_bak/pi0vl53l0x`
-
-At minimum inspect:
-
-- `pyproject.toml`
-- `README.md`
-- `src/<package>/__init__.py`
-- `src/<package>/__main__.py`
-- `src/<package>/driver.py` if present
-- core modules
-- config manager
-- CLI modules
-- tests
-
-## Quality Checks
-
-Default quality gate for each implementation phase:
-
-```bash
-python -m compileall .
-ruff check .
-ruff format --check .
-pytest -q
-```
-
-If the package already uses typing checks:
-
-```bash
-mypy .
-```
-
-Preferred practice:
-
-- run package-local checks while migrating one library
-- run broader repo checks only if shared files changed
-
-For the full project from the root, use:
+From the project root:
 
 ```bash
 uv sync --extra dev
-uv run python -m compileall ninjaclawbot/src ninjaclawbot/tests src
-uv run ruff check .
-uv run ruff format --check .
-uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
 uv run ninjaclawbot --help
+uv run ninjaclawbot health-check
+uv run ninjaclawbot list-capabilities
+uv run ninjaclawbot expression-tool
+uv run ninjaclawbot movement-tool
+uv run ninjaclawbot perform-expression greeting
+uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
+uv run ninjaclawbot run-action '{"action":"read_distance"}'
 ```
 
-For pytest in the root monorepo, run each package test suite from the root with
-that package's own config:
+Standalone library tools:
 
 ```bash
-uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml
-uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml
-uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml
-uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml
-uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
+uv run pi5servo servo-tool
+uv run pi5disp display-tool
+uv run pi5buzzer buzzer-tool
+uv run pi5vl53l0x sensor-tool
 ```
 
-For [ninjaclawbot](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot) alone, use:
-
-```bash
-cd ninjaclawbot
-uv sync --extra dev
-uv run python -m compileall src tests
-uv run ruff check .
-uv run ruff format --check .
-uv run pytest -q
-uv run python -c "import pi5buzzer, pi5servo, pi5disp, pi5vl53l0x"
-uv run ninjaclawbot --help
-```
-
-For the official OpenClaw plugin wrapper development checks, use:
+Plugin validation:
 
 ```bash
 cd integrations/openclaw/ninjaclawbot-plugin
@@ -252,436 +281,189 @@ npm run typecheck
 npm test
 ```
 
-For end-user Raspberry Pi setup, do not use this step as the primary install
-path. Use [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
-and enable the plugin by editing the OpenClaw configuration file.
+## Runtime Files
 
-Plugin design rule:
+The normal root-level runtime files are:
 
-- the plugin must stay thin
-- it may map OpenClaw lifecycle events to Python-side service requests
-- explicit robot behavior, presence modes, reply policy, and shutdown sequencing should stay in Python
-- explicit tool calls may still fall back to the one-shot `openclaw-action` bridge if the persistent bridge is unavailable
+- `servo.json`
+- `buzzer.json`
+- `display.json`
+- `vl53l0x.json`
+- `ninjaclawbot_data/movements/*.json`
+- `ninjaclawbot_data/expressions/*.json`
 
-Packaging note:
+Important display note:
 
-- the root [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml) is now the canonical project install entry
-- it installs `ninjaclawbot` and all sibling `pi5*` packages through local editable `uv` path sources
-- `ninjaclawbot/pyproject.toml` still keeps the integration package usable on its own
+- `pi5disp` keeps its own package config file
+- `ninjaclawbot` prefers the root `display.json`
+- after display setup, export the package config into the root file:
 
-## ninjaclawbot Raspberry Pi Validation
+```bash
+cd ~/NinjaClawBot
+uv run pi5disp config export "$PWD/display.json"
+```
 
-Safe smoke tests:
+## Development Workflow
 
-- `uv run ninjaclawbot list-assets`
+Use this order for normal work:
+
+1. reproduce the problem or confirm the desired behavior
+2. identify the correct layer:
+   - standalone library
+   - integrated `ninjaclawbot`
+   - OpenClaw plugin or workspace setup
+3. make the smallest safe change
+4. run the validation gate
+5. update the docs
+6. write Pi validation steps if hardware behavior changed
+
+### Which layer to change
+
+- Servo motion issue only:
+  - start in [pi5servo/README.md](pi5servo/README.md)
+- Display orientation or brightness issue:
+  - start in [pi5disp/README.md](pi5disp/README.md)
+- Expression composition or reply-state issue:
+  - start in `ninjaclawbot`
+- OpenClaw startup, Telegram reply, or diagnostics issue:
+  - start in the plugin plus workspace/deployment checks
+
+## Validation Gates
+
+Workspace-level Python gate:
+
+```bash
+cd /path/to/NinjaClawBot
+uv run --extra dev python -m compileall .
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml
+uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml
+uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml
+uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml
+uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
+```
+
+Why this is written this way:
+
+- this workspace uses sibling package folders such as `pi5buzzer/` and
+  `pi5disp/`
+- a generic root `pytest -q` can resolve those folders before their `src/`
+  packages
+- the package-specific pytest commands above are the stable, validated path
+
+Package-level `ninjaclawbot` gate:
+
+```bash
+cd /path/to/NinjaClawBot/ninjaclawbot
+uv run --extra dev python -m compileall src tests
+uv run --extra dev ruff check src tests
+uv run --extra dev ruff format --check src tests
+uv run --extra dev pytest -q tests -c pyproject.toml
+```
+
+Plugin gate:
+
+```bash
+cd /path/to/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin
+npm install
+npm run typecheck
+npm test
+```
+
+## Raspberry Pi Validation
+
+Use four buckets whenever hardware-facing behavior changes.
+
+### Safe smoke tests
+
 - `uv run ninjaclawbot health-check`
-- `uv run ninjaclawbot list-capabilities`
-- `uv run ninjaclawbot perform-reply --reply-state greeting "Hello"`
-- `uv run ninjaclawbot run-action '{"action":"set_presence_mode","parameters":{"mode":"thinking"}}'`
-- `uv run ninjaclawbot run-action '{"action":"shutdown_sequence"}'`
-
-Device communication tests:
-
-- `uv run ninjaclawbot run-action '{"action":"read_distance"}'`
-- `uv run ninjaclawbot perform-expression <name>`
-- `uv run ninjaclawbot set-idle`
-
-Actuator-moving tests:
-
-- `uv run ninjaclawbot move-servos "M_gpio12:C"`
-- `uv run ninjaclawbot perform-movement <name>`
 - `uv run ninjaclawbot expression-tool`
+- `uv run pi5disp display-tool`
+- `uv run pi5vl53l0x sensor-tool`
 
-Power-risk tests:
+### Device communication tests
 
-- use external servo power where required
-- power down before rewiring SPI and I2C devices
-- keep one-servo-only tests for the first movement validation pass
+- `i2cdetect -y 1`
+- OpenClaw startup
+- `ninjaclawbot_diagnostics`
+- Telegram message / reply cycle
 
-Expected integrated expression result:
+### Actuator-moving tests
 
-- `perform-expression` should keep the display output stable
-- `perform-expression` should resolve both saved expressions and built-in names such as `idle` or `greeting`
-- display startup should be synchronized so the first visible face or text appears before or with the first sound
-- built-in expression previews should show animated legacy-style faces rather than static text-only output
-- queued buzzer emotion playback should finish before the command exits
-- temporary reactions should return to `idle` when `idle_reset` is enabled
-- leaving `expression-tool` should not print GPIO cleanup tracebacks
-- `perform-reply` should map greeting, confusion, success, warning, and error replies to the expected built-in expressions
-- `list-capabilities` should report supported reply states and available assets for OpenClaw
-- `set_presence_mode` should keep `thinking` or `listening` alive until a later action replaces it
-- `shutdown_sequence` should render `sleepy`, then power down the display, then clean up safely
+- `uv run pi5servo servo-tool`
+- `uv run ninjaclawbot movement-tool`
+- one small known-safe saved movement only
 
-Recommended calibration order before integrated robot tests:
+### Power-risk tests
 
-1. `uv run pi5servo calib <endpoint>` or `uv run pi5servo servo-tool`
-2. `uv run pi5buzzer init <gpio>` if you need a non-default buzzer pin
-3. `uv run pi5disp init --defaults`
-4. `uv run pi5vl53l0x test`
-5. `uv run ninjaclawbot health-check`
+- `openclaw gateway restart`
+- `openclaw gateway stop`
+- confirm sleepy then display power-down
 
-## ninjaclawbot Troubleshooting
+## Troubleshooting Shortcuts
 
-### `expression-tool` exit cleanup
+### `uv` not found in OpenClaw
 
-If `expression-tool` exits with `RPi.GPIO` or `lgpio` cleanup tracebacks:
+- check the absolute path:
 
-- verify the integrated runtime is closing the display before the buzzer
-- verify you are using the current root environment from `uv sync --extra dev`
-- rerun `uv run ninjaclawbot expression-tool` and confirm it returns to the shell cleanly after `Goodbye!`
+```bash
+command -v uv
+```
 
-### `perform-expression` sound playback
+- store that path in `plugins.entries.ninjaclawbot.config.uvCommand`
 
-If the display text appears but the emotion sound is cut short:
+### Display works in `display-tool` but looks wrong in `expression-tool`
 
-- verify you are running `uv run ninjaclawbot perform-expression <name>` from the project root
-- verify the saved expression uses a valid `sound.emotion` value such as `happy`
-- confirm the command does not return until the buzzer sequence finishes
-- if needed, compare with `uv run pi5buzzer play happy` to confirm the buzzer hardware path itself is healthy
+- export the display config to the root:
 
-### Built-in expression execution
+```bash
+cd ~/NinjaClawBot
+uv run pi5disp config export "$PWD/display.json"
+uv run ninjaclawbot health-check
+```
 
-If `uv run ninjaclawbot perform-expression idle` or another built-in name fails:
+### Robot reacts but Telegram shows no text
 
-- verify you are running from the project root after `uv sync --extra dev`
-- confirm the name is one of the built-ins exposed by `expression-tool`
-- check both execution paths:
-  - `uv run ninjaclawbot perform-expression idle`
-  - `uv run ninjaclawbot perform-expression <saved-name>`
+- check:
+  - workspace `AGENTS.md`
+  - `ninjaclawbot_control` skill
+  - allowlist contains `ninjaclawbot_reply`
+- the correct behavior is:
+  - robot animation first
+  - normal visible text reply after that
 
-### OpenClaw plugin wrapper
+### Startup greeting missing
 
-If the OpenClaw plugin does not work:
-
-- run `ninjaclawbot_diagnostics` first and inspect:
-  - `summary.state`
-  - `bridge.status`
-  - `deployment.status`
+- check:
+  - `boot-md` enabled
+  - workspace `BOOT.md`
+  - `ninjaclawbot_diagnostics`
+- on the validated build, trust:
   - `startup.trackingMode`
   - `startup.effectiveCompleted`
-  - `recoveryHints`
-- verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
-- verify `plugins.entries.ninjaclawbot.enabled` is `true`
-- verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
-- verify `plugins.entries.ninjaclawbot.config.uvCommand` is the absolute result of `command -v uv` on the Raspberry Pi if the gateway log shows `spawn uv ENOENT`
-- verify `plugins.entries.ninjaclawbot.config.enablePersistentBridge` is not disabled if you expect persistent idle and lifecycle-aware behavior
-- do not rely on optional `enableAlwaysOn`-style config keys unless the installed OpenClaw build accepts them; the validated Raspberry Pi path now uses `hooks.internal.boot-md` plus workspace `BOOT.md`
-- verify `openclaw hooks list --verbose` shows `ninjaclawbot` lifecycle hook entries; if they do not appear, startup greeting and sleepy shutdown cannot fire even when the bridge is healthy
-- verify `boot-md` is enabled and that the workspace `BOOT.md` file exists if you expect a startup greeting on the current validated Raspberry Pi setup
-- if startup greeting is already working on Raspberry Pi but the raw service
-  field still says `startup_completed: false`, prefer the diagnostics
-  `startup.*` section; the validated hybrid deployment can complete startup
-  through `boot-md` and workspace `BOOT.md` without calling the Python
-  `startup_sequence()` path directly
-- restore the default bridge timeouts if `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` were tuned too aggressively
-- verify the target agent allowlist contains the `ninjaclawbot_*` tool names
-- start a new chat session after plugin or skill changes so the OpenClaw session prompt picks up the latest NinjaClawBot skill snapshot
-- verify the workspace `AGENTS.md` contains the NinjaClawBot reply policy if the model keeps answering with plain text instead of calling `ninjaclawbot_reply`
-- if the robot animates correctly but Telegram receives no text reply, verify the
-  reply policy says to send the normal visible chat reply after
-  `ninjaclawbot_reply` instead of treating the tool call itself as the final
-  answer
-- rerun `npm run typecheck` and `npm test` in the plugin folder
-- rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
-- if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path
-- if the robot reacts more than once to the same low-priority lifecycle event,
-  inspect `ninjaclawbot_diagnostics` and confirm the current build includes the
-  service-side dedupe counters from Phase 2.4
-- if startup greeting does not appear but reply tools still work, check whether the OpenClaw build exposes plugin lifecycle hooks and whether the plugin log shows `gateway_start` hook warnings
-- if gateway stop turns the display off without `sleepy`, check whether the shutdown sequence was disabled in plugin config or skipped because the persistent bridge was unavailable
-- for developer-only bridge debugging, the plugin-managed service starts the hidden command `uv run ninjaclawbot --root-dir <root> openclaw-serve`
-- expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
-
-## Repository Hygiene
-
-Python cache files must not be tracked in git.
-
-Current rule:
-
-- `__pycache__/` and `*.pyc` are ignored at the repository root
-- if an older clone still has those files tracked locally, remove them once and
-  commit the cleanup before telling Raspberry Pi users to `git pull`
-
-Why this matters:
-
-- tracked cache files already caused a real Raspberry Pi update failure during
-  `git pull`
-- generated cache artifacts make deployment harder without adding any useful
-  source history
-
-### Expression startup responsiveness
-
-If sound still starts noticeably before the face or you still see a startup flash:
-
-- verify you are running from the project root after `uv sync --extra dev`
-- test both:
-  - `uv run ninjaclawbot perform-expression idle`
-  - `uv run ninjaclawbot perform-expression hello`
-- expected result after the Phase 1 optimization:
-  - the display is initialized before sound playback begins
-  - the first face frame is sent to the panel before buzzer playback starts for face-based expressions
-  - static text-only expressions render text before buzzer playback starts
-- current limitation:
-  - one-shot `uv run ninjaclawbot perform-expression ...` still builds and tears down a fresh runtime, so a small panel-reset cost can still exist on every new process
-
-### Expression preview and idle policy
-
-If a built-in preview does not look animated or the robot does not return to `idle` correctly:
-
-- verify you are using the current root environment from `uv sync --extra dev`
-- run `uv run ninjaclawbot expression-tool`
-- preview `idle`, `happy`, `speaking`, `thinking`, and `confusing`
-- use `7. Set idle expression`, then `8. Stop active expression`
-- confirm the display returns to an animated waiting face when requested and stops cleanly on command
-
-## pi5buzzer Migration Notes
-
-Implemented package:
-
-- [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer)
-
-Legacy source audited for parity:
-
-- [NinjaRobotV5_bak/pi0buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0buzzer)
-
-Required public compatibility surface:
-
-- `pi5buzzer.Buzzer`
-- `pi5buzzer.MusicBuzzer`
-- `pi5buzzer.driver.Buzzer`
-- `pi5buzzer.driver.MusicBuzzer`
-- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/__main__.py): `init`, `beep`, `play`, `info`, `config`, `buzzer-tool`
-- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/config/config_manager.py) keeping `buzzer.json` compatibility
-
-Backend rule:
-
-- use the backend factory in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/src/pi5buzzer/core/driver.py)
-- default runtime is an `RPi.GPIO` compatible backend intended for `rpi-lgpio` on Raspberry Pi 5
-- keep high-level queueing, frequency clamping, volume semantics, and music helpers independent from the GPIO transport
-
-Phase 1 quality gate result:
-
-- `python -m compileall .`
-- `ruff check .`
-- `ruff format --check .`
-- `pytest -q`
-- current result for [pi5buzzer](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer): `65 passed`
-
-Phase 1 Raspberry Pi 5 validation checklist:
-
-- safe smoke tests: install `rpi-lgpio`, run `pi5buzzer --help`, `pi5buzzer init 17`, and verify `buzzer.json` is created
-- device communication tests: run `pi5buzzer info --health-check` and confirm the backend can claim the configured GPIO pin
-- actuator tests: run `pi5buzzer beep 440 0.3`, `pi5buzzer play happy`, and a short Python `play_song()` sequence
-- power-risk tests: verify `off()` and CLI exit leave the buzzer silent with no stuck PWM output
-- expected outcome: short tones and queued playback are audible and stable on Raspberry Pi 5
-- rollback: uninstall `pi5buzzer`, remove the created `buzzer.json`, and disconnect the buzzer from the GPIO pin
-
-Phase 1 installation troubleshooting:
-
-- if `uv sync --extra pi --extra dev` fails while building `lgpio`, check the Python version used by `uv`
-- `lgpio 0.2.2.0` currently ships Linux ARM wheels for CPython 3.9 through 3.12, but not 3.13
-- `uv` prefers managed Python versions, so an unmanaged install can drift to 3.13 and trigger a source build that needs `swig`
-- keep [pi5buzzer/.python-version](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5buzzer/.python-version) pinned to `3.11`
-- if a broken `.venv` already exists, remove it and rerun `uv sync --extra pi --extra dev`
-- manual fallback only: install `swig`, `python3-dev`, and `build-essential`, then retry the sync
-
-Phase 1 shutdown regression note:
-
-- `rpi-lgpio` PWM objects call `stop()` again during object destruction
-- the `pi5buzzer` backend must release PWM objects before `GPIO.cleanup()` closes the chip handle
-- expected result after the fix: `uv run pi5buzzer buzzer-tool`, then `9. Exit`, returns without a cleanup traceback
-
-## pi5vl53l0x Migration Notes
-
-Implemented package:
-
-- [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x)
-
-Legacy source audited for parity:
-
-- [NinjaRobotV5_bak/pi0vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0vl53l0x)
-
-Required public compatibility surface:
-
-- `pi5vl53l0x.VL53L0X`
-- `pi5vl53l0x.driver.VL53L0X`
-- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/__main__.py): `get`, `performance`, `calibrate`, `test`, `status`, `config`, `sensor-tool`
-- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/config/config_manager.py) keeping `vl53l0x.json` compatibility
-
-Backend rule:
-
-- use the retrying I2C wrapper in [i2c.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x/src/pi5vl53l0x/core/i2c.py)
-- default runtime is `smbus2` over `/dev/i2c-1` on Raspberry Pi 5
-- keep sensor initialization, timing budget logic, calibration, and health-check behavior independent from the low-level transport
-
-Quality gate result:
-
-- `uv run python -m compileall src tests`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest -q`
-- current result for [pi5vl53l0x](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5vl53l0x): `62 passed`
-
-Raspberry Pi 5 validation checklist:
-
-- safe smoke tests: run `pi5vl53l0x --help`, `pi5vl53l0x config show`, check `ls /dev/i2c-1`, and confirm `sudo i2cdetect -y 1` shows `29`
-- device communication tests: run `pi5vl53l0x test`, `pi5vl53l0x get --count 5 --interval 0.5`, and `pi5vl53l0x status`
-- sensor behavior tests: run `pi5vl53l0x performance --count 50`, `pi5vl53l0x calibrate --distance 200 --count 10`, and the interactive `pi5vl53l0x sensor-tool`
-- power-risk tests: do not hot-plug the sensor while commands are reading; power the Pi down before rewiring
-- expected outcome: stable initialization, visible address `0x29`, consistent distance readings, saved offset calibration, and successful reinitialize recovery
-- rollback: stop the running process, power down before rewiring, and remove `src/pi5vl53l0x/config/vl53l0x.json` if a clean config reset is needed
-
-## pi5disp Migration Notes
-
-Implemented package:
-
-- [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp)
-
-Legacy source audited for parity:
-
-- [NinjaRobotV5_bak/pi0disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0disp)
-
-Required public compatibility surface:
-
-- `pi5disp.ST7789V`
-- `pi5disp.ConfigManager`
-- `pi5disp.driver.ST7789V`
-- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/__main__.py): `init`, `image`, `text`, `demo`, `info`, `clear`, `brightness`, `config`, `display-tool`
-- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/config/config_manager.py) keeping `display.json` compatibility
-
-Backend rule:
-
-- use the Pi 5 adapter in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp/src/pi5disp/core/driver.py)
-- default runtime is `spidev` for SPI plus an `RPi.GPIO` compatible backend intended for `rpi-lgpio`
-- keep `display()` as a full-frame write path and `display_region()` as the partial-update path to match the legacy tested behavior
-- keep renderer helpers and text ticker effects independent from the low-level SPI and GPIO transport
-- persist the saved `brightness` value in `display.json` and apply it when `create_display()` opens a new display instance
-- keep `display-tool` on one live display session so demo, brightness, clear, and text/image actions do not churn the Pi 5 backend between menu steps
-
-Quality gate result:
-
-- `uv run python -m compileall src tests`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest -q`
-- `uv run pi5disp --help`
-- current result for [pi5disp](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5disp): `63 passed`
-
-Raspberry Pi 5 validation checklist:
-
-- safe smoke tests: run `pi5disp --help`, `pi5disp init --defaults`, `pi5disp config show`, `pi5disp info`, and confirm `ls /dev/spidev0.0` succeeds
-- device communication tests: run `pi5disp clear`, `pi5disp brightness 50`, `pi5disp config show`, `pi5disp text "Hello NinjaClawBot"`, and `pi5disp image ./example.png`
-- display behavior tests: run `pi5disp text "Scrolling text" --scroll --duration 10`, `pi5disp demo --num-balls 3 --duration 10`, and the interactive `pi5disp display-tool`
-- session regression tests: inside `pi5disp display-tool`, run ball demo, change brightness, then run ball demo again without clearing first
-- power-risk tests: power the Pi down before rewiring the display, do not hot-plug the SPI display while the backlight is active, and confirm CLI exit leaves the panel stable with the backlight under control
-- expected outcome: stable clear, text, image, demo, brightness, and scrolling behavior on the ST7789V panel, saved brightness applied on new sessions, and no stuck GPIO or SPI state after exit
-- rollback: stop the running process, power down before rewiring, and remove `display.json` if a clean config reset is needed
-
-## pi5servo Migration Notes
-
-Implemented package:
-
-- [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo)
-
-Legacy source audited for parity:
-
-- [NinjaRobotV5_bak/pi0servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/NinjaRobotV5_bak/pi0servo)
-
-Required public compatibility surface:
-
-- `pi5servo.Servo`
-- `pi5servo.ServoCalibration`
-- `pi5servo.ServoGroup`
-- `pi5servo.MultiServo`
-- `pi5servo.ConfigManager`
-- parser and motion exports in [__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__init__.py)
-- compatibility re-export in [driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/driver.py)
-- CLI commands in [__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/__main__.py): `cmd`, `move`, `calib`, `status`, `servo-tool`, `config`
-- config manager in [config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py) keeping `servo.json` compatibility and adding optional backend metadata
-
-Backend rule:
-
-- use the backend factory in [backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
-- default runtime is standalone-first for Raspberry Pi 5 and prefers hardware-backed PWM on header-connected servo pins
-- keep the legacy pigpio path available as a compatibility backend, not as the standalone default
-- keep the high-level motion model, easing, calibration, and command parsing independent from the low-level pulse generator
-- keep optional advanced external controller support through the `pca9685` backend
-- `pwm_pio` remains a planned backend placeholder and is not a production runtime yet
-
-DFR0566 endpoint rule:
-
-- treat a DFR0566 digital port used for servo signal as a native GPIO endpoint
-- treat a DFR0566 PWM servo connector as a HAT PWM endpoint driven by the dedicated `dfr0566` backend
-- do not let those two connection families share one ambiguous integer namespace
-- the implemented explicit endpoint naming model is:
-  - native GPIO: `gpio12`, `gpio13`, `gpio18`, `gpio19`
-  - DFR0566 PWM: `hat_pwm1`, `hat_pwm2`, `hat_pwm3`, `hat_pwm4`
-- current physical mapping on the HAT is:
-  - physical `PWM0` -> `hat_pwm1`
-  - physical `PWM1` -> `hat_pwm2`
-  - physical `PWM2` -> `hat_pwm3`
-  - physical `PWM3` -> `hat_pwm4`
-- numeric targets such as `12:45` still mean native GPIO shorthand, but explicit endpoint names are now supported for mixed routing
-
-Functions adapted for DFR0566 mixed-endpoint support:
-
-- [create_servo_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/backend.py)
-- [Servo.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/servo.py#L47)
-- [ServoGroup.__init__](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L30)
-- [ServoGroup._resolve_backend](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L74)
-- [ServoGroup._resolve_targets](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/core/multi_servos.py#L343)
-- [ServoTarget](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L16)
-- [ParsedCommand](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L35)
-- [parse_command](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/parser/command.py#L50)
-- [parse_pin_list](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L30)
-- [create_servo_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L170)
-- [create_group_from_config](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/_common.py#L206)
-- [ConfigManager.load](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L63)
-- [ConfigManager.get_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L118)
-- [ConfigManager.set_calibration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L141)
-- [ConfigManager.get_all_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py#L158)
-- [ConfigManager.get_all_endpoint_calibrations](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/config/config_manager.py)
-- [config_cmd.show](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/config_cmd.py)
-- [calib](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/calib.py)
-- [servo_tool](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo/src/pi5servo/cli/servo_tool.py)
-
-Quality gate result:
-
-- `uv run python -m compileall src tests`
-- `uv run ruff check .`
-- `uv run ruff format --check .`
-- `uv run pytest -q`
-- current result for [pi5servo](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5servo): `121 passed`
-
-Raspberry Pi 5 validation checklist:
-
-- safe smoke tests: run `uv run pi5servo --help`, `uv run pi5servo status --pins 12,13`, `uv run pi5servo config show`, and confirm the selected backend and `servo.json` values look correct
-- empty-config interactive check: if `servo.json` has no saved endpoints, run `uv run pi5servo servo-tool` and confirm it does not auto-claim `GPIO12` or `GPIO13` before you enter an explicit endpoint
-- DFR0566 smoke tests: run `uv run pi5servo status --backend dfr0566 --pins hat_pwm1 --address 0x10 --bus-id 1` and confirm the board responds cleanly
-- firmware checks: confirm the correct PWM overlay is enabled in `/boot/firmware/config.txt`, reboot the Pi, and verify the intended PWM-capable pins match the selected backend mapping
-- device communication tests: run `uv run pi5servo move 12 center`, `uv run pi5servo move 12 min`, `uv run pi5servo move 12 max`, `uv run pi5servo move hat_pwm1 center --backend dfr0566 --address 0x10 --bus-id 1`, `uv run pi5servo calib hat_pwm1 --backend dfr0566 --address 0x10 --bus-id 1`, and `uv run pi5servo cmd "M_gpio12:45/hat_pwm1:-30" --pins gpio12,hat_pwm1`
-- actuator-moving tests: run `uv run pi5servo servo-tool`, verify calibration, quick move, single move, speed update, and clean exit centering behavior for both `gpioNN` and `hat_pwmN`
-- same-session calibration check: calibrate a servo, stay inside the same `servo-tool` session, then run Quick Move and confirm the newly calibrated servo responds correctly without exiting and reopening the tool
-- quick-move regression check: after moving a servo through the interactive tool, run `F_gpio12:0/gpio13:0` or the equivalent endpoints in Quick Move and confirm the servos return to center instead of silently skipping the PWM write
-- mixed-routing tests: verify `servo-tool` accepts both `gpio12` and `hat_pwm1`, and confirm mixed commands no longer fail on mixed-type endpoint sorting
-- signal accuracy tests: measure the servo signal with a logic analyser or oscilloscope at center, min, and max pulse widths before trusting the setup for full robot motion
-- power-risk tests: use an external 5V servo supply with common ground, keep the robot linkage clear during first tests, and power the Pi down before rewiring
-- expected outcome: stable pulse output on the intended GPIO pins, correct DFR0566 I2C communication at the configured address, correct endpoint-aware calibration save/load, repeatable sync movement, abortable motion, and safe release on `off()` and CLI exit
-- rollback: stop the process, disconnect servo signal lines, remove `servo.json` if a clean config reset is needed, and revert to a single-servo center-only test before reintroducing multi-servo motion
-
-## Raspberry Pi 5 Validation Flow
-
-After each migrated library, produce and review:
-
-- safe smoke tests
-- device communication tests
-- actuator-moving tests where relevant
-- power-risk tests where relevant
-- expected outcomes
-- rollback steps
-
-Special rule for `pi5servo`:
-
-- treat software-timed servo pulses as testing-only
-- prefer hardware-backed PWM
-- require direct signal measurement with a logic analyser or oscilloscope during real hardware validation
+  more than the raw service field `startup_completed`
+
+### Best first debugging command
+
+Run this through the OpenClaw gateway:
+
+```bash
+curl -sS "http://127.0.0.1:YOUR_GATEWAY_PORT/tools/invoke" \
+  -H "Authorization: Bearer YOUR_OPENCLAW_GATEWAY_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tool": "ninjaclawbot_diagnostics",
+    "args": {},
+    "sessionKey": "main"
+  }' | python3 -m json.tool
+```
+
+That one tool gives you:
+
+- bridge health
+- service state
+- startup interpretation
+- deployment readiness
+- display config summary
+- recovery hints
