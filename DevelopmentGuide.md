@@ -19,6 +19,7 @@
 
 - [Project summary](#project-summary)
 - [Repository map](#repository-map)
+- [Complete file structure](#complete-file-structure)
 - [Library guides](#library-guides)
 - [Validated runtime model](#validated-runtime-model)
 - [ninjaclawbot package map](#ninjaclawbot-package-map)
@@ -65,6 +66,197 @@ Root workspace facts:
 - the root `pyproject.toml` installs the whole workspace in one step
 - `uv sync --extra dev` from the repository root is the normal install path
 - root tests cover all Python libraries together
+
+## Complete File Structure
+
+This is the current development-facing repository layout for the final validated build.
+
+Generated folders such as local virtual environments, `node_modules`, cache folders, and other machine-local artifacts are intentionally left out here so the structure stays useful for real development work.
+
+```text
+NinjaClawBot/
+├── AGENTS.md
+├── README.md
+├── DevelopmentGuide.md
+├── InstallationGuide.md
+├── LICENSE
+├── pyproject.toml
+├── uv.lock
+├── conftest.py
+├── src/
+│   └── ninjaclawbot_workspace/
+│       └── __init__.py
+├── .agents/
+│   └── skills/
+│       ├── ninjaclawbot-implementation/
+│       │   └── SKILL.md
+│       ├── pi-validation/
+│       │   └── SKILL.md
+│       └── project-documentation/
+│           └── SKILL.md
+├── backup/
+│   ├── README.md
+│   ├── DevelopmentLog.md
+│   ├── EnhancementPlan.md
+│   └── developmentPlan.md
+├── ninjaclawbot/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── ninjaclawbot_data/
+│   │   ├── expressions/
+│   │   └── movements/
+│   ├── src/
+│   │   └── ninjaclawbot/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── actions.py
+│   │       ├── adapters.py
+│   │       ├── assets.py
+│   │       ├── config.py
+│   │       ├── errors.py
+│   │       ├── executor.py
+│   │       ├── locks.py
+│   │       ├── presence.py
+│   │       ├── results.py
+│   │       ├── runtime.py
+│   │       ├── cli/
+│   │       │   ├── __init__.py
+│   │       │   ├── common.py
+│   │       │   ├── expression_tool.py
+│   │       │   └── movement_tool.py
+│   │       ├── expressions/
+│   │       │   ├── __init__.py
+│   │       │   ├── catalog.py
+│   │       │   ├── faces.py
+│   │       │   ├── player.py
+│   │       │   ├── policy.py
+│   │       │   └── sounds.py
+│   │       └── openclaw/
+│   │           ├── __init__.py
+│   │           ├── bridge.py
+│   │           └── service.py
+│   └── tests/
+│       ├── test_actions.py
+│       ├── test_adapters.py
+│       ├── test_assets.py
+│       ├── test_cli_tools.py
+│       ├── test_dependency_imports.py
+│       ├── test_executor.py
+│       ├── test_expressions.py
+│       ├── test_openclaw_bridge.py
+│       ├── test_policy.py
+│       ├── test_repo_hygiene.py
+│       ├── test_results.py
+│       └── test_runtime.py
+├── ninjaclawbot_data/
+│   ├── expressions/
+│   └── movements/
+├── pi5servo/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── src/
+│   │   └── pi5servo/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── driver.py
+│   │       ├── cli/
+│   │       ├── config/
+│   │       ├── core/
+│   │       ├── motion/
+│   │       └── parser/
+│   └── tests/
+│       ├── __init__.py
+│       ├── conftest.py
+│       ├── test_backend.py
+│       ├── test_cli.py
+│       ├── test_config.py
+│       ├── test_core.py
+│       ├── test_motion.py
+│       ├── test_parser.py
+│       └── test_servo_tool.py
+├── pi5disp/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── display.json
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── src/
+│   │   └── pi5disp/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── cli/
+│   │       ├── config/
+│   │       ├── core/
+│   │       ├── effects/
+│   │       └── fonts/
+│   └── tests/
+│       ├── conftest.py
+│       ├── test_cli.py
+│       ├── test_config.py
+│       ├── test_display_tool.py
+│       ├── test_driver.py
+│       ├── test_renderer.py
+│       ├── test_smoke.py
+│       └── test_text_ticker.py
+├── pi5buzzer/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── src/
+│   │   └── pi5buzzer/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── driver.py
+│   │       ├── notes.py
+│   │       ├── cli/
+│   │       ├── config/
+│   │       └── core/
+│   └── tests/
+│       ├── conftest.py
+│       ├── test_config.py
+│       ├── test_driver.py
+│       └── test_music.py
+├── pi5vl53l0x/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── uv.lock
+│   ├── src/
+│   │   └── pi5vl53l0x/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── driver.py
+│   │       ├── registers.py
+│   │       ├── cli/
+│   │       ├── config/
+│   │       └── core/
+│   └── tests/
+│       ├── test_cli.py
+│       ├── test_config.py
+│       ├── test_i2c.py
+│       └── test_sensor.py
+└── integrations/
+    └── openclaw/
+        └── ninjaclawbot-plugin/
+            ├── openclaw.plugin.json
+            ├── package.json
+            ├── package-lock.json
+            ├── tsconfig.json
+            ├── src/
+            │   ├── index.ts
+            │   ├── runner.ts
+            │   └── schemas.ts
+            ├── tests/
+            │   ├── index.test.ts
+            │   └── runner.test.ts
+            └── skills/
+                └── ninjaclawbot_control/
+                    └── SKILL.md
+```
 
 ## Library Guides
 
