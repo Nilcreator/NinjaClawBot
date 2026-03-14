@@ -1,5 +1,19 @@
 # pi5vl53l0x
 
+<div align="center">
+
+**VL53L0X Distance Sensor Driver and Guided Sensor Tools for Raspberry Pi 5**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+
+[NinjaClawBot README](../README.md) | [Installation Guide](../InstallationGuide.md) | [Development Guide](../DevelopmentGuide.md)
+
+</div>
+
+---
+
 A standalone VL53L0X distance sensor driver for Raspberry Pi 5.
 
 `pi5vl53l0x` helps a Raspberry Pi 5 read distance from a VL53L0X
@@ -16,6 +30,19 @@ This driver keeps the same main features as the legacy version:
 - a simple `vl53l0x.json` settings file
 
 **Part of the [NinjaClawBot](../README.md) project.**
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Python Usage](#python-usage)
+- [Automated Testing](#automated-testing)
+- [Raspberry Pi 5 Validation Checklist](#raspberry-pi-5-validation-checklist)
+- [Troubleshooting](#troubleshooting)
 
 ---
 

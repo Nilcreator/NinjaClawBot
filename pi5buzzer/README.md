@@ -1,5 +1,19 @@
 # pi5buzzer
 
+<div align="center">
+
+**Passive Buzzer Driver and Guided Test Tools for Raspberry Pi 5**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+
+[NinjaClawBot README](../README.md) | [Installation Guide](../InstallationGuide.md) | [Development Guide](../DevelopmentGuide.md)
+
+</div>
+
+---
+
 A passive buzzer driver for Raspberry Pi 5 with simple sound, music, and test tools.
 
 `pi5buzzer` helps a Raspberry Pi 5 play short beeps, notes, and simple melodies
@@ -15,6 +29,18 @@ This driver keeps the same main features as the legacy version:
 - a simple `buzzer.json` settings file
 
 **Part of the [NinjaClawBot](../README.md) project.**
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Configuration Management](#configuration-management)
+- [Python API (code interface)](#python-api-code-interface)
+- [Testing](#testing)
 
 ---
 

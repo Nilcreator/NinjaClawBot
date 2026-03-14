@@ -1,12 +1,49 @@
 # pi5servo
 
+<div align="center">
+
+**Velocity-Based Servo Control and Calibration Tools for Raspberry Pi 5**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+
+[NinjaClawBot README](../README.md) | [Installation Guide](../InstallationGuide.md) | [Development Guide](../DevelopmentGuide.md)
+
+</div>
+
+---
+
 **Velocity-based servo control library for Raspberry Pi 5**
 
 A lightweight, physics-based servo control library for SG90 and MG90S style servos. `pi5servo` keeps the movement model, calibration flow, command format, and interactive tools from `pi0servo`, but replaces the old `pigpio`-only transport with a Raspberry Pi 5 friendly backend system.
 
 The default target is **header-connected servos on Raspberry Pi 5** using hardware-backed PWM. The library also supports the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) for I2C-managed PWM servo channels, plus an optional `pca9685` backend for other advanced external controller setups.
 
-## 🔀 Connection Models
+**Part of the [NinjaClawBot](../README.md) project.**
+
+---
+
+## Contents
+
+- [Connection Models](#connection-models)
+- [Endpoint Model](#endpoint-model)
+- [Key Features](#key-features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Controller Paths](#controller-paths)
+- [Quick Start](#quick-start)
+- [Command Format](#command-format)
+- [CLI Commands](#cli-commands)
+- [Python API](#python-api)
+- [Configuration File](#configuration-file)
+- [Easing Functions](#easing-functions)
+- [Hardware Wiring](#hardware-wiring)
+- [License](#license)
+
+---
+
+## Connection Models
 
 `pi5servo` needs to distinguish two different servo signal paths when the DFRobot Raspberry Pi IO Expansion HAT (DFR0566) is involved:
 
@@ -23,7 +60,7 @@ The default target is **header-connected servos on Raspberry Pi 5** using hardwa
 > [!IMPORTANT]
 > A DFR0566 **digital** port and a DFR0566 **PWM** port are not interchangeable in software. Digital ports follow the native GPIO path. The dedicated PWM ports follow the `dfr0566` backend path.
 
-## 📌 Endpoint Model
+## Endpoint Model
 
 `pi5servo` now supports both the old native GPIO shorthand and the new explicit endpoint form:
 
@@ -38,7 +75,7 @@ Use the explicit form whenever native GPIO servos and DFR0566 PWM servos appear 
 > `hat_pwm1` = physical HAT connector `PWM0`, `hat_pwm2` = `PWM1`, `hat_pwm3` = `PWM2`, and `hat_pwm4` = `PWM3`.
 > Each servo must use its own PWM connector if you want independent control.
 
-## ✨ Key Features
+## Key Features
 
 - **Velocity-based Motion** – Physics calculations (degrees/sec) instead of arbitrary durations
 - **100Hz Update Rate** – 10ms step interval for smooth, controlled motion
@@ -49,7 +86,7 @@ Use the explicit form whenever native GPIO servos and DFR0566 PWM servos appear 
 - **Mixed Endpoint Support** – Native GPIO and `hat_pwm` endpoints can run together in one group
 - **Pi 5 Standalone Backends** – `auto`, `hardware_pwm`, `dfr0566`, optional `pca9685`, and legacy `pigpio` compatibility
 
-## 📋 Requirements
+## Requirements
 
 - Raspberry Pi 5
 - Python 3.11 or 3.12
@@ -71,7 +108,7 @@ The default header-connected backend is `hardware_pwm`. It is intended for these
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### Step 1: Install `uv`
 
@@ -150,7 +187,7 @@ uv run pi5servo status --pins 12,13
 
 If you want to use the DFR0566 or PCA9685 controller paths, install the same `pi` extra and select the backend on the CLI or in `servo.json`.
 
-## 🧩 Controller Paths
+## Controller Paths
 
 `pi5servo` can drive servos through three practical standalone paths:
 
@@ -295,7 +332,7 @@ Use `servo.json` when:
 
 ---
 
-## 🎮 Quick Start
+## Quick Start
 
 > [!CAUTION]
 > **Calibration is REQUIRED before use.** Uncalibrated servos use safe center-only defaults. This prevents unexpected movement, but it also means an uncalibrated servo will not move through its full range.
@@ -351,7 +388,7 @@ For a DFR0566 servo on the HAT's physical `PWM1` connector, enter `hat_pwm2`.
 
 ---
 
-## 📋 Command Format
+## Command Format
 
 Commands use the **movement-tool** format:
 
@@ -392,7 +429,7 @@ Commands use the **movement-tool** format:
 
 ---
 
-## 🔧 CLI Commands
+## CLI Commands
 
 ```bash
 # Interactive tool (recommended)
@@ -452,7 +489,7 @@ uv run pi5servo status \
   --pin-channel-map 12:0,13:1
 ```
 
-## 🐍 Python API
+## Python API
 
 ### Basic Standalone Usage
 
@@ -537,7 +574,7 @@ pi.stop()
 
 ---
 
-## 📁 Configuration File
+## Configuration File
 
 Calibration and optional backend settings are stored in `servo.json`:
 
@@ -576,7 +613,7 @@ Calibration and optional backend settings are stored in `servo.json`:
 
 ---
 
-## 🌊 Easing Functions
+## Easing Functions
 
 | Easing | Behavior |
 |--------|----------|
@@ -593,7 +630,7 @@ Calibration and optional backend settings are stored in `servo.json`:
 
 ---
 
-## 🔌 Hardware Wiring
+## Hardware Wiring
 
 Connect a hobby servo like this:
 

@@ -1,6 +1,21 @@
 # NinjaClawBot Development Guide
 
-## Quick Links
+<div align="center">
+
+**Developer Reference for the Final Validated NinjaClawBot Build**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Workspace](https://img.shields.io/badge/workspace-uv-blue.svg)](https://docs.astral.sh/uv/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+[![OpenClaw Ready](https://img.shields.io/badge/OpenClaw-ready-0F766E.svg)](https://docs.openclaw.ai/)
+
+[Project README](README.md) | [Installation Guide](InstallationGuide.md) | [Archive](backup/README.md)
+
+</div>
+
+---
+
+## Contents
 
 - [Project summary](#project-summary)
 - [Repository map](#repository-map)

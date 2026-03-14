@@ -1,5 +1,19 @@
 # pi5disp
 
+<div align="center">
+
+**ST7789V Display Driver and Guided Display Tools for Raspberry Pi 5**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+
+[NinjaClawBot README](../README.md) | [Installation Guide](../InstallationGuide.md) | [Development Guide](../DevelopmentGuide.md)
+
+</div>
+
+---
+
 A standalone ST7789V display driver for Raspberry Pi 5.
 
 `pi5disp` helps a Raspberry Pi 5 control an ST7789V screen (a small SPI display
@@ -16,6 +30,19 @@ This driver keeps the same main features as the legacy version:
 - an interactive display tool for guided testing
 
 **Part of the [NinjaClawBot](../README.md) project.**
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Python Usage](#python-usage)
+- [Automated Testing](#automated-testing)
+- [Raspberry Pi 5 Validation Checklist](#raspberry-pi-5-validation-checklist)
+- [Troubleshooting](#troubleshooting)
 
 ---
 

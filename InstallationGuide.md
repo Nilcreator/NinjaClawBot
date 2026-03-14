@@ -1,6 +1,21 @@
 # NinjaClawBot Installation Guide
 
-## Quick Links
+<div align="center">
+
+**Step-by-Step Raspberry Pi 5 and OpenClaw Build Guide for NinjaClawBot**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python Workspace](https://img.shields.io/badge/workspace-uv-blue.svg)](https://docs.astral.sh/uv/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
+[![OpenClaw Ready](https://img.shields.io/badge/OpenClaw-ready-0F766E.svg)](https://docs.openclaw.ai/)
+
+[Project README](README.md) | [Development Guide](DevelopmentGuide.md) | [Archive](backup/README.md)
+
+</div>
+
+---
+
+## Contents
 
 - [1. What you will build](#1-what-you-will-build)
 - [2. What you need](#2-what-you-need)
