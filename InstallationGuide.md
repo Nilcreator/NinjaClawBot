@@ -324,7 +324,7 @@ Expected result:
 
 ### 12.3 Display setup
 
-Create the display settings file first:
+Create the standalone display settings first:
 
 ```bash
 cd ~/NinjaClawBot
@@ -345,10 +345,26 @@ Inside the tool:
 3. display text such as `HELLO`
 4. optionally run the demo animation
 
+Then copy the same display settings into the root project file used by
+`ninjaclawbot`:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5disp config export "$PWD/display.json"
+```
+
 Expected result:
 
-- `display.json` is created
+- the standalone `pi5disp` display config is saved
+- the root project `display.json` is created
 - the display responds correctly
+
+Why this step matters:
+
+- the standalone `pi5disp` tools save their own display settings
+- `ninjaclawbot` prefers the root project `display.json`
+- exporting here keeps both layers on the same display rotation, pins, and
+  brightness settings from the start
 
 ### 12.4 Distance sensor setup
 
@@ -398,6 +414,13 @@ uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
 uv run ninjaclawbot set-idle
 ```
 
+Optional quick check for the display config path:
+
+```bash
+cd ~/NinjaClawBot
+uv run ninjaclawbot health-check | grep -iE '"config_path"|"using_root_config"' || true
+```
+
 Then run the interactive expression tool:
 
 ```bash
@@ -428,6 +451,8 @@ Inside the tool:
 Expected result:
 
 - health check returns structured output
+- the display section reports the root project `display.json`
+- `using_root_config` is `true`
 - greeting expression works
 - reply expression works
 - idle starts
@@ -847,8 +872,9 @@ git pull
 ```
 
 - `ninjaclawbot` shows the wrong display behavior even though `pi5disp` worked:
-  check the root project `display.json`; the integrated layer now reads that
-  file directly during runtime
+  rerun `uv run pi5disp config export "$PWD/display.json"` from the project root
+  and then confirm `uv run ninjaclawbot health-check` shows the expected
+  `config_path` and `using_root_config: true`
 
 ## Appendix D. Python And Project Installation Alternatives
 
@@ -958,6 +984,7 @@ cd ~/NinjaClawBot
 uv run pi5disp init --defaults
 uv run pi5disp text "HELLO"
 uv run pi5disp demo --num-balls 3 --duration 5
+uv run pi5disp config export "$PWD/display.json"
 ```
 
 ### Sensor
@@ -979,14 +1006,16 @@ uv run pi5vl53l0x get --count 5 --interval 0.5
   complete the guided module setup before continuing
 - `uv run pi5disp display-tool` works but `uv run ninjaclawbot expression-tool` looks wrong:
   check the `health-check` output and confirm which `config_path` is being used
-  by `ninjaclawbot`; if the root `display.json` does not exist yet, the current
-  build should fall back to the `pi5disp` config automatically
+  by `ninjaclawbot`; the most reliable fix is to rerun:
+  `uv run pi5disp config export "$PWD/display.json"`
+  from the project root so both layers use the same saved display config
 
 ### Quick checks
 
 ```bash
 cd ~/NinjaClawBot
 uv run ninjaclawbot health-check
+uv run ninjaclawbot health-check | grep -iE '"config_path"|"using_root_config"' || true
 uv run ninjaclawbot list-capabilities
 uv run ninjaclawbot perform-expression idle
 uv run ninjaclawbot expression-tool
