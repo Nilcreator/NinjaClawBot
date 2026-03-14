@@ -468,11 +468,15 @@ This patch only updates the parts NinjaClawBot needs:
 
 It does not overwrite your existing:
 
+- OpenAI or Codex login/auth profile
+- active primary model selection
 - model provider settings
 - Telegram bot token
 - gateway token
 - workspace history
 - plugin install records
+
+If you are already using an OpenAI-hosted model, that is enough. You do not need an `ollama` provider block unless you also want optional local models later.
 
 Run:
 
@@ -945,21 +949,6 @@ Replace placeholders with your own values.
       }
     }
   },
-  "models": {
-    "providers": {
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "apiKey": "ollama-local",
-        "api": "openai-completions",
-        "models": [
-          {
-            "id": "YOUR_LOCAL_MODEL_ID",
-            "name": "YOUR_LOCAL_MODEL_NAME"
-          }
-        ]
-      }
-    }
-  },
   "gateway": {
     "port": 18789,
     "mode": "local",
@@ -976,10 +965,10 @@ Replace placeholders with your own values.
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openai-codex/YOUR_MODEL_ID"
+        "primary": "openai-codex/YOUR_OPENAI_MODEL_ID"
       },
       "models": {
-        "openai-codex/YOUR_MODEL_ID": {}
+        "openai-codex/YOUR_OPENAI_MODEL_ID": {}
       },
       "workspace": "/home/YOUR_USERNAME/.openclaw/workspace",
       "compaction": {
@@ -1121,3 +1110,9 @@ Replace placeholders with your own values.
   }
 }
 ```
+
+Optional note:
+
+- If you also want local models later, you can add a separate `models.providers.ollama` block.
+- That block is optional.
+- The active model still comes from `agents.defaults.model.primary`.
