@@ -1,6 +1,7 @@
 import { noArgsSchema, moveServosSchema, nameSchema, replySchema } from "./schemas.js";
 import {
   ensureBridge,
+  runDiagnostics,
   runNinjaClawbotAction,
   runShutdownSequence,
   runStartupSequence,
@@ -188,6 +189,19 @@ export default function registerNinjaClawbotPlugin(api: any) {
     "Start the persistent idle face on NinjaClawBot.",
     noArgsSchema,
     "set_idle",
+  );
+  api.registerTool(
+    {
+      name: "ninjaclawbot_diagnostics",
+      description:
+        "Inspect NinjaClawBot bridge health, deployment readiness, and recovery hints.",
+      parameters: noArgsSchema,
+      async execute() {
+        const result = await runDiagnostics(api);
+        return jsonContent(result);
+      },
+    },
+    { optional: true },
   );
   registerOptionalTool(
     api,

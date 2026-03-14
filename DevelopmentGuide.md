@@ -87,6 +87,11 @@ Current responsibilities:
 - machine-facing JSON actions for `set_presence_mode` and `shutdown_sequence`
 - a hidden `openclaw-serve` stdio bridge that keeps one runtime alive for the official OpenClaw plugin background service
 - a hidden one-shot `openclaw-action` bridge kept for compatibility and fallback
+- an operator-facing OpenClaw diagnostics tool that merges:
+  - bridge health
+  - service state
+  - deployment readiness
+  - recovery hints
 - a persistent presence contract for `idle`, `thinking`, and `listening`
 - an explicit `shutdown_sequence` contract for sleepy -> display power-down -> cleanup
 - OpenClaw lifecycle-hook orchestration for `gateway_start`, `message_received`, `agent_end`, and `gateway_stop`
@@ -348,6 +353,11 @@ If `uv run ninjaclawbot perform-expression idle` or another built-in name fails:
 
 If the OpenClaw plugin does not work:
 
+- run `ninjaclawbot_diagnostics` first and inspect:
+  - `summary.state`
+  - `bridge.status`
+  - `deployment.status`
+  - `recoveryHints`
 - verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
 - verify `plugins.entries.ninjaclawbot.enabled` is `true`
 - verify `plugins.entries.ninjaclawbot.config.projectRoot` points to the NinjaClawBot project root
@@ -364,8 +374,8 @@ If the OpenClaw plugin does not work:
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path
 - if the robot reacts more than once to the same low-priority lifecycle event,
-  inspect bridge status and confirm the current build includes the service-side
-  dedupe changes from Phase 2.4
+  inspect `ninjaclawbot_diagnostics` and confirm the current build includes the
+  service-side dedupe counters from Phase 2.4
 - if startup greeting does not appear but reply tools still work, check whether the OpenClaw build exposes plugin lifecycle hooks and whether the plugin log shows `gateway_start` hook warnings
 - if gateway stop turns the display off without `sleepy`, check whether the shutdown sequence was disabled in plugin config or skipped because the persistent bridge was unavailable
 - for developer-only bridge debugging, the plugin-managed service starts the hidden command `uv run ninjaclawbot --root-dir <root> openclaw-serve`

@@ -34,6 +34,7 @@ test("plugin registers lifecycle hooks when api.registerHook is available", () =
     { event: "gateway_stop", name: "ninjaclawbot.gateway_stop" },
   ]);
   assert.ok(tools.includes("ninjaclawbot_reply"));
+  assert.ok(tools.includes("ninjaclawbot_diagnostics"));
   assert.ok(tools.includes("ninjaclawbot_stop_all"));
 });
 

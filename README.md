@@ -169,6 +169,15 @@ This gives you:
 For the exact OpenClaw setup and plugin configuration steps, use
 [InstallationGuide.md](InstallationGuide.md).
 
+For troubleshooting or release checks, use the OpenClaw tool
+`ninjaclawbot_diagnostics`. It reports:
+
+- persistent bridge health
+- degraded or one-shot fallback state
+- current service presence mode
+- startup and lifecycle state
+- deployment readiness hints for `BOOT.md`, `AGENTS.md`, allowlists, and skill enablement
+
 ## OpenClaw Examples
 
 ### Greeting
@@ -271,6 +280,8 @@ The current stack supports:
 - Stage 2 persistent bridge, Always On lifecycle hooks, and sleepy shutdown sequence
 - Phase 2.4 service-side lifecycle dedupe, root-level display-config loading,
   and repository cache-file hygiene
+- Phase 2.5 operator-facing diagnostics, deployment readiness inspection, and
+  repository hygiene release checks
 
-The main remaining work is operator-facing diagnostics, degraded-mode visibility,
-and the final release gate for repeated-message and recovery testing.
+The main remaining work is final Raspberry Pi validation and extended recovery
+testing on top of the new diagnostics path.

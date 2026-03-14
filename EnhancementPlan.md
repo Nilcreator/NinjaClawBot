@@ -172,7 +172,7 @@ Make lifecycle behavior deterministic under duplicate, overlapping, stale, or pa
 
 ### Phase 2.5: Validation, Observability, And Release Gate
 
-Status: Planned next phase
+Status: Implemented in code and docs; Raspberry Pi validation pending
 
 #### Objective
 
@@ -234,6 +234,267 @@ Make the current build diagnosable by non-developers, expose the real deployment
 - `ninjaclawbot`
 - `integrations/openclaw/ninjaclawbot-plugin`
 - OpenClaw workspace and deployment documentation
+
+#### Detailed Implementation Plan
+
+##### Phase 2.5A: Operator Diagnostics Surface
+
+Status: Implemented
+
+Objective:
+
+- expose the current internal service and bridge state through one simple operator-facing entrypoint
+- reuse the status already tracked in the Python service and plugin runner instead of inventing a second state model
+
+Implementation scope:
+
+- add a new OpenClaw tool such as `ninjaclawbot_diagnostics`
+- make the tool combine:
+  - Python bridge service status
+  - plugin-side persistent bridge telemetry
+  - a sanitized deployment summary
+- keep the output stable, human-readable, and safe to paste into bug reports
+- avoid exposing secrets from `openclaw.json`, provider settings, or gateway tokens
+
+Expected diagnostic sections:
+
+- `bridge`
+  - `status`
+  - `fallback_count`
+  - `last_error`
+  - `last_successful_persistent_at`
+  - `last_mode_change_at`
+- `service`
+  - `requests_handled`
+  - `current_presence_mode`
+  - `startup_completed`
+  - `last_lifecycle_event`
+  - `last_transition_source`
+  - `last_transition_reason`
+  - `last_explicit_action`
+  - `suppressed_lifecycle_events`
+- `display`
+  - active `config_path`
+  - whether root-level config is being used
+- `summary`
+  - high-level state such as:
+    - `healthy`
+    - `degraded`
+    - `one_shot_fallback`
+    - `missing_workspace_guidance`
+
+Likely implementation shape:
+
+- extend the existing bridge `status` response only where fields are still missing
+- add a plugin-side formatter that merges:
+  - `readBridgeTelemetry()`
+  - bridge `status`
+  - deployment inspection hints from the local OpenClaw config and workspace
+- register one operator-facing tool in the plugin, not multiple overlapping status tools
+
+Likely files:
+
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
+- plugin diagnostics tests
+- `ninjaclawbot/tests/test_openclaw_bridge.py`
+
+Validation gate:
+
+- `npm run typecheck`
+- `npm test`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Raspberry Pi validation target:
+
+- run diagnostics during:
+  - startup
+  - idle
+  - thinking
+  - reply
+  - shutdown preparation
+- confirm the tool clearly distinguishes:
+  - healthy persistent mode
+  - degraded persistent mode
+  - one-shot fallback mode
+
+Hardware risk:
+
+- low
+
+##### Phase 2.5B: Deployment Health And Readiness Checks
+
+Status: Implemented
+
+Objective:
+
+- make diagnostics reflect the real validated deployment model instead of only runtime internals
+- catch common Raspberry Pi setup drift before it turns into confusing robot behavior
+
+Implementation scope:
+
+- add deployment health inspection around the validated OpenClaw shape:
+  - minimal plugin config
+  - internal `boot-md` enabled
+  - workspace path present
+  - workspace `BOOT.md` present
+  - workspace `AGENTS.md` present
+  - `ninjaclawbot_control` skill enabled
+  - required `ninjaclawbot_*` tools allowlisted
+- keep this inspection secret-safe:
+  - report booleans, paths, and health hints
+  - do not echo tokens, pairing codes, API keys, or provider secrets
+- classify results as:
+  - `ready`
+  - `warning`
+  - `misconfigured`
+
+Expected readiness rules:
+
+- `ready`
+  - persistent bridge is enabled
+  - workspace exists
+  - startup guidance exists
+  - reply guidance exists
+  - tools and skill are present
+- `warning`
+  - runtime still works, but a non-critical prerequisite is missing
+  - example:
+    - startup greeting path missing while reply path still works
+- `misconfigured`
+  - the deployment is likely to fail or partially fail
+  - example:
+    - bad `uvCommand`
+    - missing project root
+    - missing allowlist for `ninjaclawbot_reply`
+
+Likely implementation shape:
+
+- add a plugin-side deployment inspector that reads the local OpenClaw deployment files best-effort
+- prefer checking the validated minimal config path first
+- treat optional lifecycle plugin flags as compatibility overrides only
+- if some config fields are not reliably available from the plugin runtime, fall back to documented operator warnings instead of guessing
+
+Likely files:
+
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- new plugin-side deployment health helper under `integrations/openclaw/ninjaclawbot-plugin/src/`
+- plugin diagnostics/readiness tests
+- `README.md`
+- `DevelopmentGuide.md`
+- `InstallationGuide.md`
+
+Validation gate:
+
+- same plugin and Python validation gate as Phase 2.5A
+- add plugin tests for:
+  - missing `BOOT.md`
+  - missing `AGENTS.md`
+  - missing tool allowlist
+  - skill disabled
+  - bad `uvCommand`
+
+Raspberry Pi validation target:
+
+- intentionally break one prerequisite at a time and confirm diagnostics report the correct readiness state
+- verify the guidance remains readable by non-developers
+
+Hardware risk:
+
+- low
+
+##### Phase 2.5C: Release Gate, Recovery, And Pi Validation Pack
+
+Status: Implemented in code and documentation; Raspberry Pi validation pending
+
+Objective:
+
+- codify the validated Raspberry Pi deployment into a repeatable release check
+- reduce future regressions caused by repo hygiene, config drift, or silent deployment differences
+
+Implementation scope:
+
+- add a release gate that checks:
+  - startup greeting path
+  - `thinking` transition
+  - explicit reply expression path
+  - idle recovery
+  - sleepy shutdown and display power-down
+  - degraded fallback visibility
+  - repository hygiene
+- add concise recovery guidance for the most common failure modes:
+  - bad `uvCommand`
+  - persistent bridge unavailable
+  - startup greeting missing
+  - text-only replies
+  - wrong display config path
+  - rollback to one-shot mode
+- keep the release gate aligned with the current supported deployment model:
+  - plugin-managed bridge
+  - `boot-md` startup
+  - workspace `AGENTS.md`
+  - enabled skill and tool allowlist
+
+Expected release-gate deliverables:
+
+- automated checks for code quality and test coverage
+- a repository hygiene check that rejects tracked cache artifacts and similar generated files
+- a Pi validation checklist split into:
+  - safe smoke tests
+  - communication tests
+  - actuator-moving tests
+  - power-risk tests
+- a short rollback checklist for operator use after a bad update
+
+Likely implementation shape:
+
+- add one lightweight hygiene check in the repo or test suite
+- add a single documented validation flow instead of scattered troubleshooting steps
+- make the new diagnostics tool the first step in operator troubleshooting
+
+Likely files:
+
+- `README.md`
+- `DevelopmentGuide.md`
+- `DevelopmentLog.md`
+- `InstallationGuide.md`
+- `EnhancementPlan.md`
+- repository hygiene check file or test if needed
+
+Validation gate:
+
+- `npm run typecheck`
+- `npm test`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+
+Raspberry Pi validation target:
+
+- prove the documented release flow works end-to-end on real hardware
+- confirm a non-developer can identify and recover from the common failure modes using the new diagnostics and guide
+
+Hardware risk:
+
+- low to medium
+
+##### Phase 2.5 Completion Criteria
+
+Phase 2.5 is complete only when all of the following are true:
+
+- an operator can run one diagnostics command or tool and understand the current robot state
+- the diagnostics output reflects the hybrid OpenClaw deployment that is actually validated on Raspberry Pi
+- the release gate catches repo hygiene and deployment drift before another Pi update is attempted
+- the installation and developer docs use the new diagnostics and recovery flow as the primary support path
 
 #### Planned Validation Gate
 

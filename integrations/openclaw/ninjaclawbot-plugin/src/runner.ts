@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import readline, { Interface as ReadLineInterface } from "node:readline";
 
 export const PLUGIN_ID = "ninjaclawbot";
@@ -71,6 +74,56 @@ export interface BridgeTelemetry {
   lastSuccessfulPersistentAt: string | null;
 }
 
+type ReadinessStatus = "ready" | "warning" | "misconfigured";
+type DiagnosticsSummaryState =
+  | "healthy"
+  | "warning"
+  | "degraded"
+  | "one_shot_fallback"
+  | "misconfigured";
+
+export interface DisplayConfigSummary {
+  configPath: string | null;
+  rootConfigPath: string | null;
+  packageConfigPath: string | null;
+  usingRootConfig: boolean;
+  configExists: boolean;
+}
+
+export interface DeploymentHealth {
+  status: ReadinessStatus;
+  persistentBridgeEnabled: boolean;
+  minimalPluginConfig: boolean;
+  usesOptionalLifecycleOverrides: boolean;
+  bootMdEnabled: boolean;
+  skillEnabled: boolean;
+  workspacePath: string | null;
+  workspaceExists: boolean;
+  bootMdPath: string | null;
+  bootMdPresent: boolean;
+  agentsMdPath: string | null;
+  agentsMdPresent: boolean;
+  replyToolOptedIn: boolean;
+  pluginOptedIn: boolean;
+  diagnosticsToolOptedIn: boolean;
+  allowlist: string[];
+  issues: string[];
+  warnings: string[];
+}
+
+export interface NinjaClawbotDiagnostics {
+  bridge: BridgeTelemetry & { persistentBridgeEnabled: boolean; serviceConnected: boolean };
+  service: Record<string, unknown> | null;
+  deployment: DeploymentHealth;
+  display: DisplayConfigSummary;
+  summary: {
+    state: DiagnosticsSummaryState;
+    readiness: ReadinessStatus;
+    message: string;
+  };
+  recoveryHints: string[];
+}
+
 let activeBridge: BridgeClient | null = null;
 let bridgeTelemetry: BridgeTelemetry = {
   status: "uninitialized",
@@ -79,6 +132,23 @@ let bridgeTelemetry: BridgeTelemetry = {
   lastModeChangeAt: null,
   lastSuccessfulPersistentAt: null,
 };
+
+const OPTIONAL_LIFECYCLE_CONFIG_KEYS = new Set([
+  "enableAlwaysOn",
+  "enableStartupGreeting",
+  "enableAutoThinking",
+  "enableShutdownSequence",
+]);
+
+const MINIMAL_PLUGIN_CONFIG_KEYS = new Set([
+  "projectRoot",
+  "rootDir",
+  "uvCommand",
+  "enablePersistentBridge",
+  "bridgeStartTimeoutMs",
+  "bridgeRequestTimeoutMs",
+  "bridgeShutdownTimeoutMs",
+]);
 
 function updateBridgeTelemetry(
   status: BridgeHealthState,
@@ -117,6 +187,260 @@ function asBoolean(value: unknown, fallback: boolean): boolean {
 function asPositiveInt(value: unknown, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.trunc(parsed) : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function expandUserPath(rawPath: string | null): string | null {
+  if (!rawPath) {
+    return null;
+  }
+  if (rawPath === "~") {
+    return os.homedir();
+  }
+  if (rawPath.startsWith("~/")) {
+    return path.join(os.homedir(), rawPath.slice(2));
+  }
+  return rawPath;
+}
+
+function workspacePathFromConfig(api: OpenClawPluginApiLike): string | null {
+  const root = asObject(api.config);
+  const agents = asObject(root.agents);
+  const defaults = asObject(agents.defaults);
+  const list = Array.isArray(agents.list)
+    ? agents.list.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const mainAgent =
+    list.find((item) => String(item.id ?? "").trim() === "main") ?? list[0] ?? {};
+
+  const workspace = String(mainAgent.workspace ?? defaults.workspace ?? "").trim();
+  return expandUserPath(workspace || null);
+}
+
+function readRawPluginEntryConfig(api: OpenClawPluginApiLike): Record<string, unknown> {
+  const root = asObject(api.config);
+  const plugins = asObject(root.plugins);
+  const entries = asObject(plugins.entries);
+  const entry = asObject(entries[PLUGIN_ID]);
+  return asObject(entry.config);
+}
+
+function readCombinedToolOptInList(api: OpenClawPluginApiLike): string[] {
+  const root = asObject(api.config);
+  const globalTools = asObject(root.tools);
+  const agents = asObject(root.agents);
+  const defaults = asObject(agents.defaults);
+  const list = Array.isArray(agents.list)
+    ? agents.list.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    : [];
+  const mainAgent =
+    list.find((item) => String(item.id ?? "").trim() === "main") ?? list[0] ?? {};
+  const mainTools = asObject(mainAgent.tools);
+  const defaultTools = asObject(defaults.tools);
+
+  return Array.from(
+    new Set([
+      ...asStringArray(globalTools.allow),
+      ...asStringArray(globalTools.alsoAllow),
+      ...asStringArray(defaultTools.allow),
+      ...asStringArray(defaultTools.alsoAllow),
+      ...asStringArray(mainTools.allow),
+      ...asStringArray(mainTools.alsoAllow),
+    ]),
+  );
+}
+
+function isToolOptedIn(allowlist: string[], toolName: string): boolean {
+  return allowlist.includes("group:plugins") || allowlist.includes(PLUGIN_ID) || allowlist.includes(toolName);
+}
+
+export function readDisplayConfigSummary(config: OpenClawPluginConfig): DisplayConfigSummary {
+  const rootConfigPath = path.resolve(config.rootDir ?? config.projectRoot, "display.json");
+  const packageConfigPath = path.resolve(config.projectRoot, "pi5disp", "display.json");
+  const usingRootConfig = fs.existsSync(rootConfigPath);
+  const configPath = usingRootConfig ? rootConfigPath : packageConfigPath;
+
+  return {
+    configPath,
+    rootConfigPath,
+    packageConfigPath,
+    usingRootConfig,
+    configExists: fs.existsSync(configPath),
+  };
+}
+
+export function inspectDeploymentHealth(api: OpenClawPluginApiLike): DeploymentHealth {
+  const rawPluginConfig = readRawPluginEntryConfig(api);
+  const rawPluginKeys = Object.keys(rawPluginConfig);
+  const allowlist = readCombinedToolOptInList(api);
+  const workspacePath = workspacePathFromConfig(api);
+  const workspaceExists =
+    workspacePath !== null && fs.existsSync(workspacePath) && fs.statSync(workspacePath).isDirectory();
+  const bootMdPath = workspacePath ? path.join(workspacePath, "BOOT.md") : null;
+  const agentsMdPath = workspacePath ? path.join(workspacePath, "AGENTS.md") : null;
+  const bootMdPresent = bootMdPath !== null && fs.existsSync(bootMdPath);
+  const agentsMdPresent = agentsMdPath !== null && fs.existsSync(agentsMdPath);
+
+  const root = asObject(api.config);
+  const hooks = asObject(root.hooks);
+  const internalHooks = asObject(hooks.internal);
+  const internalEntries = asObject(internalHooks.entries);
+  const bootMdEntry = asObject(internalEntries["boot-md"]);
+  const skills = asObject(root.skills);
+  const skillEntries = asObject(skills.entries);
+  const skillEntry = asObject(skillEntries.ninjaclawbot_control);
+
+  let config: OpenClawPluginConfig | null = null;
+  const issues: string[] = [];
+  const warnings: string[] = [];
+
+  try {
+    config = extractPluginConfig(api);
+  } catch (error) {
+    issues.push(error instanceof Error ? error.message : String(error));
+  }
+
+  const persistentBridgeEnabled = config?.enablePersistentBridge ?? false;
+  const bootMdEnabled =
+    asBoolean(internalHooks.enabled, false) && asBoolean(bootMdEntry.enabled, false);
+  const skillEnabled = asBoolean(skillEntry.enabled, false);
+  const replyToolOptedIn = isToolOptedIn(allowlist, "ninjaclawbot_reply");
+  const pluginOptedIn = allowlist.includes(PLUGIN_ID) || allowlist.includes("group:plugins");
+  const diagnosticsToolOptedIn = isToolOptedIn(allowlist, "ninjaclawbot_diagnostics");
+  const minimalPluginConfig = rawPluginKeys.every((key) => MINIMAL_PLUGIN_CONFIG_KEYS.has(key));
+  const usesOptionalLifecycleOverrides = rawPluginKeys.some((key) =>
+    OPTIONAL_LIFECYCLE_CONFIG_KEYS.has(key),
+  );
+
+  if (!persistentBridgeEnabled) {
+    warnings.push("Persistent bridge is disabled; lifecycle features will fall back to one-shot mode.");
+  }
+  if (!workspacePath) {
+    warnings.push("No OpenClaw workspace path is configured.");
+  } else if (!workspaceExists) {
+    warnings.push("Configured OpenClaw workspace path does not exist.");
+  }
+  if (!bootMdEnabled) {
+    warnings.push("boot-md is not enabled; startup greeting may not run.");
+  }
+  if (workspaceExists && !bootMdPresent) {
+    warnings.push("Workspace BOOT.md is missing; startup greeting may not run.");
+  }
+  if (workspaceExists && !agentsMdPresent) {
+    warnings.push("Workspace AGENTS.md is missing; reply-tool guidance may be weaker.");
+  }
+  if (!skillEnabled) {
+    warnings.push("ninjaclawbot_control skill is not enabled.");
+  }
+  if (!replyToolOptedIn) {
+    issues.push("The main OpenClaw agent does not allow ninjaclawbot reply tools.");
+  }
+  if (usesOptionalLifecycleOverrides) {
+    warnings.push(
+      "Optional lifecycle override keys are configured; the release-tested deployment uses the minimal plugin config.",
+    );
+  }
+
+  return {
+    status: issues.length > 0 ? "misconfigured" : warnings.length > 0 ? "warning" : "ready",
+    persistentBridgeEnabled,
+    minimalPluginConfig,
+    usesOptionalLifecycleOverrides,
+    bootMdEnabled,
+    skillEnabled,
+    workspacePath,
+    workspaceExists,
+    bootMdPath,
+    bootMdPresent,
+    agentsMdPath,
+    agentsMdPresent,
+    replyToolOptedIn,
+    pluginOptedIn,
+    diagnosticsToolOptedIn,
+    allowlist,
+    issues,
+    warnings,
+  };
+}
+
+function buildRecoveryHints(
+  diagnostics: Pick<NinjaClawbotDiagnostics, "bridge" | "deployment" | "display" | "summary">,
+): string[] {
+  const hints: string[] = [];
+  const { bridge, deployment, display, summary } = diagnostics;
+
+  if (bridge.lastError && bridge.lastError.includes("ENOENT")) {
+    hints.push("Set plugins.entries.ninjaclawbot.config.uvCommand to the absolute path from `command -v uv`.");
+  }
+  if (!deployment.replyToolOptedIn) {
+    hints.push("Allowlist `ninjaclawbot` or `ninjaclawbot_reply` for the main OpenClaw agent.");
+  }
+  if (!deployment.bootMdEnabled || !deployment.bootMdPresent) {
+    hints.push("Enable `boot-md` and make sure the workspace BOOT.md file exists for the startup greeting.");
+  }
+  if (!deployment.agentsMdPresent || !deployment.skillEnabled) {
+    hints.push(
+      "Keep workspace AGENTS.md and the `ninjaclawbot_control` skill enabled so reply expressions stay reliable.",
+    );
+  }
+  if (!bridge.persistentBridgeEnabled || summary.state === "one_shot_fallback") {
+    hints.push("Re-enable the persistent bridge if you want Always On lifecycle behavior instead of one-shot fallback.");
+  }
+  if (!display.usingRootConfig) {
+    hints.push(
+      "If display orientation is wrong, export the pi5disp config into the project root with `uv run pi5disp config export \"$PWD/display.json\"`.",
+    );
+  }
+
+  return Array.from(new Set(hints));
+}
+
+function summarizeDiagnostics(
+  bridge: NinjaClawbotDiagnostics["bridge"],
+  deployment: DeploymentHealth,
+): NinjaClawbotDiagnostics["summary"] {
+  if (deployment.status === "misconfigured") {
+    return {
+      state: "misconfigured",
+      readiness: deployment.status,
+      message: deployment.issues[0] ?? "The OpenClaw deployment is misconfigured.",
+    };
+  }
+  if (bridge.status === "disabled") {
+    return {
+      state: "one_shot_fallback",
+      readiness: deployment.status,
+      message: "Persistent bridge is disabled; only one-shot robot actions are available.",
+    };
+  }
+  if (bridge.status === "degraded") {
+    return {
+      state: "degraded",
+      readiness: deployment.status,
+      message: bridge.lastError ?? "Persistent bridge is degraded.",
+    };
+  }
+  if (deployment.status === "warning") {
+    return {
+      state: "warning",
+      readiness: deployment.status,
+      message: deployment.warnings[0] ?? "Deployment has warnings but is still usable.",
+    };
+  }
+  return {
+    state: "healthy",
+    readiness: deployment.status,
+    message: "Persistent bridge and validated deployment prerequisites are healthy.",
+  };
 }
 
 export function alwaysOnEnabled(config: OpenClawPluginConfig): boolean {
@@ -570,6 +894,58 @@ export async function readBridgeStatus(api: OpenClawPluginApiLike) {
     await shutdownBridge();
     return null;
   }
+}
+
+export async function runDiagnostics(
+  api: OpenClawPluginApiLike,
+): Promise<NinjaClawbotDiagnostics> {
+  const deployment = inspectDeploymentHealth(api);
+  let serviceStatus: Record<string, unknown> | null = null;
+  let config: OpenClawPluginConfig | null = null;
+
+  try {
+    config = extractPluginConfig(api);
+    if (config.enablePersistentBridge) {
+      serviceStatus = await readBridgeStatus(api);
+    } else {
+      updateBridgeTelemetry("disabled");
+    }
+  } catch (error) {
+    updateBridgeTelemetry("degraded", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+
+  const bridge = {
+    ...readBridgeTelemetry(),
+    persistentBridgeEnabled: deployment.persistentBridgeEnabled,
+    serviceConnected: serviceStatus !== null,
+  };
+  const display =
+    config !== null
+      ? readDisplayConfigSummary(config)
+      : {
+          configPath: null,
+          rootConfigPath: null,
+          packageConfigPath: null,
+          usingRootConfig: false,
+          configExists: false,
+        };
+  const summary = summarizeDiagnostics(bridge, deployment);
+
+  return {
+    bridge,
+    service: serviceStatus,
+    deployment,
+    display,
+    summary,
+    recoveryHints: buildRecoveryHints({
+      bridge,
+      deployment,
+      display,
+      summary,
+    }),
+  };
 }
 
 export async function runNinjaClawbotAction(

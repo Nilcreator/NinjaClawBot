@@ -2,6 +2,72 @@
 
 ## 2026-03-14
 
+### Phase 2.5: Diagnostics, Deployment Readiness, And Release Gate
+
+Summary:
+
+- implemented the first complete Phase 2.5 slice around operator-facing
+  diagnostics, deployment readiness inspection, and release hygiene
+- added a new OpenClaw tool, `ninjaclawbot_diagnostics`, that merges:
+  - persistent bridge telemetry
+  - Python service status
+  - deployment readiness hints
+  - recovery suggestions
+- added plugin-side deployment checks for the validated hybrid setup:
+  - `boot-md`
+  - workspace `BOOT.md`
+  - workspace `AGENTS.md`
+  - `ninjaclawbot_control` skill
+  - agent tool allowlist
+  - minimal plugin config usage
+- added a repository hygiene test so tracked Python cache artifacts are caught
+  automatically before another Raspberry Pi update
+- removed the remaining tracked `__pycache__` and `.pyc` files still present
+  across the repo
+
+Files changed:
+
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/src/runner.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts)
+- [ninjaclawbot/tests/test_repo_hygiene.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_repo_hygiene.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [EnhancementPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/EnhancementPlan.md)
+
+Why:
+
+- the bridge and service already tracked useful internal status, but operators
+  still had no single place to inspect what was wrong
+- recent startup, reply, config, and `uvCommand` issues required too much
+  manual log reading and config inspection
+- the release gate needed to reflect the real validated hybrid OpenClaw setup,
+  not just the intended one
+
+Validation:
+
+- `npm run typecheck`
+- `npm test`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- pending after this Phase 2.5 implementation
+- required next checks:
+  - run `ninjaclawbot_diagnostics` and confirm bridge and deployment state
+  - confirm startup greeting, reply expression, and sleepy shutdown still work
+  - confirm diagnostics report warning or misconfigured states when one
+    prerequisite is intentionally broken
+  - confirm `git pull` no longer fails on tracked cache artifacts in older Pi
+    working directories
+
 ### Display Config Compatibility Fix For `expression-tool`
 
 Summary:

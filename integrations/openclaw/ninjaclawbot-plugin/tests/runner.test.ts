@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -6,9 +9,12 @@ import {
   buildCommand,
   buildServeCommand,
   extractPluginConfig,
+  inspectDeploymentHealth,
   parseBridgeOutput,
   readBridgeTelemetry,
+  readDisplayConfigSummary,
   runNinjaClawbotAction,
+  runDiagnostics,
 } from "../src/runner.js";
 
 test("extractPluginConfig reads the plugin entry config", () => {
@@ -183,4 +189,184 @@ test("runNinjaClawbotAction marks telemetry disabled when persistent bridge is o
   }
 
   assert.equal(readBridgeTelemetry().status, "disabled");
+});
+
+test("readDisplayConfigSummary prefers the root display config when present", () => {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-display-"));
+  const rootDir = path.join(baseDir, "robot");
+  const projectRoot = path.join(baseDir, "project");
+  fs.mkdirSync(rootDir, { recursive: true });
+  fs.mkdirSync(path.join(projectRoot, "pi5disp"), { recursive: true });
+  fs.writeFileSync(path.join(rootDir, "display.json"), "{}\n", "utf-8");
+  fs.writeFileSync(path.join(projectRoot, "pi5disp", "display.json"), "{}\n", "utf-8");
+
+  const summary = readDisplayConfigSummary({
+    projectRoot,
+    rootDir,
+    enablePersistentBridge: true,
+  });
+
+  assert.equal(summary.usingRootConfig, true);
+  assert.equal(summary.configPath, path.join(rootDir, "display.json"));
+  assert.equal(summary.configExists, true);
+});
+
+test("inspectDeploymentHealth reports validated deployment readiness", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-workspace-"));
+  fs.writeFileSync(path.join(workspace, "BOOT.md"), "# startup\n", "utf-8");
+  fs.writeFileSync(path.join(workspace, "AGENTS.md"), "# policy\n", "utf-8");
+
+  const deployment = inspectDeploymentHealth({
+    config: {
+      hooks: {
+        internal: {
+          enabled: true,
+          entries: {
+            "boot-md": { enabled: true },
+          },
+        },
+      },
+      skills: {
+        entries: {
+          ninjaclawbot_control: { enabled: true },
+        },
+      },
+      agents: {
+        defaults: {
+          workspace,
+        },
+        list: [
+          {
+            id: "main",
+            tools: {
+              allow: ["ninjaclawbot"],
+            },
+          },
+        ],
+      },
+      plugins: {
+        entries: {
+          ninjaclawbot: {
+            config: {
+              projectRoot: "/robot",
+              rootDir: "/robot",
+              uvCommand: "uv",
+              enablePersistentBridge: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(deployment.status, "ready");
+  assert.equal(deployment.bootMdPresent, true);
+  assert.equal(deployment.agentsMdPresent, true);
+  assert.equal(deployment.replyToolOptedIn, true);
+  assert.equal(deployment.minimalPluginConfig, true);
+});
+
+test("inspectDeploymentHealth flags missing reply allowlist as misconfigured", () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-workspace-"));
+
+  const deployment = inspectDeploymentHealth({
+    config: {
+      hooks: {
+        internal: {
+          enabled: true,
+          entries: {
+            "boot-md": { enabled: true },
+          },
+        },
+      },
+      skills: {
+        entries: {
+          ninjaclawbot_control: { enabled: true },
+        },
+      },
+      agents: {
+        defaults: {
+          workspace,
+        },
+        list: [
+          {
+            id: "main",
+            tools: {
+              allow: [],
+            },
+          },
+        ],
+      },
+      plugins: {
+        entries: {
+          ninjaclawbot: {
+            config: {
+              projectRoot: "/robot",
+              enablePersistentBridge: true,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(deployment.status, "misconfigured");
+  assert.ok(
+    deployment.issues.some((issue) => issue.includes("reply tools")),
+  );
+});
+
+test("runDiagnostics reports one-shot fallback when persistent bridge is disabled", async () => {
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-workspace-"));
+  fs.writeFileSync(path.join(workspace, "BOOT.md"), "# startup\n", "utf-8");
+  fs.writeFileSync(path.join(workspace, "AGENTS.md"), "# policy\n", "utf-8");
+
+  const diagnostics = await runDiagnostics({
+    config: {
+      hooks: {
+        internal: {
+          enabled: true,
+          entries: {
+            "boot-md": { enabled: true },
+          },
+        },
+      },
+      skills: {
+        entries: {
+          ninjaclawbot_control: { enabled: true },
+        },
+      },
+      agents: {
+        defaults: {
+          workspace,
+        },
+        list: [
+          {
+            id: "main",
+            tools: {
+              allow: ["ninjaclawbot"],
+            },
+          },
+        ],
+      },
+      plugins: {
+        entries: {
+          ninjaclawbot: {
+            config: {
+              projectRoot: workspace,
+              rootDir: workspace,
+              enablePersistentBridge: false,
+            },
+          },
+        },
+      },
+    },
+  });
+
+  assert.equal(diagnostics.bridge.status, "disabled");
+  assert.equal(diagnostics.summary.state, "one_shot_fallback");
+  assert.equal(diagnostics.deployment.status, "warning");
+  assert.ok(
+    diagnostics.recoveryHints.some((hint) => hint.includes("persistent bridge")),
+  );
 });

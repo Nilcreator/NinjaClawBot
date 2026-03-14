@@ -769,6 +769,9 @@ Expected result:
 
 - one startup greeting appears
 - the robot then returns to idle
+- if you can inspect OpenClaw tools directly, `ninjaclawbot_diagnostics`
+  should report `summary.state` as `healthy` or `warning`, not
+  `misconfigured`
 
 ### 20.2 Reply check
 
@@ -1037,6 +1040,15 @@ uv run ninjaclawbot stop-all
 
 ## Appendix K. Final Validation Troubleshooting
 
+- first inspect the new `ninjaclawbot_diagnostics` tool if your OpenClaw setup
+  lets you invoke tools directly:
+  - `summary.state` tells you whether the deployment is healthy, warning,
+    degraded, one-shot fallback, or misconfigured
+  - `bridge.status` tells you whether the persistent bridge is healthy,
+    degraded, disabled, or still uninitialized
+  - `deployment.status` tells you whether the validated `BOOT.md`,
+    `AGENTS.md`, skill, and allowlist setup is ready
+  - `recoveryHints` gives the shortest next actions to try
 - startup works but reply is text-only:
   check the log for `ninjaclawbot_reply`
 - shutdown works but startup does not:
