@@ -2,6 +2,60 @@
 
 ## 2026-03-14
 
+### Reply And Diagnostics Usage Fix For Telegram/OpenClaw
+
+Summary:
+
+- corrected the OpenClaw-facing reply contract so `ninjaclawbot_reply` is now
+  treated as the robot animation step before the normal visible chat reply,
+  instead of being treated as the final user-facing answer by itself
+- updated the plugin tool description and result guidance so the model is told
+  to keep sending the normal Telegram text reply after the robot tool call
+- updated the plugin skill and workspace `AGENTS.md` setup template to match
+  that behavior
+- documented the correct way to run `ninjaclawbot_diagnostics`, which is an
+  OpenClaw tool invoked through the gateway, not a local `uv` CLI command
+- updated the sanitized OpenClaw allowlist template so
+  `ninjaclawbot_diagnostics` is included by default
+
+Files changed:
+
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+
+Why:
+
+- the previous guidance made it too easy for the model to stop after the robot
+  tool call, which produced correct hardware reactions but silent Telegram
+  replies
+- users also needed a clear, correct invocation path for
+  `ninjaclawbot_diagnostics`
+
+Validation:
+
+- `npm run typecheck`
+- `npm test`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- pending after this fix
+- required next checks:
+  - call `ninjaclawbot_diagnostics` through the OpenClaw gateway
+  - verify Telegram now receives both:
+    - robot expression
+    - normal text reply
+  - verify startup greeting and sleepy shutdown still work
+
 ### Phase 2.5: Diagnostics, Deployment Readiness, And Release Gate
 
 Summary:

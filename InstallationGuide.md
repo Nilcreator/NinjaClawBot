@@ -532,6 +532,7 @@ tool_names = [
     "ninjaclawbot_read_distance",
     "ninjaclawbot_health",
     "ninjaclawbot_capabilities",
+    "ninjaclawbot_diagnostics",
     "ninjaclawbot_set_idle",
     "ninjaclawbot_stop",
     "ninjaclawbot_stop_all",
@@ -677,9 +678,11 @@ block = """
 ## NinjaClawBot Reply Policy
 
 When replying to users in Telegram or other chat channels:
-- always use `ninjaclawbot_reply` for the final visible answer
+- first call `ninjaclawbot_reply` to animate the robot for the answer
+- then send the normal visible text reply to the user in the same turn
 - choose the closest `reply_state` for the tone of the answer
-- do not send a plain text-only final answer unless `ninjaclawbot_reply` fails
+- do not treat the tool call itself as the final visible chat reply
+- if `ninjaclawbot_reply` fails, still send the normal visible text reply
 - after normal replies, let the lifecycle return the robot to idle
 """.lstrip()
 
@@ -757,6 +760,56 @@ Need help later?
 Purpose:
 - confirm the complete validated behavior on the Raspberry Pi
 
+### 20.0 Run `ninjaclawbot_diagnostics`
+
+Purpose:
+- check the OpenClaw-facing robot state before testing Telegram
+- confirm the persistent bridge, workspace files, and reply setup are healthy
+
+Run:
+
+```bash
+eval "$(
+python3 - <<'PY'
+import json
+import shlex
+from pathlib import Path
+
+cfg = json.load((Path.home() / ".openclaw" / "openclaw.json").open("r", encoding="utf-8"))
+gateway = cfg.get("gateway", {})
+auth = gateway.get("auth", {})
+port = int(gateway.get("port", 18789))
+token = str(auth.get("token", "")).strip()
+
+print(f"export OPENCLAW_URL=http://127.0.0.1:{port}")
+print(f"export OPENCLAW_TOKEN={shlex.quote(token or 'YOUR_OPENCLAW_GATEWAY_TOKEN')}")
+PY
+)"
+
+curl -sS "$OPENCLAW_URL/tools/invoke" \
+  -H "Authorization: Bearer $OPENCLAW_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "tool": "ninjaclawbot_diagnostics",
+    "args": {},
+    "sessionKey": "main"
+  }' | python3 -m json.tool
+```
+
+Expected result:
+
+- the command returns JSON from the OpenClaw gateway
+- `summary.state` is usually `healthy` or `warning`
+- `bridge.status` is usually `healthy`
+- `deployment.status` is not `misconfigured`
+- `recoveryHints` is empty or only contains minor warnings
+
+If the command fails:
+
+- make sure `ninjaclawbot_diagnostics` is in the agent tool allowlist
+- make sure the gateway token in `openclaw.json` is correct
+- make sure the gateway is already running
+
 ### 20.1 Startup check
 
 Run:
@@ -790,7 +843,7 @@ hello
 Expected result:
 
 - the robot shows a reply expression
-- the answer is not text-only
+- Telegram still receives the normal text reply
 - the robot returns to idle after the reply
 
 If you want to confirm the tool call from the Pi terminal:
@@ -1050,7 +1103,11 @@ uv run ninjaclawbot stop-all
     `AGENTS.md`, skill, and allowlist setup is ready
   - `recoveryHints` gives the shortest next actions to try
 - startup works but reply is text-only:
-  check the log for `ninjaclawbot_reply`
+  check the log for `ninjaclawbot_reply`, then verify the workspace `AGENTS.md`
+  says to send the normal text reply after the tool call
+- `ninjaclawbot_diagnostics` says tool not found:
+  add `ninjaclawbot_diagnostics` to the main agent allowlist in
+  `openclaw.json`, then restart the gateway
 - shutdown works but startup does not:
   recheck `boot-md` and `BOOT.md`
 - `openclaw logs --follow` fails:
@@ -1107,6 +1164,7 @@ real values.
             "ninjaclawbot_read_distance",
             "ninjaclawbot_health",
             "ninjaclawbot_capabilities",
+            "ninjaclawbot_diagnostics",
             "ninjaclawbot_set_idle",
             "ninjaclawbot_stop",
             "ninjaclawbot_stop_all",

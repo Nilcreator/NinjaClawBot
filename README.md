@@ -188,6 +188,7 @@ Result:
 
 - the robot shows a greeting face
 - the buzzer plays the matching sound
+- the user still receives the normal visible chat reply
 - the robot returns to idle after the greeting
 
 ### Clarifying question
@@ -229,6 +230,7 @@ drives these transitions automatically:
   - persistent `thinking`
 - explicit final reply:
   - emotion from `ninjaclawbot_reply`
+  - then normal visible chat reply to the user
   - then back to `idle`
 - gateway stop:
   - `sleepy`

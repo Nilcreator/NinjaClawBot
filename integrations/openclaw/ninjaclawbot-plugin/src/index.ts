@@ -15,6 +15,15 @@ function jsonContent(payload: unknown) {
   return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
 }
 
+function replyToolContent(payload: unknown) {
+  return jsonContent({
+    ...((payload && typeof payload === "object" ? payload : {}) as Record<string, unknown>),
+    user_reply_required: true,
+    next_step:
+      "After this tool call, continue by sending the normal visible text reply to the user in chat.",
+  });
+}
+
 function registerOptionalTool(
   api: any,
   name: string,
@@ -134,12 +143,21 @@ export default function registerNinjaClawbotPlugin(api: any) {
     },
   );
 
-  registerOptionalTool(
-    api,
-    "ninjaclawbot_reply",
-    "Render a conversational NinjaClawBot reply using the built-in emotion policy.",
-    replySchema,
-    "perform_reply",
+  api.registerTool(
+    {
+      name: "ninjaclawbot_reply",
+      description:
+        "Animate NinjaClawBot for a conversational reply. After this tool call, continue by sending the normal visible text reply to the user.",
+      parameters: replySchema,
+      async execute(_id: string, params: ToolParams) {
+        const result = await runNinjaClawbotAction(api, {
+          action: "perform_reply",
+          parameters: params,
+        });
+        return replyToolContent(result);
+      },
+    },
+    { optional: true },
   );
   registerOptionalTool(
     api,

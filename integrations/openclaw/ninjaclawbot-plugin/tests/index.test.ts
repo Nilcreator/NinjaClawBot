@@ -5,15 +5,15 @@ import registerNinjaClawbotPlugin from "../src/index.js";
 
 test("plugin registers lifecycle hooks when api.registerHook is available", () => {
   const hooks: Array<{ event: string; name: string }> = [];
-  const tools: string[] = [];
+  const tools: Array<{ name: string; description?: string }> = [];
   let registeredServiceId = "";
 
   const api = {
     registerService(service: { id: string }) {
       registeredServiceId = service.id;
     },
-    registerTool(tool: { name: string }) {
-      tools.push(tool.name);
+    registerTool(tool: { name: string; description?: string }) {
+      tools.push(tool);
     },
     registerHook(
       eventName: string,
@@ -33,9 +33,16 @@ test("plugin registers lifecycle hooks when api.registerHook is available", () =
     { event: "agent_end", name: "ninjaclawbot.agent_end" },
     { event: "gateway_stop", name: "ninjaclawbot.gateway_stop" },
   ]);
-  assert.ok(tools.includes("ninjaclawbot_reply"));
-  assert.ok(tools.includes("ninjaclawbot_diagnostics"));
-  assert.ok(tools.includes("ninjaclawbot_stop_all"));
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_reply"));
+  assert.ok(
+    tools.some(
+      (tool) =>
+        tool.name === "ninjaclawbot_reply" &&
+        tool.description?.includes("normal visible text reply"),
+    ),
+  );
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_diagnostics"));
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_stop_all"));
 });
 
 test("plugin falls back to api.on when registerHook is unavailable", () => {

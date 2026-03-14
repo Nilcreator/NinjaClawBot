@@ -370,6 +370,10 @@ If the OpenClaw plugin does not work:
 - verify the target agent allowlist contains the `ninjaclawbot_*` tool names
 - start a new chat session after plugin or skill changes so the OpenClaw session prompt picks up the latest NinjaClawBot skill snapshot
 - verify the workspace `AGENTS.md` contains the NinjaClawBot reply policy if the model keeps answering with plain text instead of calling `ninjaclawbot_reply`
+- if the robot animates correctly but Telegram receives no text reply, verify the
+  reply policy says to send the normal visible chat reply after
+  `ninjaclawbot_reply` instead of treating the tool call itself as the final
+  answer
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path

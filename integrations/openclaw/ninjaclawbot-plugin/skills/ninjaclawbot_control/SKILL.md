@@ -14,7 +14,8 @@ Use the `ninjaclawbot_*` tools for all robot-related actions. Do not call raw dr
   - persistent `idle`
   - automatic `thinking` on incoming user messages
   - sleepy shutdown on gateway stop
-- Use `ninjaclawbot_reply` for normal conversational replies instead of manually constructing expression chains.
+- Use `ninjaclawbot_reply` to animate the robot before a normal conversational reply.
+- After `ninjaclawbot_reply`, continue by sending the normal visible text answer to the user in chat.
 - Use `ninjaclawbot_perform_expression` only when the user explicitly asks for a named expression or when a precise built-in expression is required.
 - Use `ninjaclawbot_perform_movement` for saved robot motions.
 - Use `ninjaclawbot_move_servos` only for deliberate low-level servo control tasks.
@@ -22,6 +23,12 @@ Use the `ninjaclawbot_*` tools for all robot-related actions. Do not call raw dr
 - If an action looks unsafe or needs to stop immediately, use `ninjaclawbot_stop_all`.
 
 ## Reply Policy
+
+- `ninjaclawbot_reply` is not the final chat message by itself.
+- For Telegram or other chat channels:
+  - first call `ninjaclawbot_reply`
+  - then send the normal visible text reply to the user
+  - if the tool fails, still send the normal visible text reply
 
 - Greeting or warm welcome: use `reply_state: "greeting"`.
 - Positive confirmation or simple acknowledgement: use `reply_state: "confirmation"`.
@@ -43,13 +50,13 @@ Use the `ninjaclawbot_*` tools for all robot-related actions. Do not call raw dr
 ## Examples
 
 - User says hello:
-  call `ninjaclawbot_reply` with `text` set to the greeting reply and `reply_state: "greeting"`.
+  call `ninjaclawbot_reply` with `text` set to the greeting reply and `reply_state: "greeting"`, then send the same greeting as the normal chat reply.
 - You need clarification:
-  call `ninjaclawbot_reply` with `reply_state: "asking_clarification"`.
+  call `ninjaclawbot_reply` with `reply_state: "asking_clarification"`, then ask the clarification question in chat.
 - You cannot answer confidently:
-  call `ninjaclawbot_reply` with `reply_state: "cannot_answer"`.
+  call `ninjaclawbot_reply` with `reply_state: "cannot_answer"`, then send the explanation in chat.
 - A task completed successfully:
-  call `ninjaclawbot_reply` with `reply_state: "success"`.
+  call `ninjaclawbot_reply` with `reply_state: "success"`, then send the success message in chat.
 - The user explicitly asks for a saved movement:
   call `ninjaclawbot_perform_movement` with the saved movement name.
 
