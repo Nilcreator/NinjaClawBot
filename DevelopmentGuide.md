@@ -144,8 +144,11 @@ Generated user asset paths:
 
 Important config note:
 
-- the integrated `DisplayAdapter` must use the root-level `display.json`
+- the integrated `DisplayAdapter` prefers the root-level `display.json`
   referenced by `NinjaClawbotConfig.display_config_path`
+- if that root file does not exist yet, it falls back to the standalone
+  `pi5disp` package config so users who tested the display with `display-tool`
+  first do not get a broken `expression-tool` experience
 - if `ninjaclawbot` behavior does not match the standalone `pi5disp` test you
   just ran, verify the root project `display.json` file before debugging the
   display driver itself

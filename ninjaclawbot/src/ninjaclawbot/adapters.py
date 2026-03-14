@@ -287,10 +287,22 @@ class DisplayAdapter:
         self.config = config
         self._display: Any | None = None
         self._config: dict[str, Any] | None = None
+        self._config_path: Path | None = None
 
     def _load_config(self) -> dict[str, Any]:
         manager_module = _import_or_raise("pi5disp.config.config_manager")
-        manager = manager_module.ConfigManager(str(self.config.display_config_path))
+        root_config_path = self.config.display_config_path.resolve()
+        if root_config_path.exists():
+            manager = manager_module.ConfigManager(str(root_config_path))
+            self._config_path = root_config_path
+            self._config = dict(manager.load())
+            return self._config
+
+        # Compatibility fallback for existing installs where the user finished
+        # display setup through `uv run pi5disp init` / `display-tool` before
+        # the root-level NinjaClawBot config file was created.
+        manager = manager_module.ConfigManager()
+        self._config_path = Path(manager.config_path).resolve()
         self._config = dict(manager.load())
         return self._config
 
@@ -404,6 +416,8 @@ class DisplayAdapter:
     def health_check(self) -> DeviceHealth:
         display = self._build_display()
         config = self._config or {}
+        config_path = self._config_path or self.config.display_config_path
+        using_root_config = Path(config_path).resolve() == self.config.display_config_path.resolve()
         return DeviceHealth(
             available=bool(display.health_check()),
             data={
@@ -411,7 +425,8 @@ class DisplayAdapter:
                 "height": display.height,
                 "rotation": config.get("rotation", 90),
                 "brightness": config.get("brightness", 100),
-                "config_path": str(self.config.display_config_path),
+                "config_path": str(config_path),
+                "using_root_config": using_root_config,
             },
         )
 

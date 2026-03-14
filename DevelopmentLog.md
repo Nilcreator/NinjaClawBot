@@ -2,6 +2,53 @@
 
 ## 2026-03-14
 
+### Display Config Compatibility Fix For `expression-tool`
+
+Summary:
+
+- audited the mismatch reported after Raspberry Pi reinstall where
+  `uv run pi5disp display-tool` looked correct but
+  `uv run ninjaclawbot expression-tool` rendered facial expressions wrongly
+- confirmed the root cause was a config-path split:
+  - standalone `pi5disp` tools used the package-local `display.json`
+  - integrated `ninjaclawbot` tools used the root project `display.json`
+- updated the integrated display adapter to prefer the root config but fall
+  back automatically to the standalone `pi5disp` config when the root file does
+  not exist yet
+- updated the installation guide so the quick local test now explicitly includes
+  `expression-tool` and `movement-tool`
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/tests/test_adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_adapters.py)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+
+Why:
+
+- the installation flow legitimately encourages users to validate the screen
+  with `pi5disp display-tool` before using `ninjaclawbot`
+- the integrated layer therefore had to tolerate that setup order instead of
+  assuming the root `display.json` already existed
+
+Validation:
+
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Raspberry Pi validation status:
+
+- pending after this fix
+- required manual check:
+  - `uv run pi5disp display-tool`
+  - `uv run ninjaclawbot health-check`
+  - `uv run ninjaclawbot expression-tool`
+
 ### Phase 2.4 Hardening: Lifecycle Dedupe, Root Display Config, And Repository Hygiene
 
 Summary:

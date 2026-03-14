@@ -144,6 +144,7 @@ def test_display_adapter_uses_root_level_display_config(monkeypatch, tmp_path) -
     monkeypatch.setattr("ninjaclawbot.adapters._import_or_raise", fake_import)
 
     config = NinjaClawbotConfig(root_dir=tmp_path)
+    config.display_config_path.write_text("{}", encoding="utf-8")
     adapter = DisplayAdapter(config)
     health = adapter.health_check()
 
@@ -159,3 +160,71 @@ def test_display_adapter_uses_root_level_display_config(monkeypatch, tmp_path) -
     }
     assert captured["brightness"] == 65
     assert health.data["config_path"] == str(config.display_config_path)
+    assert health.data["using_root_config"] is True
+
+
+def test_display_adapter_falls_back_to_pi5disp_config_when_root_missing(
+    monkeypatch, tmp_path
+) -> None:
+    captured: dict[str, object] = {}
+    package_config_path = tmp_path / "pi5disp-display.json"
+
+    class FakeDisplay:
+        width = 240
+        height = 320
+
+        def __init__(self, **kwargs) -> None:
+            captured["driver_kwargs"] = dict(kwargs)
+
+        def set_brightness(self, value: int) -> None:
+            captured["brightness"] = value
+
+        def health_check(self) -> bool:
+            return True
+
+    class FakeManager:
+        def __init__(self, config_path: str = "display.json") -> None:
+            self.config_path = config_path
+            captured.setdefault("manager_paths", []).append(config_path)
+
+        def load(self) -> dict[str, int]:
+            if self.config_path == str(package_config_path):
+                return {
+                    "dc_pin": 11,
+                    "rst_pin": 12,
+                    "backlight_pin": 13,
+                    "width": 240,
+                    "height": 320,
+                    "rotation": 270,
+                    "brightness": 40,
+                    "spi_speed_mhz": 16,
+                }
+            raise AssertionError(f"unexpected config path: {self.config_path}")
+
+    def fake_import(module_name: str):
+        if module_name == "pi5disp.config.config_manager":
+            return SimpleNamespace(ConfigManager=FakeManager)
+        if module_name == "pi5disp.core.driver":
+            return SimpleNamespace(ST7789V=FakeDisplay)
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr("ninjaclawbot.adapters._import_or_raise", fake_import)
+
+    config = NinjaClawbotConfig(root_dir=tmp_path / "robot-root")
+    adapter = DisplayAdapter(config)
+
+    original_init = FakeManager.__init__
+
+    def fake_manager_init(self, config_path: str = "display.json") -> None:
+        if config_path == "display.json":
+            config_path = str(package_config_path)
+        original_init(self, config_path)
+
+    monkeypatch.setattr(FakeManager, "__init__", fake_manager_init)
+
+    health = adapter.health_check()
+
+    assert health.data["config_path"] == str(package_config_path)
+    assert health.data["using_root_config"] is False
+    assert captured["driver_kwargs"]["rotation"] == 270
+    assert captured["brightness"] == 40

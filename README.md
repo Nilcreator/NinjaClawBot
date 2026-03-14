@@ -110,6 +110,8 @@ For the detailed OpenClaw installation itself, use the linked
 - the validated `BOOT.md` and workspace `AGENTS.md` setup for startup greeting and reply expressions
 - an appendix with troubleshooting and alternative commands for each setup stage
 - a full reference OpenClaw config template with placeholders
+- a local test step that now includes both `expression-tool` and
+  `movement-tool`
 
 ## What Files Are Created At Runtime
 

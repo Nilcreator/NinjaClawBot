@@ -388,7 +388,7 @@ Need help later?
 Purpose:
 - confirm the full robot layer works before adding OpenClaw
 
-Run:
+Run the direct checks first:
 
 ```bash
 cd ~/NinjaClawBot
@@ -398,12 +398,42 @@ uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
 uv run ninjaclawbot set-idle
 ```
 
+Then run the interactive expression tool:
+
+```bash
+cd ~/NinjaClawBot
+uv run ninjaclawbot expression-tool
+```
+
+Inside the tool:
+
+1. list built-in expressions
+2. preview `greeting`
+3. preview `idle`
+4. exit cleanly
+
+Then run the interactive movement tool:
+
+```bash
+cd ~/NinjaClawBot
+uv run ninjaclawbot movement-tool
+```
+
+Inside the tool:
+
+1. list saved movements if you already have any
+2. if your servos are fully calibrated and safely mounted, optionally create or run one small safe movement
+3. otherwise just confirm the tool opens correctly and exit
+
 Expected result:
 
 - health check returns structured output
 - greeting expression works
 - reply expression works
 - idle starts
+- `expression-tool` previews show correctly on the display
+- `movement-tool` opens without endpoint or cleanup errors
+- if you already have a safe movement, it runs correctly
 
 Need help later?
 - [Troubleshooting](#appendix-i-ninjaclawbot-local-testing)
@@ -947,6 +977,10 @@ uv run pi5vl53l0x get --count 5 --interval 0.5
   check that each hardware module worked first
 - `health-check` shows unavailable hardware:
   complete the guided module setup before continuing
+- `uv run pi5disp display-tool` works but `uv run ninjaclawbot expression-tool` looks wrong:
+  check the `health-check` output and confirm which `config_path` is being used
+  by `ninjaclawbot`; if the root `display.json` does not exist yet, the current
+  build should fall back to the `pi5disp` config automatically
 
 ### Quick checks
 
@@ -955,6 +989,7 @@ cd ~/NinjaClawBot
 uv run ninjaclawbot health-check
 uv run ninjaclawbot list-capabilities
 uv run ninjaclawbot perform-expression idle
+uv run ninjaclawbot expression-tool
 ```
 
 ## Appendix J. Local Testing Alternative Commands
@@ -966,6 +1001,7 @@ cd ~/NinjaClawBot
 uv run ninjaclawbot list-assets
 uv run ninjaclawbot perform-expression greeting
 uv run ninjaclawbot perform-reply --reply-state success "Finished"
+uv run ninjaclawbot movement-tool
 uv run ninjaclawbot stop
 uv run ninjaclawbot stop-all
 ```
