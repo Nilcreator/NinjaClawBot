@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   alwaysOnEnabled,
+  buildStartupDiagnostics,
   buildCommand,
   buildServeCommand,
   extractPluginConfig,
@@ -369,4 +370,38 @@ test("runDiagnostics reports one-shot fallback when persistent bridge is disable
   assert.ok(
     diagnostics.recoveryHints.some((hint) => hint.includes("persistent bridge")),
   );
+});
+
+test("buildStartupDiagnostics reflects the validated workspace boot-md startup path", () => {
+  const startup = buildStartupDiagnostics(
+    {
+      status: "ready",
+      persistentBridgeEnabled: true,
+      minimalPluginConfig: true,
+      usesOptionalLifecycleOverrides: false,
+      bootMdEnabled: true,
+      skillEnabled: true,
+      workspacePath: "/workspace",
+      workspaceExists: true,
+      bootMdPath: "/workspace/BOOT.md",
+      bootMdPresent: true,
+      agentsMdPath: "/workspace/AGENTS.md",
+      agentsMdPresent: true,
+      replyToolOptedIn: true,
+      pluginOptedIn: true,
+      diagnosticsToolOptedIn: true,
+      allowlist: ["ninjaclawbot", "ninjaclawbot_reply", "ninjaclawbot_diagnostics"],
+      issues: [],
+      warnings: [],
+    },
+    {
+      running: true,
+      startup_completed: false,
+    },
+  );
+
+  assert.equal(startup.trackingMode, "workspace_boot_md");
+  assert.equal(startup.configured, true);
+  assert.equal(startup.observedByService, false);
+  assert.equal(startup.effectiveCompleted, true);
 });

@@ -357,6 +357,8 @@ If the OpenClaw plugin does not work:
   - `summary.state`
   - `bridge.status`
   - `deployment.status`
+  - `startup.trackingMode`
+  - `startup.effectiveCompleted`
   - `recoveryHints`
 - verify the plugin path in `plugins.load.paths` points to `integrations/openclaw/ninjaclawbot-plugin`
 - verify `plugins.entries.ninjaclawbot.enabled` is `true`
@@ -366,6 +368,11 @@ If the OpenClaw plugin does not work:
 - do not rely on optional `enableAlwaysOn`-style config keys unless the installed OpenClaw build accepts them; the validated Raspberry Pi path now uses `hooks.internal.boot-md` plus workspace `BOOT.md`
 - verify `openclaw hooks list --verbose` shows `ninjaclawbot` lifecycle hook entries; if they do not appear, startup greeting and sleepy shutdown cannot fire even when the bridge is healthy
 - verify `boot-md` is enabled and that the workspace `BOOT.md` file exists if you expect a startup greeting on the current validated Raspberry Pi setup
+- if startup greeting is already working on Raspberry Pi but the raw service
+  field still says `startup_completed: false`, prefer the diagnostics
+  `startup.*` section; the validated hybrid deployment can complete startup
+  through `boot-md` and workspace `BOOT.md` without calling the Python
+  `startup_sequence()` path directly
 - restore the default bridge timeouts if `bridgeStartTimeoutMs`, `bridgeRequestTimeoutMs`, or `bridgeShutdownTimeoutMs` were tuned too aggressively
 - verify the target agent allowlist contains the `ninjaclawbot_*` tool names
 - start a new chat session after plugin or skill changes so the OpenClaw session prompt picks up the latest NinjaClawBot skill snapshot

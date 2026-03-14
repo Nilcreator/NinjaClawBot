@@ -802,6 +802,8 @@ Expected result:
 - `summary.state` is usually `healthy` or `warning`
 - `bridge.status` is usually `healthy`
 - `deployment.status` is not `misconfigured`
+- `startup.trackingMode` is usually `workspace_boot_md` on the validated Raspberry Pi setup
+- `startup.effectiveCompleted` should be `true` once the validated startup path is configured
 - `recoveryHints` is empty or only contains minor warnings
 
 If the command fails:
@@ -1101,6 +1103,11 @@ uv run ninjaclawbot stop-all
     degraded, disabled, or still uninitialized
   - `deployment.status` tells you whether the validated `BOOT.md`,
     `AGENTS.md`, skill, and allowlist setup is ready
+  - `startup.trackingMode` tells you whether startup is being tracked through
+    the Python service or through the validated `boot-md` + workspace `BOOT.md`
+    path
+  - `startup.effectiveCompleted` is the field to trust for the final startup
+    result on the validated hybrid OpenClaw deployment
   - `recoveryHints` gives the shortest next actions to try
 - startup works but reply is text-only:
   check the log for `ninjaclawbot_reply`, then verify the workspace `AGENTS.md`

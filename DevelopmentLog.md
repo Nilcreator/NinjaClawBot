@@ -2,6 +2,65 @@
 
 ## 2026-03-14
 
+### Final Phase 2.5 Follow-up And Documentation Closeout
+
+Summary:
+
+- completed the last Phase 2.5 observability follow-up so
+  `ninjaclawbot_diagnostics` now reports startup correctly for the validated
+  hybrid OpenClaw deployment
+- added explicit startup diagnostics fields:
+  - `startup.trackingMode`
+  - `startup.configured`
+  - `startup.observedByService`
+  - `startup.effectiveCompleted`
+- updated the main project docs to treat the validated Raspberry Pi path as
+  complete instead of still pending
+- aligned the diagnostics instructions with the real deployment model:
+  - plugin-managed persistent bridge and shutdown
+  - `boot-md` plus workspace `BOOT.md` for startup
+  - workspace `AGENTS.md`, skill enablement, and allowlist for reply behavior
+
+Files changed:
+
+- [integrations/openclaw/ninjaclawbot-plugin/src/runner.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [EnhancementPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/EnhancementPlan.md)
+
+Why:
+
+- Raspberry Pi validation already proved the real startup -> reply -> shutdown
+  path worked, but the diagnostics output still under-reported startup because
+  the validated deployment uses `boot-md` and workspace `BOOT.md` instead of
+  always calling the Python `startup_sequence()` path directly
+- the project documentation still needed one last pass to mark Stage 2 as
+  complete and explain the hybrid startup model clearly
+
+Validation:
+
+- `npm run typecheck`
+- `npm test`
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- completed
+- validated by the user on the real Telegram/OpenClaw Raspberry Pi setup:
+  - startup greeting
+  - `ninjaclawbot_reply`
+  - normal Telegram text reply
+  - sleepy shutdown
+  - healthy diagnostics output
+  - deployment readiness reported as `ready`
+
 ### Reply And Diagnostics Usage Fix For Telegram/OpenClaw
 
 Summary:

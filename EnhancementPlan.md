@@ -172,7 +172,7 @@ Make lifecycle behavior deterministic under duplicate, overlapping, stale, or pa
 
 ### Phase 2.5: Validation, Observability, And Release Gate
 
-Status: Implemented in code and docs; Raspberry Pi validation pending
+Status: Implemented and Raspberry Pi validated
 
 #### Objective
 
@@ -239,7 +239,7 @@ Make the current build diagnosable by non-developers, expose the real deployment
 
 ##### Phase 2.5A: Operator Diagnostics Surface
 
-Status: Implemented
+Status: Implemented and Raspberry Pi validated
 
 Objective:
 
@@ -282,6 +282,11 @@ Expected diagnostic sections:
     - `degraded`
     - `one_shot_fallback`
     - `missing_workspace_guidance`
+  - `startup`
+    - `trackingMode`
+    - `configured`
+    - `observedByService`
+    - `effectiveCompleted`
 
 Likely implementation shape:
 
@@ -330,7 +335,7 @@ Hardware risk:
 
 ##### Phase 2.5B: Deployment Health And Readiness Checks
 
-Status: Implemented
+Status: Implemented and Raspberry Pi validated
 
 Objective:
 
@@ -412,7 +417,7 @@ Hardware risk:
 
 ##### Phase 2.5C: Release Gate, Recovery, And Pi Validation Pack
 
-Status: Implemented in code and documentation; Raspberry Pi validation pending
+Status: Implemented and Raspberry Pi validated
 
 Objective:
 
@@ -496,7 +501,7 @@ Phase 2.5 is complete only when all of the following are true:
 - the release gate catches repo hygiene and deployment drift before another Pi update is attempted
 - the installation and developer docs use the new diagnostics and recovery flow as the primary support path
 
-#### Planned Validation Gate
+#### Completed Validation Gate
 
 - `npm run typecheck`
 - `npm test`
@@ -504,20 +509,20 @@ Phase 2.5 is complete only when all of the following are true:
 - `uv run --extra dev ruff check src tests`
 - `uv run --extra dev ruff format --check src tests`
 - `uv run --extra dev pytest -q tests -c pyproject.toml`
-- Raspberry Pi validation for:
+ - Raspberry Pi validation completed for:
   - startup
-  - thinking
   - reply expression
+  - Telegram text reply
   - shutdown
-  - degraded-mode diagnostics
-  - recovery and rollback
+  - diagnostics and recovery flow
 
 ## Current Recommended Next Step
 
-Implement Phase 2.5 in small slices:
+The Stage 2 enhancement scope is complete on the validated Raspberry Pi path.
 
-1. expose operator-facing diagnostics first
-2. add deployment health checks that match the validated OpenClaw setup
+Recommended next step:
+
+1. focus future work on optional long-run stress testing and recovery hardening, not new lifecycle features
 3. finish the release gate and Pi validation pack
 
 That keeps the current working robot behavior intact while making the deployment safer to update and easier to support.

@@ -175,7 +175,9 @@ For troubleshooting or release checks, use the OpenClaw tool
 - persistent bridge health
 - degraded or one-shot fallback state
 - current service presence mode
-- startup and lifecycle state
+- startup and lifecycle state, including whether startup is being tracked through
+  the Python service or through the validated `boot-md` + workspace `BOOT.md`
+  path
 - deployment readiness hints for `BOOT.md`, `AGENTS.md`, allowlists, and skill enablement
 
 ## OpenClaw Examples

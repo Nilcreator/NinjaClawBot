@@ -116,6 +116,12 @@ export interface NinjaClawbotDiagnostics {
   service: Record<string, unknown> | null;
   deployment: DeploymentHealth;
   display: DisplayConfigSummary;
+  startup: {
+    trackingMode: "service_sequence" | "workspace_boot_md" | "unknown";
+    configured: boolean;
+    observedByService: boolean;
+    effectiveCompleted: boolean;
+  };
   summary: {
     state: DiagnosticsSummaryState;
     readiness: ReadinessStatus;
@@ -373,10 +379,13 @@ export function inspectDeploymentHealth(api: OpenClawPluginApiLike): DeploymentH
 }
 
 function buildRecoveryHints(
-  diagnostics: Pick<NinjaClawbotDiagnostics, "bridge" | "deployment" | "display" | "summary">,
+  diagnostics: Pick<
+    NinjaClawbotDiagnostics,
+    "bridge" | "deployment" | "display" | "summary" | "startup"
+  >,
 ): string[] {
   const hints: string[] = [];
-  const { bridge, deployment, display, summary } = diagnostics;
+  const { bridge, deployment, display, summary, startup } = diagnostics;
 
   if (bridge.lastError && bridge.lastError.includes("ENOENT")) {
     hints.push("Set plugins.entries.ninjaclawbot.config.uvCommand to the absolute path from `command -v uv`.");
@@ -386,6 +395,11 @@ function buildRecoveryHints(
   }
   if (!deployment.bootMdEnabled || !deployment.bootMdPresent) {
     hints.push("Enable `boot-md` and make sure the workspace BOOT.md file exists for the startup greeting.");
+  }
+  if (!startup.effectiveCompleted && deployment.persistentBridgeEnabled) {
+    hints.push(
+      "If startup greeting is expected, make sure the gateway is started through the validated boot-md + BOOT.md path or the bridge startup sequence.",
+    );
   }
   if (!deployment.agentsMdPresent || !deployment.skillEnabled) {
     hints.push(
@@ -402,6 +416,26 @@ function buildRecoveryHints(
   }
 
   return Array.from(new Set(hints));
+}
+
+export function buildStartupDiagnostics(
+  deployment: DeploymentHealth,
+  serviceStatus: Record<string, unknown> | null,
+): NinjaClawbotDiagnostics["startup"] {
+  const observedByService = serviceStatus?.startup_completed === true;
+  const workspaceBootConfigured =
+    deployment.persistentBridgeEnabled && deployment.bootMdEnabled && deployment.bootMdPresent;
+
+  return {
+    trackingMode: observedByService
+      ? "service_sequence"
+      : workspaceBootConfigured
+        ? "workspace_boot_md"
+        : "unknown",
+    configured: observedByService || workspaceBootConfigured,
+    observedByService,
+    effectiveCompleted: observedByService || workspaceBootConfigured,
+  };
 }
 
 function summarizeDiagnostics(
@@ -931,6 +965,7 @@ export async function runDiagnostics(
           usingRootConfig: false,
           configExists: false,
         };
+  const startup = buildStartupDiagnostics(deployment, serviceStatus);
   const summary = summarizeDiagnostics(bridge, deployment);
 
   return {
@@ -938,11 +973,13 @@ export async function runDiagnostics(
     service: serviceStatus,
     deployment,
     display,
+    startup,
     summary,
     recoveryHints: buildRecoveryHints({
       bridge,
       deployment,
       display,
+      startup,
       summary,
     }),
   };
