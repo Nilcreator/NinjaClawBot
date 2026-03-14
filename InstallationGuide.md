@@ -152,12 +152,15 @@ Need help later?
 Purpose:
 - get OpenClaw working before you connect NinjaClawBot to it
 
-The official OpenClaw docs currently recommend the installer script for Linux and Raspberry Pi.
+Use these references in this order:
 
-Official references:
+- Key Raspberry Pi companion reference:
+  - [NinjaClawAgent README](https://github.com/Nilcreator/NinjaClawAgent/blob/main/README.md)
+- Official references:
+  - [OpenClaw install guide](https://docs.openclaw.ai/start/installation)
+  - [OpenClaw onboarding guide](https://docs.openclaw.ai/start/onboarding)
 
-- [OpenClaw install guide](https://docs.openclaw.ai/start/installation)
-- [OpenClaw onboarding guide](https://docs.openclaw.ai/start/onboarding)
+The NinjaClawAgent guide is the easiest companion guide to follow on Raspberry Pi. The official OpenClaw pages are still the source of truth for the latest installer and onboarding behavior.
 
 ### 5.1 Install OpenClaw
 
@@ -455,6 +458,21 @@ Need help later?
 
 Purpose:
 - add NinjaClawBot without overwriting your own secrets and model settings
+
+This patch only updates the parts NinjaClawBot needs:
+
+- the main agent tool allowlist
+- internal `boot-md`
+- the NinjaClawBot skill entry
+- plugin allow/load/entry settings
+
+It does not overwrite your existing:
+
+- model provider settings
+- Telegram bot token
+- gateway token
+- workspace history
+- plugin install records
 
 Run:
 
@@ -909,16 +927,64 @@ Replace placeholders with your own values.
 
 ```json
 {
+  "meta": {
+    "lastTouchedVersion": "YOUR_OPENCLAW_VERSION",
+    "lastTouchedAt": "YYYY-MM-DDTHH:MM:SSZ"
+  },
+  "wizard": {
+    "lastRunAt": "YYYY-MM-DDTHH:MM:SSZ",
+    "lastRunVersion": "YOUR_OPENCLAW_VERSION",
+    "lastRunCommand": "configure",
+    "lastRunMode": "local"
+  },
+  "auth": {
+    "profiles": {
+      "openai-codex:default": {
+        "provider": "openai-codex",
+        "mode": "oauth"
+      }
+    }
+  },
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "apiKey": "ollama-local",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "YOUR_LOCAL_MODEL_ID",
+            "name": "YOUR_LOCAL_MODEL_NAME"
+          }
+        ]
+      }
+    }
+  },
   "gateway": {
     "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
     "auth": {
       "mode": "token",
       "token": "YOUR_OPENCLAW_GATEWAY_TOKEN"
+    },
+    "tailscale": {
+      "mode": "off",
+      "resetOnExit": false
     }
   },
   "agents": {
     "defaults": {
-      "workspace": "/home/YOUR_USERNAME/.openclaw/workspace"
+      "model": {
+        "primary": "openai-codex/YOUR_MODEL_ID"
+      },
+      "models": {
+        "openai-codex/YOUR_MODEL_ID": {}
+      },
+      "workspace": "/home/YOUR_USERNAME/.openclaw/workspace",
+      "compaction": {
+        "mode": "safeguard"
+      }
     },
     "list": [
       {
@@ -942,6 +1008,48 @@ Replace placeholders with your own values.
       }
     ]
   },
+  "tools": {
+    "media": {
+      "audio": {
+        "enabled": true,
+        "scope": {
+          "default": "deny",
+          "rules": [
+            {
+              "action": "allow",
+              "match": {
+                "chatType": "direct"
+              }
+            }
+          ]
+        },
+        "maxBytes": 20971520,
+        "models": [
+          {
+            "type": "cli",
+            "command": "/home/YOUR_USERNAME/.local/bin/whisper",
+            "args": [
+              "--model",
+              "base",
+              "--language",
+              "YOUR_LANGUAGE_CODE",
+              "--output_format",
+              "txt",
+              "--output_dir",
+              "/tmp",
+              "{{MediaPath}}"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
   "hooks": {
     "internal": {
       "enabled": true,
@@ -949,6 +1057,18 @@ Replace placeholders with your own values.
         "boot-md": {
           "enabled": true
         }
+      }
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "botToken": "YOUR_TELEGRAM_BOT_TOKEN",
+      "groupPolicy": "allowlist",
+      "streaming": false,
+      "network": {
+        "autoSelectFamily": false
       }
     }
   },
@@ -987,6 +1107,15 @@ Replace placeholders with your own values.
           "bridgeRequestTimeoutMs": 15000,
           "bridgeShutdownTimeoutMs": 5000
         }
+      }
+    },
+    "installs": {
+      "ninjaclawbot": {
+        "source": "path",
+        "sourcePath": "/home/YOUR_USERNAME/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin",
+        "installPath": "/home/YOUR_USERNAME/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin",
+        "version": "YOUR_PLUGIN_VERSION",
+        "installedAt": "YYYY-MM-DDTHH:MM:SSZ"
       }
     }
   }
