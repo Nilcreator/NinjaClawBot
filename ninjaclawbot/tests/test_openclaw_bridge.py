@@ -74,12 +74,16 @@ def test_service_core_can_run_presence_and_startup_sequences(tmp_path: Path) -> 
         def __init__(self) -> None:
             super().__init__()
             self.active_expression = None
+            self.greeting_runs = 0
+            self.presence_calls: list[str] = []
 
         def perform_expression(self, definition):
+            self.greeting_runs += 1
             self.active_expression = "greeting"
             return {"builtin": definition.get("builtin")}
 
         def set_presence_mode(self, mode: str):
+            self.presence_calls.append(mode)
             self.active_expression = mode
             return {"presence_mode": mode, "active_expression": mode}
 
@@ -96,13 +100,79 @@ def test_service_core_can_run_presence_and_startup_sequences(tmp_path: Path) -> 
     service = OpenClawServiceCore(tmp_path, executor_factory=factory)
 
     startup = service.startup_sequence()
+    startup_again = service.startup_sequence(lifecycle_event="boot_md")
     thinking = service.set_presence_mode("thinking", lifecycle_event="message_received")
     status = service.status()
 
     assert startup["presence_mode"] == "idle"
+    assert startup_again["already_started"] is True
     assert thinking["presence_mode"] == "thinking"
     assert status["current_presence_mode"] == "thinking"
     assert status["last_lifecycle_event"] == "message_received"
+    assert status["suppressed_lifecycle_events"] == 0
+    assert created[0].runtime.greeting_runs == 1
+    assert created[0].runtime.presence_calls == ["idle", "thinking"]
+
+
+def test_service_core_suppresses_stale_idle_after_explicit_activity(tmp_path: Path) -> None:
+    class PresenceRuntime(_FakeRuntime):
+        def set_presence_mode(self, mode: str):
+            self.active_expression = mode
+            return {"presence_mode": mode, "active_expression": mode}
+
+    class PresenceExecutor(_FakeExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.runtime = PresenceRuntime()
+
+        def execute(self, payload):
+            self.calls.append(payload)
+            self.runtime.active_expression = "idle"
+            return ActionResult.success(action=str(payload.get("action", "unknown")))
+
+    service = OpenClawServiceCore(tmp_path, executor_factory=lambda _root: PresenceExecutor())
+
+    thinking = service.set_presence_mode("thinking", lifecycle_event="message_received")
+    reply = service.execute_action({"action": "perform_reply"})
+    fallback_idle = service.set_presence_mode("idle", lifecycle_event="agent_end")
+    status = service.status()
+
+    assert thinking["changed"] is True
+    assert reply["status"] == "success"
+    assert fallback_idle["changed"] is False
+    assert fallback_idle["suppressed"] is True
+    assert fallback_idle["reason"] == "idle_fallback_not_needed"
+    assert status["suppressed_lifecycle_events"] == 1
+    assert status["last_transition_reason"] == "idle_fallback_not_needed"
+
+
+def test_service_core_coalesces_repeated_thinking_updates(tmp_path: Path) -> None:
+    class PresenceRuntime(_FakeRuntime):
+        def __init__(self) -> None:
+            super().__init__()
+            self.presence_calls: list[str] = []
+
+        def set_presence_mode(self, mode: str):
+            self.presence_calls.append(mode)
+            self.active_expression = mode
+            return {"presence_mode": mode, "active_expression": mode}
+
+    class PresenceExecutor(_FakeExecutor):
+        def __init__(self) -> None:
+            super().__init__()
+            self.runtime = PresenceRuntime()
+
+    executor = PresenceExecutor()
+    service = OpenClawServiceCore(tmp_path, executor_factory=lambda _root: executor)
+
+    first = service.set_presence_mode("thinking", lifecycle_event="message_received")
+    second = service.set_presence_mode("thinking", lifecycle_event="message_received")
+
+    assert first["changed"] is True
+    assert second["changed"] is False
+    assert second["suppressed"] is True
+    assert second["reason"] == "thinking_already_active"
+    assert executor.runtime.presence_calls == ["thinking"]
 
 
 def test_serve_stdio_handles_status_action_and_shutdown(monkeypatch, tmp_path: Path) -> None:

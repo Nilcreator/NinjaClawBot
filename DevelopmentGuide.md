@@ -90,6 +90,8 @@ Current responsibilities:
 - a persistent presence contract for `idle`, `thinking`, and `listening`
 - an explicit `shutdown_sequence` contract for sleepy -> display power-down -> cleanup
 - OpenClaw lifecycle-hook orchestration for `gateway_start`, `message_received`, `agent_end`, and `gateway_stop`
+- service-core lifecycle arbitration so repeated low-priority updates such as
+  duplicate `thinking` or fallback `idle` can be coalesced or suppressed
 - safe failure reporting when hardware is unavailable or not calibrated yet
 - reusable service-core modules under `ninjaclawbot.openclaw` so future standalone launch modes can reuse the same bridge/runtime ownership logic
 
@@ -139,6 +141,14 @@ Generated user asset paths:
 
 - `ninjaclawbot_data/movements`
 - `ninjaclawbot_data/expressions`
+
+Important config note:
+
+- the integrated `DisplayAdapter` must use the root-level `display.json`
+  referenced by `NinjaClawbotConfig.display_config_path`
+- if `ninjaclawbot` behavior does not match the standalone `pi5disp` test you
+  just ran, verify the root project `display.json` file before debugging the
+  display driver itself
 
 ## Required Files To Review During Driver Work
 
@@ -350,10 +360,30 @@ If the OpenClaw plugin does not work:
 - rerun `npm run typecheck` and `npm test` in the plugin folder
 - rerun `uv run ninjaclawbot list-capabilities` from the project root and confirm the Python bridge is healthy before debugging OpenClaw itself
 - if tool calls still work but persistent idle does not survive across calls, inspect the gateway log for `ninjaclawbot-bridge` warnings; that means the plugin has degraded to the one-shot fallback path
+- if the robot reacts more than once to the same low-priority lifecycle event,
+  inspect bridge status and confirm the current build includes the service-side
+  dedupe changes from Phase 2.4
 - if startup greeting does not appear but reply tools still work, check whether the OpenClaw build exposes plugin lifecycle hooks and whether the plugin log shows `gateway_start` hook warnings
 - if gateway stop turns the display off without `sleepy`, check whether the shutdown sequence was disabled in plugin config or skipped because the persistent bridge was unavailable
 - for developer-only bridge debugging, the plugin-managed service starts the hidden command `uv run ninjaclawbot --root-dir <root> openclaw-serve`
 - expected result: saved assets are loaded from `ninjaclawbot_data/expressions`, and built-in names fall back to the expression catalog when no saved asset exists
+
+## Repository Hygiene
+
+Python cache files must not be tracked in git.
+
+Current rule:
+
+- `__pycache__/` and `*.pyc` are ignored at the repository root
+- if an older clone still has those files tracked locally, remove them once and
+  commit the cleanup before telling Raspberry Pi users to `git pull`
+
+Why this matters:
+
+- tracked cache files already caused a real Raspberry Pi update failure during
+  `git pull`
+- generated cache artifacts make deployment harder without adding any useful
+  source history
 
 ### Expression startup responsiveness
 

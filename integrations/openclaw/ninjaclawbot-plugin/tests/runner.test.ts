@@ -7,6 +7,8 @@ import {
   buildServeCommand,
   extractPluginConfig,
   parseBridgeOutput,
+  readBridgeTelemetry,
+  runNinjaClawbotAction,
 } from "../src/runner.js";
 
 test("extractPluginConfig reads the plugin entry config", () => {
@@ -156,4 +158,29 @@ test("parseBridgeOutput can recover JSON from noisy stdout", () => {
 
   assert.equal(parsed.status, "success");
   assert.equal(parsed.action, "health_check");
+});
+
+test("runNinjaClawbotAction marks telemetry disabled when persistent bridge is off", async () => {
+  const api = {
+    config: {
+      plugins: {
+        entries: {
+          ninjaclawbot: {
+            config: {
+              projectRoot: "/robot",
+              enablePersistentBridge: false,
+            },
+          },
+        },
+      },
+    },
+  };
+
+  try {
+    await runNinjaClawbotAction(api, { action: "health_check" });
+  } catch {
+    // One-shot execution will fail in the test environment because /robot does not exist.
+  }
+
+  assert.equal(readBridgeTelemetry().status, "disabled");
 });

@@ -158,6 +158,7 @@ This gives you:
 - one clear robot-control boundary
 - one warm runtime reused across OpenClaw tool calls while the gateway is running
 - lifecycle-aware robot presence during the OpenClaw gateway session
+- service-side arbitration so duplicate low-priority lifecycle updates do not replay forever
 - typed JSON-style action results
 - safer hardware access
 - a shared reply-emotion policy
@@ -228,7 +229,11 @@ Operator note:
   the plugin is loaded correctly
 - after changing plugin or skill behavior, start a fresh chat session so the
   OpenClaw prompt picks up the latest NinjaClawBot skill snapshot
-  - runtime cleanup
+- `ninjaclawbot` now reads the root-level `display.json` file directly instead
+  of silently using the package-local `pi5disp` default config
+- old clones that still contain tracked `__pycache__` files should update once
+  and then keep those files ignored; the repository now ignores Python cache
+  artifacts by default
 
 ## Recommended Reading Order
 
@@ -262,6 +267,8 @@ The current stack supports:
 - integrated `ninjaclawbot` usage
 - Stage 1 expression engine and expression tool
 - Stage 2 persistent bridge, Always On lifecycle hooks, and sleepy shutdown sequence
+- Phase 2.4 service-side lifecycle dedupe, root-level display-config loading,
+  and repository cache-file hygiene
 
-The main remaining work is Raspberry Pi validation of the complete Telegram-backed
-OpenClaw path and deeper lifecycle hardening under repeated-message stress.
+The main remaining work is operator-facing diagnostics, degraded-mode visibility,
+and the final release gate for repeated-message and recovery testing.

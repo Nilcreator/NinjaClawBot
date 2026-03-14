@@ -2,6 +2,66 @@
 
 ## 2026-03-14
 
+### Phase 2.4 Hardening: Lifecycle Dedupe, Root Display Config, And Repository Hygiene
+
+Summary:
+
+- implemented the first hardening slice of Phase 2.4 in the active
+  `ninjaclawbot` and OpenClaw bridge code
+- added service-core suppression and dedupe rules for repeated low-priority
+  lifecycle transitions
+- made the integrated display adapter load the root-level `display.json`
+  instead of silently using the package-local `pi5disp` default config
+- added initial plugin-side bridge telemetry so the code can distinguish
+  `healthy`, `degraded`, and `disabled` bridge states for future diagnostics
+- removed tracked Python cache artifacts from version control and added a root
+  `.gitignore` so Raspberry Pi updates no longer break on generated `__pycache__`
+  files
+
+Files changed:
+
+- [ninjaclawbot/src/ninjaclawbot/openclaw/service.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/openclaw/service.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/tests/test_openclaw_bridge.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_openclaw_bridge.py)
+- [ninjaclawbot/tests/test_adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests/test_adapters.py)
+- [integrations/openclaw/ninjaclawbot-plugin/src/runner.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts)
+- [.gitignore](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/.gitignore)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentLog.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [EnhancementPlan.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/EnhancementPlan.md)
+
+Why:
+
+- the happy-path lifecycle already worked on Raspberry Pi, but the service core
+  still treated every lifecycle request too literally
+- repeated `thinking` and stale fallback `idle` updates needed explicit
+  suppression rules before more stress testing
+- `ninjaclawbot` had to respect the same root-level display configuration file
+  the installation guide tells users to create
+- tracked cache files had already caused a real `git pull` failure on Raspberry
+  Pi and needed to be removed from the repository itself
+
+Validation:
+
+- `uv run --extra dev python -m compileall src tests`
+- `uv run --extra dev ruff check src tests`
+- `uv run --extra dev ruff format --check src tests`
+- `uv run --extra dev pytest -q tests -c pyproject.toml`
+- `npm run typecheck`
+- `npm test`
+
+Raspberry Pi validation status:
+
+- not yet rerun after this Phase 2.4 hardening slice
+- required next checks:
+  - repeated-message dedupe under Telegram/OpenClaw
+  - duplicate startup-source suppression
+  - root-level `display.json` confirmation from the integrated runtime
+  - gateway restart and recovery behavior
+
 ### Installation Guide Simplification With Interactive Tools And Appendix
 
 Summary:

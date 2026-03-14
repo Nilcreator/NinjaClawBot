@@ -288,14 +288,32 @@ class DisplayAdapter:
         self._display: Any | None = None
         self._config: dict[str, Any] | None = None
 
+    def _load_config(self) -> dict[str, Any]:
+        manager_module = _import_or_raise("pi5disp.config.config_manager")
+        manager = manager_module.ConfigManager(str(self.config.display_config_path))
+        self._config = dict(manager.load())
+        return self._config
+
     def _build_display(self) -> Any:
         if self._display is not None:
             return self._display
 
-        common = _import_or_raise("pi5disp.cli._common")
-        _manager, config = common.load_config()
-        self._config = dict(config)
-        self._display = common.create_display()
+        config = self._load_config()
+        driver_module = _import_or_raise("pi5disp.core.driver")
+        spi_speed_mhz = int(config.get("spi_speed_mhz", 32))
+        self._display = driver_module.ST7789V(
+            dc_pin=config.get("dc_pin", 14),
+            rst_pin=config.get("rst_pin", 15),
+            backlight_pin=config.get("backlight_pin", 16),
+            width=config.get("width", 240),
+            height=config.get("height", 320),
+            rotation=config.get("rotation", 90),
+            speed_hz=spi_speed_mhz * 1_000_000,
+        )
+        brightness = int(config.get("brightness", 100))
+        set_brightness = getattr(self._display, "set_brightness", None)
+        if callable(set_brightness):
+            set_brightness(max(0, min(100, brightness)))
         return self._display
 
     def prewarm(self) -> None:
@@ -393,6 +411,7 @@ class DisplayAdapter:
                 "height": display.height,
                 "rotation": config.get("rotation", 90),
                 "brightness": config.get("brightness", 100),
+                "config_path": str(self.config.display_config_path),
             },
         )
 

@@ -568,7 +568,7 @@ Documentation updates required:
 
 #### Phase 2.4: Arbitration, Dedupe, Degraded Mode, And Config Hardening
 
-Status: Re-audited on 2026-03-14. The happy-path lifecycle is working on Raspberry Pi, but arbitration, degraded-mode reporting, and config hardening are still incomplete.
+Status: Initial hardening slice implemented on 2026-03-14. The happy-path lifecycle is working on Raspberry Pi, and the first arbitration/config cleanup is now in place, but deeper degraded-mode exposure and release hardening are still incomplete.
 
 Current validated deployment baseline:
 
@@ -602,6 +602,22 @@ Audit-confirmed gaps:
 - the plugin code and manifest still advertise optional lifecycle flags, but the validated Raspberry Pi deployment does not rely on them
 - bridge fallback behavior exists, but there is no strong degraded-mode model for operators or tests
 - tracked `__pycache__` and `.pyc` files are still present in the repository and have already broken `git pull` on Raspberry Pi
+
+Implemented in the first hardening slice:
+
+- service-core suppression and dedupe for:
+  - repeated `message_received -> thinking`
+  - stale or unnecessary `agent_end -> idle`
+  - duplicate startup requests after startup has already completed
+- bridge-service status fields for:
+  - activity epoch
+  - suppressed lifecycle event count
+  - last transition source and reason
+  - last explicit action
+- integrated display loading now uses the root-level `display.json` path owned by `NinjaClawbotConfig`
+- root repository `.gitignore` added for Python cache artifacts
+- tracked `__pycache__` and `.pyc` files removed from version control
+- initial plugin-side bridge telemetry added for `healthy`, `degraded`, and `disabled` states
 
 Objective:
 

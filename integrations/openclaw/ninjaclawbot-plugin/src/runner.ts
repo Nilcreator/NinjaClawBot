@@ -61,7 +61,50 @@ interface BridgeClient {
   exited: boolean;
 }
 
+type BridgeHealthState = "uninitialized" | "disabled" | "healthy" | "degraded";
+
+export interface BridgeTelemetry {
+  status: BridgeHealthState;
+  lastError: string | null;
+  fallbackCount: number;
+  lastModeChangeAt: string | null;
+  lastSuccessfulPersistentAt: string | null;
+}
+
 let activeBridge: BridgeClient | null = null;
+let bridgeTelemetry: BridgeTelemetry = {
+  status: "uninitialized",
+  lastError: null,
+  fallbackCount: 0,
+  lastModeChangeAt: null,
+  lastSuccessfulPersistentAt: null,
+};
+
+function updateBridgeTelemetry(
+  status: BridgeHealthState,
+  options: {
+    error?: string | null;
+    incrementFallback?: boolean;
+    persistentSuccess?: boolean;
+  } = {},
+) {
+  const changed = bridgeTelemetry.status !== status;
+  bridgeTelemetry = {
+    status,
+    lastError: options.error ?? (status === "healthy" ? null : bridgeTelemetry.lastError),
+    fallbackCount:
+      bridgeTelemetry.fallbackCount + (options.incrementFallback === true ? 1 : 0),
+    lastModeChangeAt: changed ? new Date().toISOString() : bridgeTelemetry.lastModeChangeAt,
+    lastSuccessfulPersistentAt:
+      options.persistentSuccess === true
+        ? new Date().toISOString()
+        : bridgeTelemetry.lastSuccessfulPersistentAt,
+  };
+}
+
+export function readBridgeTelemetry(): BridgeTelemetry {
+  return { ...bridgeTelemetry };
+}
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -350,6 +393,9 @@ async function runPersistentBridgeRequest(
 ): Promise<Record<string, unknown> | null> {
   const config = extractPluginConfig(api);
   if (!alwaysOnEnabled(config)) {
+    if (!config.enablePersistentBridge) {
+      updateBridgeTelemetry("disabled");
+    }
     return null;
   }
 
@@ -367,8 +413,12 @@ async function runPersistentBridgeRequest(
     if (!response.ok) {
       throw new Error(response.error ?? `${context} failed.`);
     }
+    updateBridgeTelemetry("healthy", { persistentSuccess: true });
     return response.data ?? {};
   } catch (error) {
+    updateBridgeTelemetry("degraded", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.warn(
       `[ninjaclawbot-bridge] ${context}: ${
         error instanceof Error ? error.message : String(error)
@@ -382,6 +432,7 @@ async function runPersistentBridgeRequest(
 export async function ensureBridge(api: OpenClawPluginApiLike): Promise<void> {
   const config = extractPluginConfig(api);
   if (!config.enablePersistentBridge) {
+    updateBridgeTelemetry("disabled");
     return;
   }
 
@@ -402,7 +453,11 @@ export async function ensureBridge(api: OpenClawPluginApiLike): Promise<void> {
     if (!response.ok) {
       throw new Error(response.error ?? "Persistent ninjaclawbot bridge health check failed.");
     }
+    updateBridgeTelemetry("healthy", { persistentSuccess: true });
   } catch (error) {
+    updateBridgeTelemetry("degraded", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     await shutdownBridge();
     throw error;
   }
@@ -426,6 +481,7 @@ export async function shutdownBridge(): Promise<void> {
   if (!client.exited) {
     client.child.kill("SIGTERM");
   }
+  updateBridgeTelemetry("uninitialized");
 }
 
 export async function runStartupSequence(api: OpenClawPluginApiLike) {
@@ -483,6 +539,7 @@ export async function runShutdownSequence(
 export async function readBridgeStatus(api: OpenClawPluginApiLike) {
   const config = extractPluginConfig(api);
   if (!config.enablePersistentBridge) {
+    updateBridgeTelemetry("disabled");
     return null;
   }
 
@@ -499,8 +556,12 @@ export async function readBridgeStatus(api: OpenClawPluginApiLike) {
     if (!response.ok) {
       throw new Error(response.error ?? "Bridge status request failed.");
     }
+    updateBridgeTelemetry("healthy", { persistentSuccess: true });
     return response.data ?? {};
   } catch (error) {
+    updateBridgeTelemetry("degraded", {
+      error: error instanceof Error ? error.message : String(error),
+    });
     console.warn(
       `[ninjaclawbot-bridge] Bridge status failed: ${
         error instanceof Error ? error.message : String(error)
@@ -517,6 +578,7 @@ export async function runNinjaClawbotAction(
 ) {
   const config = extractPluginConfig(api);
   if (!config.enablePersistentBridge) {
+    updateBridgeTelemetry("disabled");
     return runNinjaClawbotActionOneShot(config, payload);
   }
 
@@ -542,8 +604,13 @@ export async function runNinjaClawbotAction(
     if (!response.ok) {
       throw new Error(response.error ?? "Persistent ninjaclawbot bridge request failed.");
     }
+    updateBridgeTelemetry("healthy", { persistentSuccess: true });
     return response.data ?? {};
   } catch (error) {
+    updateBridgeTelemetry("degraded", {
+      error: error instanceof Error ? error.message : String(error),
+      incrementFallback: true,
+    });
     console.warn(
       `[ninjaclawbot-bridge] Falling back to one-shot execution: ${
         error instanceof Error ? error.message : String(error)

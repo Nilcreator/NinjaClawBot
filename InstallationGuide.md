@@ -795,7 +795,8 @@ grep -n 'dtoverlay=pwm-2chan' /boot/firmware/config.txt || true
 - `uv sync --extra dev` fails:
   check internet access and rerun it from `~/NinjaClawBot`
 - `git pull` fails because of `__pycache__` files:
-  use the cleanup block below
+  this should only affect older clones from before the repository cache-file
+  cleanup; use the one-time cleanup block below
 
 ### Quick fixes
 
@@ -814,6 +815,10 @@ find ninjaclawbot/src -type d -name __pycache__ -prune -exec rm -rf {} +
 git ls-files | grep '/__pycache__/.*\.pyc$' | xargs -r git restore --
 git pull
 ```
+
+- `ninjaclawbot` shows the wrong display behavior even though `pi5disp` worked:
+  check the root project `display.json`; the integrated layer now reads that
+  file directly during runtime
 
 ## Appendix D. Python And Project Installation Alternatives
 

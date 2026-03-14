@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ninjaclawbot.adapters import BuzzerAdapter
+from ninjaclawbot.adapters import BuzzerAdapter, DisplayAdapter
 from ninjaclawbot.config import NinjaClawbotConfig
 
 
@@ -97,3 +97,65 @@ def test_buzzer_adapter_waits_for_tone_playback(monkeypatch) -> None:
     assert waited_for == pytest.approx(0.4)
     assert len(sleep_calls) == 1
     assert sleep_calls[0] == pytest.approx(0.4)
+
+
+def test_display_adapter_uses_root_level_display_config(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeDisplay:
+        width = 240
+        height = 320
+
+        def __init__(self, **kwargs) -> None:
+            captured["driver_kwargs"] = dict(kwargs)
+
+        def set_brightness(self, value: int) -> None:
+            captured["brightness"] = value
+
+        def health_check(self) -> bool:
+            return True
+
+        def close(self) -> None:
+            captured["closed"] = True
+
+    class FakeManager:
+        def __init__(self, config_path: str) -> None:
+            captured["config_path"] = config_path
+
+        def load(self) -> dict[str, int]:
+            return {
+                "dc_pin": 21,
+                "rst_pin": 22,
+                "backlight_pin": 23,
+                "width": 240,
+                "height": 320,
+                "rotation": 180,
+                "brightness": 65,
+                "spi_speed_mhz": 24,
+            }
+
+    def fake_import(module_name: str):
+        if module_name == "pi5disp.config.config_manager":
+            return SimpleNamespace(ConfigManager=FakeManager)
+        if module_name == "pi5disp.core.driver":
+            return SimpleNamespace(ST7789V=FakeDisplay)
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr("ninjaclawbot.adapters._import_or_raise", fake_import)
+
+    config = NinjaClawbotConfig(root_dir=tmp_path)
+    adapter = DisplayAdapter(config)
+    health = adapter.health_check()
+
+    assert captured["config_path"] == str(config.display_config_path)
+    assert captured["driver_kwargs"] == {
+        "dc_pin": 21,
+        "rst_pin": 22,
+        "backlight_pin": 23,
+        "width": 240,
+        "height": 320,
+        "rotation": 180,
+        "speed_hz": 24_000_000,
+    }
+    assert captured["brightness"] == 65
+    assert health.data["config_path"] == str(config.display_config_path)
