@@ -127,11 +127,17 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
         "build_stt_backend",
         lambda config: object(),
     )
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "get_recommended_sample_rate",
+        lambda selector, fallback_rate: 16_000,
+    )
 
     inputs = "\n".join(
         [
             "standalone",
             "default",
+            "16000",
             "whisper_cpp",
             "/usr/local/bin/whisper-cli",
             str(tmp_path / "ggml-base.bin"),

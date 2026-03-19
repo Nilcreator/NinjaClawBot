@@ -43,19 +43,129 @@ def list_input_devices() -> list[AudioDeviceInfo]:
     return devices
 
 
+def _coerce_device_index(candidate: object) -> int | None:
+    """Convert a sounddevice device selector into an integer index when possible."""
+    if candidate in (None, -1):
+        return None
+    if isinstance(candidate, bool):
+        return int(candidate)
+    try:
+        return int(candidate)
+    except (TypeError, ValueError) as exc:
+        raise DeviceError(
+            f"Could not interpret the default input device returned by sounddevice: {candidate!r}"
+        ) from exc
+
+
 def get_default_input_device() -> int | None:
     """Return the default input device index, if available."""
     sd = _get_sounddevice()
     default_device = getattr(sd.default, "device", None)
 
-    if isinstance(default_device, (tuple, list)):
+    if default_device is None:
+        return None
+
+    try:
         candidate = default_device[0]
-    else:
+    except (TypeError, IndexError, KeyError):
         candidate = default_device
 
-    if candidate in (None, -1):
+    return _coerce_device_index(candidate)
+
+
+def get_input_device_info(selector: int | str | None) -> AudioDeviceInfo | None:
+    """Return device info for the given selector or the default input device."""
+    devices = list_input_devices()
+    if selector is None or selector == "":
+        default_index = get_default_input_device()
+        if default_index is None:
+            return None
+        selector = default_index
+
+    resolved_index = resolve_input_device(selector)
+    if resolved_index is None:
         return None
-    return int(candidate)
+    for device in devices:
+        if device.index == resolved_index:
+            return device
+    raise DeviceError(f"No input device found with index {resolved_index}.")
+
+
+def get_recommended_sample_rate(
+    selector: int | str | None,
+    *,
+    fallback_rate: int,
+) -> int:
+    """Return a sensible sample-rate default for the selected input device."""
+    try:
+        device = get_input_device_info(selector)
+    except DeviceError:
+        return fallback_rate
+
+    if device is None or device.default_samplerate is None:
+        return fallback_rate
+    suggested = int(round(device.default_samplerate))
+    return suggested if suggested > 0 else fallback_rate
+
+
+def resolve_supported_input_settings(
+    *,
+    selector: int | str | None,
+    sample_rate: int,
+    channels: int,
+    dtype: str = "int16",
+) -> tuple[int | None, int, AudioDeviceInfo | None, str | None]:
+    """Validate the requested input settings and fall back to device defaults when needed."""
+    sd = _get_sounddevice()
+    resolved_device = resolve_input_device(selector)
+    device_info = get_input_device_info(resolved_device)
+
+    try:
+        sd.check_input_settings(
+            device=resolved_device,
+            channels=channels,
+            dtype=dtype,
+            samplerate=float(sample_rate),
+        )
+        return resolved_device, sample_rate, device_info, None
+    except Exception as exc:
+        requested_error = str(exc).strip()
+
+    recommended_rate = get_recommended_sample_rate(
+        resolved_device,
+        fallback_rate=sample_rate,
+    )
+    if recommended_rate != sample_rate:
+        try:
+            sd.check_input_settings(
+                device=resolved_device,
+                channels=channels,
+                dtype=dtype,
+                samplerate=float(recommended_rate),
+            )
+            device_label = (
+                f"{device_info.name} [{device_info.index}]"
+                if device_info is not None
+                else "the default input device"
+            )
+            warning = (
+                f"Configured sample rate {sample_rate} Hz is not supported by {device_label}. "
+                f"Using {recommended_rate} Hz instead."
+            )
+            return resolved_device, recommended_rate, device_info, warning
+        except Exception:
+            pass
+
+    device_label = (
+        f"{device_info.name} [{device_info.index}]"
+        if device_info is not None
+        else "the default input device"
+    )
+    suggestion = f" Try {recommended_rate} Hz." if recommended_rate != sample_rate else ""
+    raise DeviceError(
+        f"Configured sample rate {sample_rate} Hz is not supported by {device_label}: "
+        f"{requested_error}.{suggestion}"
+    )
 
 
 def resolve_input_device(selector: int | str | None) -> int | None:

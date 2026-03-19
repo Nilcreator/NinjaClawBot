@@ -6,7 +6,7 @@ import os
 
 import click
 
-from pi5mic.core.devices import list_input_devices
+from pi5mic.core.devices import list_input_devices, resolve_supported_input_settings
 from pi5mic.errors import ConfigError, DeviceError, STTError, TransportError
 from pi5mic.install.whisper_cpp import resolve_model_path, resolve_whisper_cpp_command
 from pi5mic.integration.delivery import describe_delivery_mode
@@ -19,6 +19,7 @@ from ._common import build_openclaw_transport, build_presence_controller, load_m
 def doctor(ctx: click.Context) -> None:
     """Check local config, microphone readiness, and STT prerequisites."""
     failures: list[str] = []
+    warnings: list[str] = []
 
     try:
         manager = load_manager(ctx.obj.get("config_file"))
@@ -32,6 +33,26 @@ def doctor(ctx: click.Context) -> None:
         click.echo(f"OK   audio devices discovered: {len(devices)}")
     except DeviceError as exc:
         failures.append(f"audio devices unavailable: {exc}")
+        devices = []
+
+    if devices:
+        audio_config = config["audio"]
+        try:
+            resolved_device, actual_rate, device_info, warning = resolve_supported_input_settings(
+                selector=audio_config.get("input_device"),
+                sample_rate=int(audio_config["sample_rate"]),
+                channels=int(audio_config["channels"]),
+            )
+            device_label = (
+                f"{device_info.name} [{device_info.index}]"
+                if device_info is not None
+                else f"default ({resolved_device if resolved_device is not None else 'auto'})"
+            )
+            click.echo(f"OK   input stream settings: {device_label} @ {actual_rate} Hz")
+            if warning:
+                warnings.append(warning)
+        except DeviceError as exc:
+            failures.append(str(exc))
 
     selected_backend = str(config["stt"]["selected"])
     click.echo(f"INFO active STT backend: {selected_backend}")
@@ -76,5 +97,12 @@ def doctor(ctx: click.Context) -> None:
         for failure in failures:
             click.echo(f"  - {failure}")
         raise click.ClickException("pi5mic doctor detected configuration problems.")
+
+    if warnings:
+        click.echo("\nWarnings:")
+        for warning in warnings:
+            click.echo(f"  - {warning}")
+        click.echo("\npi5mic doctor passed with warnings.")
+        return
 
     click.echo("\npi5mic doctor passed.")

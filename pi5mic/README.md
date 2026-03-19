@@ -175,6 +175,7 @@ What this is doing:
 
 - creates or updates `mic.json`
 - asks you which profile, microphone, and STT backend you want
+- asks for a sample rate that matches your selected microphone
 
 ### Recommended choices for standalone testing
 
@@ -182,10 +183,18 @@ Choose:
 
 - `Profile`: `standalone`
 - `Input device`: your microphone number, name, or `default`
+- `Sample rate (Hz)`: accept the recommended value shown by `pi5mic`
 - `STT backend`: `whisper_cpp`
 - `whisper.cpp command path`: your `whisper-cli` path
 - `whisper.cpp model path`: your `ggml-base.bin` path
 - `Maximum clip length`: `10` or `15`
+
+Important note about sample rate:
+
+- many Raspberry Pi USB microphones do not accept `16000` Hz directly
+- they often work best at `44100` Hz or `48000` Hz
+- `pi5mic` now tries to recommend the device's own default sample rate during setup
+- for most users, the safest choice is to accept the recommended value
 
 What you should expect:
 
@@ -257,6 +266,21 @@ What to expect:
 - lines starting with `OK`
 - then:
   - `pi5mic doctor passed.`
+
+Sometimes you may see:
+
+- `pi5mic doctor passed with warnings.`
+
+This usually means:
+
+- your saved sample rate does not match what the microphone accepts
+- `pi5mic` found a safer working rate, such as `48000` Hz
+
+If that happens:
+
+- rerun `uv run pi5mic setup`
+- keep the same microphone
+- accept the recommended sample rate
 
 If something is wrong:
 
@@ -379,8 +403,10 @@ What you should expect:
 - success messages for:
   - config
   - audio device discovery
-  - `whisper.cpp` command
-  - model file
+- `whisper.cpp` command
+- model file
+
+If the sample rate is not ideal for the selected microphone, `doctor` may still succeed but show a warning with a better rate to use.
 
 ### Step 13. Test recording only
 
@@ -399,6 +425,8 @@ What you should expect:
 - metadata such as duration, frames, and bytes
 
 This is a good test when you want to confirm the microphone works before testing transcription.
+
+If this command reports `Invalid sample rate`, rerun `uv run pi5mic setup` and accept the sample rate recommended by the wizard.
 
 ### Step 14. Test transcription on the saved WAV file
 
@@ -547,7 +575,39 @@ You have tested the current standalone `pi5mic` build successfully if all of the
 6. `uv run pi5mic run --once`
 7. `uv run pi5mic mic-tool`
 
-## 9. Validation Commands For Developers
+## 9. Common Problem: `Invalid sample rate`
+
+If you see an error like this:
+
+```text
+Error opening RawInputStream: Invalid sample rate [PaErrorCode -9997]
+```
+
+it usually means:
+
+- the microphone was found correctly
+- but the saved sample rate in `mic.json` does not match what that microphone supports
+
+The easiest fix is:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+
+- keep the same microphone
+- accept the sample rate recommended by the wizard
+- run `uv run pi5mic doctor` again
+- run `uv run pi5mic run --once` again
+
+Why this happens:
+
+- many Raspberry Pi microphones prefer their hardware default rate
+- this is often `44100` Hz or `48000` Hz, not `16000` Hz
+
+## 10. Validation Commands For Developers
 
 ```bash
 cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code\ library/NinjaClawbot/pi5mic

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from pi5mic.core.devices import list_input_devices
+from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
 from pi5mic.errors import ConfigError, DeviceError, STTError
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
 from pi5mic.integration.delivery import SUPPORTED_DELIVERY_MODES
@@ -52,6 +52,21 @@ def setup_cmd(ctx: click.Context) -> None:
         default=current_device_display,
     ).strip()
     config["audio"]["input_device"] = None if device_choice.lower() == "default" else device_choice
+
+    recommended_sample_rate = get_recommended_sample_rate(
+        config["audio"]["input_device"],
+        fallback_rate=int(config["audio"]["sample_rate"]),
+    )
+    if recommended_sample_rate != int(config["audio"]["sample_rate"]):
+        click.echo(
+            f"Recommended sample rate for this microphone: {recommended_sample_rate} Hz "
+            "(using the device default reported by PortAudio/ALSA)."
+        )
+    config["audio"]["sample_rate"] = click.prompt(
+        "Sample rate (Hz)",
+        type=int,
+        default=recommended_sample_rate,
+    )
 
     backend = click.prompt(
         "STT backend",

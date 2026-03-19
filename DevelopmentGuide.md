@@ -662,6 +662,23 @@ cd ~/NinjaClawBot
 uv run pi5mic doctor
 ```
 
+### `pi5mic` says `Invalid sample rate`
+
+- this usually means the microphone exists, but the saved sample rate in
+  `mic.json` does not match what ALSA accepts for that device
+- rerun setup and accept the recommended rate:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+uv run pi5mic doctor
+```
+
+- many Raspberry Pi microphones prefer `44100` Hz or `48000` Hz instead of
+  `16000` Hz
+- the current `pi5mic` build will try to recommend the device default and the
+  doctor command may pass with a warning when it can auto-correct safely
+
 ### `uv` not found in OpenClaw
 
 - check the absolute path:

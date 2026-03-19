@@ -11,7 +11,7 @@ from pi5mic.core.audio_backend import load_sounddevice
 from pi5mic.errors import RecordingError
 from pi5mic.models import RecordedClip, RecorderSettings
 
-from .devices import resolve_input_device
+from .devices import resolve_supported_input_settings
 
 
 def _get_sounddevice():
@@ -29,13 +29,23 @@ def record_wav(output_path: Path | str, settings: RecorderSettings) -> RecordedC
     path.parent.mkdir(parents=True, exist_ok=True)
 
     sd = _get_sounddevice()
-    resolved_device = resolve_input_device(settings.device)
-    total_frames = math.ceil(settings.duration_seconds * settings.sample_rate)
+    try:
+        resolved_device, actual_sample_rate, _device_info, _warning = (
+            resolve_supported_input_settings(
+                selector=settings.device,
+                sample_rate=settings.sample_rate,
+                channels=settings.channels,
+            )
+        )
+    except Exception as exc:
+        raise RecordingError(str(exc)) from exc
+
+    total_frames = math.ceil(settings.duration_seconds * actual_sample_rate)
     overflowed = False
 
     try:
         with sd.RawInputStream(
-            samplerate=settings.sample_rate,
+            samplerate=actual_sample_rate,
             blocksize=settings.block_size,
             device=resolved_device,
             channels=settings.channels,
@@ -44,7 +54,7 @@ def record_wav(output_path: Path | str, settings: RecorderSettings) -> RecordedC
             with wave.open(str(path), "wb") as wav_file:
                 wav_file.setnchannels(settings.channels)
                 wav_file.setsampwidth(settings.sample_width_bytes)
-                wav_file.setframerate(settings.sample_rate)
+                wav_file.setframerate(actual_sample_rate)
 
                 remaining_frames = total_frames
                 while remaining_frames > 0:
@@ -60,7 +70,7 @@ def record_wav(output_path: Path | str, settings: RecorderSettings) -> RecordedC
     return RecordedClip(
         path=path,
         duration_seconds=settings.duration_seconds,
-        sample_rate=settings.sample_rate,
+        sample_rate=actual_sample_rate,
         channels=settings.channels,
         frames=total_frames,
         bytes_written=bytes_written,

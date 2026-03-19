@@ -7,25 +7,41 @@
 Summary:
 
 - audited the Raspberry Pi traceback from `pi5mic setup` and `mic-tool`
-- identified the root cause:
+- identified the first root cause:
   - `sounddevice` was installed
   - but importing it raised `OSError: PortAudio library not found`
   - `pi5mic` only converted `ImportError` into friendly user-facing errors, so
     the Pi surfaced a raw traceback instead of a setup hint
+- identified the second root cause:
+  - `status` assumed `sounddevice.default.device` was always a tuple/list, but
+    on the tested environment it was a `sounddevice._InputOutputPair`
+  - `pi5mic` also kept the old `16000` Hz default even when the selected ALSA
+    microphone only supported its hardware default sample rate, so record/run
+    failed later with `Invalid sample rate [PaErrorCode -9997]`
 - fixed both audio import paths:
   - microphone discovery now translates missing PortAudio into `DeviceError`
   - recording now translates missing PortAudio into `RecordingError`
+- fixed the default-device parsing path so `status` no longer crashes on
+  `_InputOutputPair`
+- added input-setting validation and fallback behavior:
+  - `setup` now recommends the selected microphone's default sample rate
+  - `doctor` now validates input stream settings and can pass with warnings
+  - recording falls back to the device default sample rate when the configured
+    rate is unsupported but a safe default is available
 - added regression tests for:
   - missing PortAudio during device discovery
   - missing PortAudio during recording setup
   - `mic-tool -> setup` warning behavior so the interactive path no longer
     crashes on this setup issue
+  - `_InputOutputPair` default-device handling
+  - invalid-sample-rate fallback and doctor warnings
 - rewrote the `pi5mic` README into a clearer beginner-friendly standalone
   setup and testing guide with:
   - step-by-step installation
   - `mic-tool` explanation and usage
   - direct command-line explanation and usage
   - explicit PortAudio troubleshooting
+  - explicit invalid-sample-rate troubleshooting
 
 Files changed:
 
@@ -36,6 +52,7 @@ Files changed:
 - [pi5mic/tests/test_recorder.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_recorder.py)
 - [pi5mic/tests/test_mic_tool_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_mic_tool_setup.py)
 - [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
 - [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
 
 Why:

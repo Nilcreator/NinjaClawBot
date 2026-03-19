@@ -31,12 +31,18 @@ def test_mic_tool_setup_warns_instead_of_crashing_when_audio_backend_is_unavaila
         lambda command=None: Path("/usr/local/bin/whisper-cli"),
     )
     monkeypatch.setattr(setup_cmd_module, "build_stt_backend", lambda config: object())
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "get_recommended_sample_rate",
+        lambda selector, fallback_rate: 16_000,
+    )
 
     inputs = "\n".join(
         [
             "1",
             "standalone",
             "default",
+            "16000",
             "whisper_cpp",
             "/usr/local/bin/whisper-cli",
             str(tmp_path / "ggml-base.bin"),

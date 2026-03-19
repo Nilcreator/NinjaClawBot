@@ -33,12 +33,20 @@ class _FakeRawInputStream:
 
 
 class _FakeSoundDevice:
+    def check_input_settings(self, *, device=None, channels=None, dtype=None, samplerate=None):
+        if samplerate == 8_000:
+            raise ValueError("Invalid sample rate [PaErrorCode -9997]")
+
     RawInputStream = _FakeRawInputStream
 
 
 def test_record_wav_writes_valid_file(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(recorder_module, "_get_sounddevice", lambda: _FakeSoundDevice())
-    monkeypatch.setattr(recorder_module, "resolve_input_device", lambda selector: selector)
+    monkeypatch.setattr(
+        recorder_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (1, 8_000, None, None),
+    )
 
     settings = RecorderSettings(
         device=1, sample_rate=8_000, channels=1, block_size=400, duration_seconds=0.1
@@ -57,7 +65,11 @@ def test_record_wav_writes_valid_file(tmp_path, monkeypatch) -> None:
 
 def test_record_temp_wav_uses_temp_directory(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(recorder_module, "_get_sounddevice", lambda: _FakeSoundDevice())
-    monkeypatch.setattr(recorder_module, "resolve_input_device", lambda selector: selector)
+    monkeypatch.setattr(
+        recorder_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (None, 8_000, None, None),
+    )
 
     clip = recorder_module.record_temp_wav(
         RecorderSettings(sample_rate=8_000, duration_seconds=0.05),
@@ -68,6 +80,22 @@ def test_record_temp_wav_uses_temp_directory(tmp_path, monkeypatch) -> None:
     assert clip.path.parent == tmp_path
     assert clip.path.name.startswith("capture-")
     assert clip.path.suffix == ".wav"
+
+
+def test_record_wav_falls_back_to_supported_sample_rate(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(recorder_module, "_get_sounddevice", lambda: _FakeSoundDevice())
+    monkeypatch.setattr(
+        recorder_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (0, 48_000, None, "Using 48000 Hz instead."),
+    )
+
+    settings = RecorderSettings(
+        device=1, sample_rate=8_000, channels=1, block_size=400, duration_seconds=0.1
+    )
+    clip = recorder_module.record_wav(tmp_path / "clip.wav", settings)
+
+    assert clip.sample_rate == 48_000
 
 
 def test_recorder_settings_validate_sample_width() -> None:
