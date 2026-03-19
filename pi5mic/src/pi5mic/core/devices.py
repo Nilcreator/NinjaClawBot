@@ -4,18 +4,16 @@ from __future__ import annotations
 
 from typing import Any, cast
 
+from pi5mic.core.audio_backend import load_sounddevice
 from pi5mic.errors import DeviceError
 from pi5mic.models import AudioDeviceInfo
 
 
 def _get_sounddevice():
-    try:
-        import sounddevice as sd
-    except ImportError as exc:  # pragma: no cover - exercised indirectly in CLI
-        raise DeviceError(
-            "The 'sounddevice' package is required for microphone discovery and recording."
-        ) from exc
-    return sd
+    return load_sounddevice(
+        purpose="microphone discovery and status checks",
+        error_factory=DeviceError,
+    )
 
 
 def list_input_devices() -> list[AudioDeviceInfo]:

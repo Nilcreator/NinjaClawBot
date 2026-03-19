@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import builtins
 import wave
 
 import pytest
 
 from pi5mic.core import recorder as recorder_module
+from pi5mic.errors import RecordingError
 from pi5mic.models import RecorderSettings
 
 
@@ -71,3 +73,17 @@ def test_record_temp_wav_uses_temp_directory(tmp_path, monkeypatch) -> None:
 def test_recorder_settings_validate_sample_width() -> None:
     with pytest.raises(ValueError, match="16-bit PCM"):
         RecorderSettings(sample_width_bytes=1).validate()
+
+
+def test_recording_backend_reports_missing_portaudio(monkeypatch) -> None:
+    original_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sounddevice":
+            raise OSError("PortAudio library not found")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(RecordingError, match="PortAudio library not found"):
+        recorder_module._get_sounddevice()

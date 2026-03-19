@@ -7,6 +7,7 @@ import tempfile
 import wave
 from pathlib import Path
 
+from pi5mic.core.audio_backend import load_sounddevice
 from pi5mic.errors import RecordingError
 from pi5mic.models import RecordedClip, RecorderSettings
 
@@ -14,11 +15,10 @@ from .devices import resolve_input_device
 
 
 def _get_sounddevice():
-    try:
-        import sounddevice as sd
-    except ImportError as exc:  # pragma: no cover - exercised indirectly in CLI
-        raise RecordingError("The 'sounddevice' package is required for WAV recording.") from exc
-    return sd
+    return load_sounddevice(
+        purpose="WAV recording",
+        error_factory=RecordingError,
+    )
 
 
 def record_wav(output_path: Path | str, settings: RecorderSettings) -> RecordedClip:

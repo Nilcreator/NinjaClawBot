@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import builtins
+
 import pytest
 
 from pi5mic.core import devices as devices_module
@@ -92,3 +94,17 @@ def test_resolve_input_device_rejects_missing_device(monkeypatch) -> None:
 
     with pytest.raises(DeviceError, match="No input device found with index 5"):
         devices_module.resolve_input_device(5)
+
+
+def test_get_sounddevice_reports_missing_portaudio(monkeypatch) -> None:
+    original_import = builtins.__import__
+
+    def fake_import(name, *args, **kwargs):
+        if name == "sounddevice":
+            raise OSError("PortAudio library not found")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    with pytest.raises(DeviceError, match="PortAudio library not found"):
+        devices_module._get_sounddevice()

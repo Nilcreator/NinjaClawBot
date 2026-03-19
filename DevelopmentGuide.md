@@ -645,6 +645,23 @@ Use four buckets whenever hardware-facing behavior changes.
 
 ## Troubleshooting Shortcuts
 
+### `pi5mic` says `PortAudio library not found`
+
+- this is usually a Raspberry Pi system-library issue, not a Python-code issue
+- install PortAudio first:
+
+```bash
+sudo apt update
+sudo apt install -y libportaudio2 portaudio19-dev
+```
+
+- then re-run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+```
+
 ### `uv` not found in OpenClaw
 
 - check the absolute path:

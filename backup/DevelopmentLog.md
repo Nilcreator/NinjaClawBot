@@ -2,6 +2,66 @@
 
 ## 2026-03-19
 
+### pi5mic Raspberry Pi PortAudio Crash Fix And Standalone README Rewrite
+
+Summary:
+
+- audited the Raspberry Pi traceback from `pi5mic setup` and `mic-tool`
+- identified the root cause:
+  - `sounddevice` was installed
+  - but importing it raised `OSError: PortAudio library not found`
+  - `pi5mic` only converted `ImportError` into friendly user-facing errors, so
+    the Pi surfaced a raw traceback instead of a setup hint
+- fixed both audio import paths:
+  - microphone discovery now translates missing PortAudio into `DeviceError`
+  - recording now translates missing PortAudio into `RecordingError`
+- added regression tests for:
+  - missing PortAudio during device discovery
+  - missing PortAudio during recording setup
+  - `mic-tool -> setup` warning behavior so the interactive path no longer
+    crashes on this setup issue
+- rewrote the `pi5mic` README into a clearer beginner-friendly standalone
+  setup and testing guide with:
+  - step-by-step installation
+  - `mic-tool` explanation and usage
+  - direct command-line explanation and usage
+  - explicit PortAudio troubleshooting
+
+Files changed:
+
+- [pi5mic/src/pi5mic/core/audio_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/core/audio_backend.py)
+- [pi5mic/src/pi5mic/core/devices.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/core/devices.py)
+- [pi5mic/src/pi5mic/core/recorder.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/core/recorder.py)
+- [pi5mic/tests/test_devices.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_devices.py)
+- [pi5mic/tests/test_recorder.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_recorder.py)
+- [pi5mic/tests/test_mic_tool_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_mic_tool_setup.py)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- on Raspberry Pi, the most common first-run problem is not a missing Python
+  package but a missing system PortAudio library
+- the earlier implementation hid this case from our tests and therefore failed
+  the non-developer operator experience requirement
+
+Validation:
+
+- `cd pi5mic && uv run --extra dev python -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- code-side crash fix implemented
+- real Raspberry Pi retest still required:
+  - rerun `pi5mic setup`
+  - rerun `pi5mic mic-tool`
+  - rerun `pi5mic doctor`
+  - verify the new error message disappears once PortAudio is installed
+
 ### pi5mic Preview Implementation, OpenClaw Handoff, And Workspace Integration
 
 Summary:
