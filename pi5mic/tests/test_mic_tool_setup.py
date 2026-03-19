@@ -36,6 +36,8 @@ def test_mic_tool_setup_warns_instead_of_crashing_when_audio_backend_is_unavaila
         "get_recommended_sample_rate",
         lambda selector, fallback_rate: 16_000,
     )
+    monkeypatch.setattr(setup_cmd_module, "recommend_whisper_threads", lambda threads=None: 2)
+    monkeypatch.setattr(setup_cmd_module, "is_raspberry_pi", lambda: False)
 
     inputs = "\n".join(
         [
@@ -46,6 +48,8 @@ def test_mic_tool_setup_warns_instead_of_crashing_when_audio_backend_is_unavaila
             "whisper_cpp",
             "/usr/local/bin/whisper-cli",
             str(tmp_path / "ggml-base.bin"),
+            "2",
+            "120",
             "15",
             "6",
         ]

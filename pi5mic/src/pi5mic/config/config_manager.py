@@ -19,7 +19,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "channels": 1,
         "sample_width_bytes": 2,
         "block_size": 1_024,
-        "max_clip_seconds": 30.0,
+        "max_clip_seconds": 12.0,
         "silence_timeout_seconds": 1.2,
     },
     "wakeword": {
@@ -35,9 +35,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "language": "auto",
             "translate_to_english": False,
             "threads": None,
+            "timeout_seconds": 120,
         },
         "gemini": {
-            "model": "gemini-3-flash-preview",
+            "model": "gemini-2.5-flash",
             "timeout_seconds": 60,
             "retry_limit": 2,
         },

@@ -95,7 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, `whisper.cpp` default STT, optional Gemini STT, and guided `mic-tool`
+- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, optional Gemini STT, and guided `mic-tool`
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer
@@ -163,7 +163,7 @@ Validated outcomes:
 - Telegram text reply plus robot reaction
 - deployment diagnostics through `ninjaclawbot_diagnostics`
 - `pi5mic` preview package implemented with package-level tests passing
-- Raspberry Pi microphone validation for the new voice path is still pending
+- Raspberry Pi microphone validation for the new voice path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, and Raspberry Pi health warnings
 
 ## License
 
@@ -231,7 +231,7 @@ This project is licensed under the **MIT License**.
 - `pi5servo`: キャリブレーション、モーション制御、`servo-tool`
 - `pi5disp`: 画面初期化、描画、`display-tool`
 - `pi5buzzer`: 音再生、`buzzer-tool`
-- `pi5mic`: マイク録音、標準 `whisper.cpp` STT、任意の Gemini STT、`mic-tool`
+- `pi5mic`: マイク録音、Raspberry Pi 向けに安全寄りにした `whisper.cpp` 既定値、任意の Gemini STT、`mic-tool`
 - `pi5vl53l0x`: センサー読み取り、`sensor-tool`
 
 ### 統合ロボットレイヤー
@@ -292,7 +292,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 - Telegram テキスト返信とロボット反応
 - `ninjaclawbot_diagnostics`
 - `pi5mic` プレビュー実装とパッケージテスト完了
-- 新しい音声経路の Raspberry Pi 実機検証はまだ必要
+- 新しい音声経路の Raspberry Pi 実機検証はまだ必要だが、`pi5mic doctor` はサンプルレート、Gemini 認証、Raspberry Pi の電源・温度警告を表示できるようになった
 
 ## ライセンス
 
@@ -360,7 +360,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 - `pi5servo`: 校正、動作控制、`servo-tool`
 - `pi5disp`: 顯示初始化、畫面測試、`display-tool`
 - `pi5buzzer`: 聲音播放、`buzzer-tool`
-- `pi5mic`: 麥克風錄音、預設 `whisper.cpp` STT、可選 Gemini STT、`mic-tool`
+- `pi5mic`: 麥克風錄音、較安全的 Raspberry Pi `whisper.cpp` 預設值、可選 Gemini STT、`mic-tool`
 - `pi5vl53l0x`: 感測器讀值、`sensor-tool`
 
 ### 整合式機器人層
@@ -421,7 +421,7 @@ uv run pi5vl53l0x sensor-tool
 - Telegram 文字回覆與機器人反應
 - `ninjaclawbot_diagnostics`
 - `pi5mic` 預覽套件已完成，套件測試通過
-- 新語音路徑仍需要 Raspberry Pi 實機驗證
+- 新語音路徑仍需要 Raspberry Pi 實機驗證，但 `pi5mic doctor` 現在會顯示取樣率、Gemini 驗證與 Raspberry Pi 電源／溫度警告
 
 ## 授權
 

@@ -2,6 +2,97 @@
 
 ## 2026-03-19
 
+### pi5mic Raspberry Pi Whisper Hardening And Gemini Doctor Audit
+
+Summary:
+
+- audited two new Raspberry Pi field issues reported during real-device testing:
+  - the board powering off or rebooting after local Whisper capture
+  - Gemini doctor failure caused by missing environment credentials
+- identified the Gemini root cause:
+  - the backend and `doctor` path were correctly requiring `GOOGLE_API_KEY` or
+    `GEMINI_API_KEY`
+  - but the diagnostic was too terse for non-developer setup and the runtime
+    config values for timeout/retry were not actually wired into the backend
+- identified the Whisper-side robustness gaps:
+  - the preview path still allowed relatively heavy local transcription defaults
+    on Raspberry Pi
+  - there was no Pi-specific health signal in `doctor` to help distinguish code
+    failures from undervoltage, thermal throttling, or low-memory conditions
+- improved the local Whisper runtime:
+  - added a safer automatic thread limit on Raspberry Pi when threads are left
+    unset
+  - normalized recorded WAV clips to `16000` Hz mono before calling
+    `whisper.cpp`
+  - shortened the default clip length to reduce fixed-cost preview runs
+  - surfaced the effective Whisper runtime in `status` and `doctor`
+- improved the Gemini runtime and diagnostics:
+  - switched the fallback model default to `gemini-2.5-flash`
+  - added explicit environment-key resolution with clearer operator help
+  - wired `timeout_seconds` and `retry_limit` into the Google Gen AI client
+  - made `doctor` report the detected credential source and missing-package case
+- added Raspberry Pi health diagnostics:
+  - `doctor` now reports Raspberry Pi model, temperature, and throttled history
+    when available through `vcgencmd`
+  - `doctor` now warns when Whisper runs are being attempted under low-memory
+    conditions
+- expanded regression coverage for:
+  - Whisper thread recommendation
+  - WAV normalization
+  - Gemini env-key selection and HTTP options
+  - Raspberry Pi throttling warnings
+- updated the docs so non-programmer operators now get step-by-step guidance for:
+  - Gemini API key setup
+  - Raspberry Pi shutdown / reboot troubleshooting
+  - the new safer Whisper defaults
+
+Files changed:
+
+- [pi5mic/src/pi5mic/core/system_info.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/core/system_info.py)
+- [pi5mic/src/pi5mic/stt/whisper_cpp.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/stt/whisper_cpp.py)
+- [pi5mic/src/pi5mic/stt/gemini.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/stt/gemini.py)
+- [pi5mic/src/pi5mic/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/_common.py)
+- [pi5mic/src/pi5mic/cli/setup_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/setup_cmd.py)
+- [pi5mic/src/pi5mic/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/doctor.py)
+- [pi5mic/src/pi5mic/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/status.py)
+- [pi5mic/src/pi5mic/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/config/config_manager.py)
+- [pi5mic/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_cli.py)
+- [pi5mic/tests/test_doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_doctor.py)
+- [pi5mic/tests/test_mic_tool_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_mic_tool_setup.py)
+- [pi5mic/tests/test_stt_gemini.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_stt_gemini.py)
+- [pi5mic/tests/test_stt_whisper_cpp.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_stt_whisper_cpp.py)
+- [pi5mic/tests/test_system_info.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_system_info.py)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the Gemini credential failure was a real setup issue, but it needed a more
+  user-friendly explanation and complete runtime wiring
+- the Raspberry Pi shutdown report strongly suggested that the preview path
+  needed safer local Whisper defaults plus better hardware diagnostics instead
+  of treating every failure as a pure Python bug
+
+Validation:
+
+- `cd pi5mic && uv run --extra dev python -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Raspberry Pi validation status:
+
+- code-side hardening complete
+- real Raspberry Pi retest still required:
+  - rerun `pi5mic setup`
+  - rerun `pi5mic doctor`
+  - rerun `pi5mic status`
+  - rerun `pi5mic run --once`
+  - if the board still powers off, capture `vcgencmd get_throttled` and
+    `vcgencmd measure_temp`
+
 ### pi5mic Raspberry Pi PortAudio Crash Fix And Standalone README Rewrite
 
 Summary:

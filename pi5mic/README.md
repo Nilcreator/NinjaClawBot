@@ -15,6 +15,7 @@ Current implemented features:
 - guide you through setup with `pi5mic setup`
 - provide a simple menu with `pi5mic mic-tool`
 - run one full record-and-transcribe test with `pi5mic run --once`
+- show Raspberry Pi health warnings in `pi5mic doctor` when power or thermal history is available
 
 Current limit:
 
@@ -187,7 +188,8 @@ Choose:
 - `STT backend`: `whisper_cpp`
 - `whisper.cpp command path`: your `whisper-cli` path
 - `whisper.cpp model path`: your `ggml-base.bin` path
-- `Maximum clip length`: `10` or `15`
+- `whisper.cpp threads`: accept the suggested value on Raspberry Pi, usually `2`
+- `Maximum clip length`: start with `8`, `10`, or `12`
 
 Important note about sample rate:
 
@@ -195,6 +197,15 @@ Important note about sample rate:
 - they often work best at `44100` Hz or `48000` Hz
 - `pi5mic` now tries to recommend the device's own default sample rate during setup
 - for most users, the safest choice is to accept the recommended value
+
+Important note about Raspberry Pi safety defaults:
+
+- `pi5mic` now normalizes recorded WAV clips to `16000` Hz mono before sending
+  them to `whisper.cpp`
+- if you leave the thread setting blank, `pi5mic` now uses a safer default on
+  Raspberry Pi instead of letting `whisper.cpp` spike to the platform default
+- the default max clip length is now shorter because the current preview path
+  still records the full clip before transcription
 
 What you should expect:
 
@@ -275,6 +286,8 @@ This usually means:
 
 - your saved sample rate does not match what the microphone accepts
 - `pi5mic` found a safer working rate, such as `48000` Hz
+- or `pi5mic` detected Raspberry Pi power, thermal, or memory pressure that may
+  affect local Whisper transcription
 
 If that happens:
 
@@ -301,6 +314,7 @@ What to expect:
   - input device
   - sample rate
   - STT backend
+  - Whisper runtime or Gemini auth status
   - number of detected input devices
 
 #### 5. Run one capture cycle
@@ -318,6 +332,12 @@ What to expect:
 - `Transcript:`
 - your recognized words
 - backend information
+
+What `pi5mic` now does automatically for local Whisper on Raspberry Pi:
+
+- keeps a safer default thread count when you leave the setting blank
+- converts WAV clips to `16000` Hz mono before transcription
+- keeps the default clip shorter so the preview path does less work per cycle
 
 This is the simplest way to test whether the whole standalone microphone flow works.
 
@@ -507,6 +527,15 @@ Gemini is optional. Only use this if you want to test the alternative cloud back
 uv sync --extra dev --extra gemini
 ```
 
+What this is doing:
+
+- installs the Google Gemini SDK used by the optional cloud backend
+
+What you should expect:
+
+- the command finishes without errors
+- after this, `pi5mic` can use Gemini if the API key is present
+
 ### Step 19. Set your Gemini API key
 
 ```bash
@@ -519,6 +548,17 @@ or:
 export GEMINI_API_KEY="your_key_here"
 ```
 
+What this is doing:
+
+- gives the current shell permission to call the Gemini Developer API
+
+What you should expect:
+
+- there is usually no output
+- the key only exists in the current shell unless you also add it to your shell
+  profile
+- if both variables are set, the Google SDK uses `GOOGLE_API_KEY` first
+
 ### Step 20. Switch the backend in setup
 
 ```bash
@@ -528,12 +568,26 @@ uv run pi5mic setup
 Choose:
 
 - `STT backend`: `gemini`
+- `Gemini model id`: keep `gemini-2.5-flash` unless you have a reason to change it
+- `Gemini request timeout (seconds)`: keep the default to start
+- `Gemini retry limit`: keep the default to start
 
 What you should expect:
 
 - the wizard reminds you that Gemini needs an environment variable
-- `uv run pi5mic doctor` should then report:
-  - `OK   Gemini credentials found in environment`
+- it also tells you which export command format to use
+
+### Step 21. Verify Gemini with doctor
+
+```bash
+uv run pi5mic doctor
+```
+
+What you should expect:
+
+- `INFO active STT backend: gemini`
+- `OK   Gemini credentials found in environment (GEMINI_API_KEY)` or
+  `OK   Gemini credentials found in environment (GOOGLE_API_KEY)`
 
 ## 7. Common Problem: `PortAudio library not found`
 
@@ -563,7 +617,43 @@ uv run pi5mic doctor
 
 You should now get a friendly setup result instead of a crash.
 
-## 8. What Counts As A Successful Standalone Test
+## 8. Common Problem: `Gemini credentials are not configured in the environment`
+
+If you see an error like this:
+
+```text
+Gemini credentials are not configured in the environment.
+```
+
+it means:
+
+- `pi5mic` is configured to use the Gemini backend
+- but the current shell does not have `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+
+Fix it with one of these:
+
+```bash
+export GEMINI_API_KEY="your_key_here"
+```
+
+or:
+
+```bash
+export GOOGLE_API_KEY="your_key_here"
+```
+
+Then rerun:
+
+```bash
+uv run pi5mic doctor
+```
+
+What you should expect:
+
+- doctor should stop failing on Gemini credentials
+- it should tell you which environment variable it found
+
+## 9. What Counts As A Successful Standalone Test
 
 You have tested the current standalone `pi5mic` build successfully if all of these work:
 
@@ -575,7 +665,7 @@ You have tested the current standalone `pi5mic` build successfully if all of the
 6. `uv run pi5mic run --once`
 7. `uv run pi5mic mic-tool`
 
-## 9. Common Problem: `Invalid sample rate`
+## 10. Common Problem: `Invalid sample rate`
 
 If you see an error like this:
 
@@ -607,7 +697,51 @@ Why this happens:
 - many Raspberry Pi microphones prefer their hardware default rate
 - this is often `44100` Hz or `48000` Hz, not `16000` Hz
 
-## 10. Validation Commands For Developers
+## 11. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
+
+If the Raspberry Pi itself powers off or reboots after the `Recording...` step,
+that is usually different from a normal Python error.
+
+What this often means:
+
+- the board hit a power or thermal problem while local Whisper transcription was
+  starting
+- or the board was already under memory pressure before `whisper.cpp` launched
+
+What `pi5mic` now does to reduce that risk:
+
+- shorter default clip length
+- safer automatic Whisper thread limit on Raspberry Pi when you leave threads blank
+- WAV normalization to `16000` Hz mono before Whisper
+- Raspberry Pi `doctor` warnings for:
+  - temperature
+  - historic or current throttling
+  - historic or current undervoltage
+  - low available memory
+
+Check it with:
+
+```bash
+uv run pi5mic doctor
+vcgencmd get_throttled
+vcgencmd measure_temp
+```
+
+If you see warnings about undervoltage, throttling, or high temperature:
+
+- use a stronger, known-good Raspberry Pi 5 power supply
+- add active cooling or improve airflow
+- lower `Maximum clip length` in `pi5mic setup` to `8` or `10`
+- set `whisper.cpp threads` to `1` or `2`
+- if local Whisper is still too heavy for your Pi setup, switch to Gemini
+
+If `doctor` does not show hardware warnings but the Pi still shuts down:
+
+- retest with `uv run pi5mic run --once --audio-file ./mic-test.wav`
+- if file transcription is stable but live recording is not, focus on the mic,
+  USB power, or other connected peripherals
+
+## 12. Validation Commands For Developers
 
 ```bash
 cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code\ library/NinjaClawbot/pi5mic

@@ -14,6 +14,29 @@ from .base import SpeechToTextBackend
 _TRANSCRIPTION_PROMPT = (
     "Transcribe this audio. Preserve the spoken language and return only the transcript text."
 )
+_DEFAULT_TIMEOUT_SECONDS = 60
+_DEFAULT_RETRY_LIMIT = 2
+
+
+def resolve_gemini_api_key() -> tuple[str, str]:
+    """Return the configured Gemini API key and the env var that provided it."""
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if google_api_key:
+        return "GOOGLE_API_KEY", google_api_key
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if gemini_api_key:
+        return "GEMINI_API_KEY", gemini_api_key
+
+    raise STTError(
+        "Gemini credentials are not configured in the environment. "
+        "Set GOOGLE_API_KEY or GEMINI_API_KEY before using the Gemini backend."
+    )
+
+
+def describe_gemini_env_help() -> str:
+    """Return a short actionable Gemini credential hint."""
+    return 'Example: export GEMINI_API_KEY="your_api_key_here"'
 
 
 class GeminiBackend(SpeechToTextBackend):
@@ -22,9 +45,13 @@ class GeminiBackend(SpeechToTextBackend):
     def __init__(
         self,
         *,
-        model: str = "gemini-3-flash-preview",
+        model: str = "gemini-2.5-flash",
+        timeout_seconds: int = _DEFAULT_TIMEOUT_SECONDS,
+        retry_limit: int = _DEFAULT_RETRY_LIMIT,
     ) -> None:
         self.model = model
+        self.timeout_seconds = timeout_seconds
+        self.retry_limit = retry_limit
 
     def transcribe(self, audio_path: str | Path) -> TranscriptionResult:
         """Transcribe an audio file through Gemini."""
@@ -32,8 +59,7 @@ class GeminiBackend(SpeechToTextBackend):
         if not source.is_file():
             raise STTError(f"Audio file not found: {source}")
 
-        if not (os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")):
-            raise STTError("Gemini credentials are not configured in the environment.")
+        _credential_name, api_key = resolve_gemini_api_key()
 
         try:
             from google import genai
@@ -47,16 +73,25 @@ class GeminiBackend(SpeechToTextBackend):
         if mime_type in {"audio/x-wav", "audio/vnd.wave"}:
             mime_type = "audio/wav"
         audio_bytes = source.read_bytes()
-        client = genai.Client()
+        retry_options = types.HttpRetryOptions(
+            attempts=max(1, self.retry_limit + 1),
+            initial_delay=1.0,
+            max_delay=10.0,
+        )
+        http_options = types.HttpOptions(
+            timeout=max(1, int(self.timeout_seconds * 1000)),
+            retry_options=retry_options,
+        )
 
         try:
-            response = client.models.generate_content(
-                model=self.model,
-                contents=[
-                    types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
-                    _TRANSCRIPTION_PROMPT,
-                ],
-            )
+            with genai.Client(api_key=api_key, http_options=http_options) as client:
+                response = client.models.generate_content(
+                    model=self.model,
+                    contents=[
+                        types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+                        _TRANSCRIPTION_PROMPT,
+                    ],
+                )
         except Exception as exc:  # pragma: no cover - network/backend path
             raise STTError(f"Gemini transcription failed: {exc}") from exc
 

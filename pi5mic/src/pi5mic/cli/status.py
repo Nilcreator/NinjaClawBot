@@ -5,8 +5,10 @@ from __future__ import annotations
 import click
 
 from pi5mic.core.devices import get_default_input_device, list_input_devices
-from pi5mic.errors import ConfigError, DeviceError
+from pi5mic.errors import ConfigError, DeviceError, STTError
 from pi5mic.integration.delivery import describe_delivery_mode
+from pi5mic.stt.gemini import resolve_gemini_api_key
+from pi5mic.stt.whisper_cpp import describe_whisper_runtime
 
 from ._common import load_manager
 
@@ -31,6 +33,20 @@ def status(ctx: click.Context) -> None:
     click.echo(f"  Sample rate:      {audio_config.get('sample_rate')} Hz")
     click.echo(f"  Channels:         {audio_config.get('channels')}")
     click.echo(f"  STT backend:      {stt_config.get('selected')}")
+    if stt_config.get("selected") == "whisper_cpp":
+        whisper_config = stt_config.get("whisper_cpp", {})
+        configured_threads = (
+            int(whisper_config["threads"])
+            if isinstance(whisper_config, dict) and whisper_config.get("threads") not in (None, "")
+            else None
+        )
+        click.echo(f"  Whisper runtime:  {describe_whisper_runtime(configured_threads)}")
+    elif stt_config.get("selected") == "gemini":
+        try:
+            credential_name, _api_key = resolve_gemini_api_key()
+            click.echo(f"  Gemini auth:      {credential_name}")
+        except STTError:
+            click.echo("  Gemini auth:      missing")
     if config.get("profile") == "openclaw":
         openclaw_config = config["integration"]["openclaw"]
         click.echo(f"  OpenClaw command: {openclaw_config.get('command') or 'openclaw (PATH)'}")

@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import wave
 from types import SimpleNamespace
 
 import pytest
 
 from pi5mic.errors import STTError
 from pi5mic.install import whisper_cpp as install_module
-from pi5mic.stt.whisper_cpp import WhisperCppBackend
+from pi5mic.stt.whisper_cpp import (
+    WhisperCppBackend,
+    describe_whisper_runtime,
+    recommend_whisper_threads,
+)
 
 
 def test_find_whisper_cpp_command_uses_which(monkeypatch, tmp_path) -> None:
@@ -98,3 +103,49 @@ def test_whisper_cpp_backend_raises_when_json_missing(monkeypatch, tmp_path) -> 
     backend = WhisperCppBackend(command=command_path, model_path=model_path)
     with pytest.raises(STTError, match="without producing a JSON transcript"):
         backend.transcribe(audio_path)
+
+
+def test_recommend_whisper_threads_uses_safe_raspberry_pi_default(monkeypatch) -> None:
+    monkeypatch.setattr("pi5mic.stt.whisper_cpp.is_raspberry_pi", lambda: True)
+    monkeypatch.setattr("pi5mic.stt.whisper_cpp.os.cpu_count", lambda: 4)
+
+    assert recommend_whisper_threads() == 2
+    assert "safe Raspberry Pi default" in describe_whisper_runtime(None)
+
+
+def test_whisper_cpp_backend_normalizes_wav_before_transcribing(monkeypatch, tmp_path) -> None:
+    command_path = tmp_path / "whisper-cli"
+    model_path = tmp_path / "ggml-base.bin"
+    audio_path = tmp_path / "clip.wav"
+    command_path.write_text("", encoding="utf-8")
+    model_path.write_text("", encoding="utf-8")
+
+    with wave.open(str(audio_path), "wb") as handle:
+        handle.setnchannels(1)
+        handle.setsampwidth(2)
+        handle.setframerate(44_100)
+        handle.writeframes(b"\x00\x00" * 44_100)
+
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        captured["command"] = command
+        prepared_audio = command[command.index("-f") + 1]
+        with wave.open(prepared_audio, "rb") as handle:
+            captured["sample_rate"] = handle.getframerate()
+            captured["channels"] = handle.getnchannels()
+        output_prefix = command[command.index("-of") + 1]
+        with open(f"{output_prefix}.json", "w", encoding="utf-8") as handle:
+            json.dump({"text": "hello world", "language": "en"}, handle)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pi5mic.stt.whisper_cpp.subprocess.run", fake_run)
+
+    backend = WhisperCppBackend(command=command_path, model_path=model_path, threads=2)
+    result = backend.transcribe(audio_path)
+
+    assert result.text == "hello world"
+    assert captured["sample_rate"] == 16_000
+    assert captured["channels"] == 1
+    assert "-np" in captured["command"]

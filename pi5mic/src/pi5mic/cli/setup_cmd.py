@@ -7,9 +7,12 @@ from pathlib import Path
 import click
 
 from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
+from pi5mic.core.system_info import is_raspberry_pi
 from pi5mic.errors import ConfigError, DeviceError, STTError
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
 from pi5mic.integration.delivery import SUPPORTED_DELIVERY_MODES
+from pi5mic.stt.gemini import describe_gemini_env_help
+from pi5mic.stt.whisper_cpp import recommend_whisper_threads
 from pi5mic.transport.openclaw_cli import find_openclaw_command
 
 from ._common import build_stt_backend, load_manager
@@ -87,20 +90,65 @@ def setup_cmd(ctx: click.Context) -> None:
         model_value = click.prompt("whisper.cpp model path", default=default_model_path).strip()
         whisper_config["command"] = command_value
         whisper_config["model_path"] = model_value
+        configured_threads = (
+            int(whisper_config["threads"])
+            if whisper_config.get("threads") not in (None, "")
+            else None
+        )
+        recommended_threads = recommend_whisper_threads(configured_threads)
+        if recommended_threads is not None and configured_threads is None:
+            click.echo(
+                "Recommended whisper.cpp thread limit on this device: "
+                f"{recommended_threads} (safer on Raspberry Pi)."
+            )
+        thread_default = (
+            str(configured_threads)
+            if configured_threads is not None
+            else (str(recommended_threads) if recommended_threads is not None else "")
+        )
+        thread_prompt = click.prompt(
+            "whisper.cpp threads (leave blank for automatic)",
+            default=thread_default,
+            show_default=bool(thread_default),
+        ).strip()
+        whisper_config["threads"] = int(thread_prompt) if thread_prompt else None
+        whisper_config["timeout_seconds"] = click.prompt(
+            "whisper.cpp timeout (seconds)",
+            type=int,
+            default=int(whisper_config.get("timeout_seconds", 120)),
+        )
     else:
         gemini_config = config["stt"]["gemini"]
         gemini_config["model"] = click.prompt(
             "Gemini model id",
-            default=str(gemini_config.get("model", "gemini-3-flash-preview")),
+            default=str(gemini_config.get("model", "gemini-2.5-flash")),
         ).strip()
+        gemini_config["timeout_seconds"] = click.prompt(
+            "Gemini request timeout (seconds)",
+            type=int,
+            default=int(gemini_config.get("timeout_seconds", 60)),
+        )
+        gemini_config["retry_limit"] = click.prompt(
+            "Gemini retry limit",
+            type=int,
+            default=int(gemini_config.get("retry_limit", 2)),
+        )
         click.echo(
             "Gemini requires GOOGLE_API_KEY or GEMINI_API_KEY in the environment before use."
         )
+        click.echo(describe_gemini_env_help())
 
+    max_clip_default = float(config["audio"]["max_clip_seconds"])
+    if backend == "whisper_cpp" and is_raspberry_pi() and max_clip_default > 12.0:
+        click.echo(
+            "The current preview path records a fixed-length clip before transcription. "
+            "On Raspberry Pi, 8 to 12 seconds is a safer starting point."
+        )
+        max_clip_default = 12.0
     max_clip_seconds = click.prompt(
         "Maximum clip length (seconds)",
         type=float,
-        default=float(config["audio"]["max_clip_seconds"]),
+        default=max_clip_default,
     )
     config["audio"]["max_clip_seconds"] = max_clip_seconds
 

@@ -44,13 +44,18 @@ def build_stt_backend(config: dict, backend_name: str | None = None):
                 if whisper_config.get("threads") not in (None, "")
                 else None
             ),
+            timeout_seconds=int(whisper_config.get("timeout_seconds", 120)),
         )
 
     if selected == "gemini":
         gemini_config = stt_config.get("gemini")
         if not isinstance(gemini_config, dict):
             raise ConfigError("Config key 'stt.gemini' must be an object.")
-        return GeminiBackend(model=str(gemini_config.get("model", "gemini-3-flash-preview")))
+        return GeminiBackend(
+            model=str(gemini_config.get("model", "gemini-2.5-flash")),
+            timeout_seconds=int(gemini_config.get("timeout_seconds", 60)),
+            retry_limit=int(gemini_config.get("retry_limit", 2)),
+        )
 
     raise ConfigError(f"Unsupported STT backend: {selected}")
 

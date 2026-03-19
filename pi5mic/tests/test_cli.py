@@ -132,6 +132,8 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
         "get_recommended_sample_rate",
         lambda selector, fallback_rate: 16_000,
     )
+    monkeypatch.setattr(setup_cmd_module, "recommend_whisper_threads", lambda threads=None: 2)
+    monkeypatch.setattr(setup_cmd_module, "is_raspberry_pi", lambda: False)
 
     inputs = "\n".join(
         [
@@ -141,6 +143,8 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
             "whisper_cpp",
             "/usr/local/bin/whisper-cli",
             str(tmp_path / "ggml-base.bin"),
+            "2",
+            "120",
             "15",
         ]
     )
@@ -155,6 +159,7 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
     saved = (tmp_path / "mic.json").read_text(encoding="utf-8")
     assert "/usr/local/bin/whisper-cli" in saved
     assert str(tmp_path / "ggml-base.bin") in saved
+    assert '"threads": 2' in saved
 
 
 def test_transcribe_command_uses_backend_builder(monkeypatch, tmp_path) -> None:

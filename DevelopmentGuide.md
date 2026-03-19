@@ -679,6 +679,54 @@ uv run pi5mic doctor
 - the current `pi5mic` build will try to recommend the device default and the
   doctor command may pass with a warning when it can auto-correct safely
 
+### `pi5mic` says `Gemini credentials are not configured in the environment`
+
+- this is a real configuration problem, not a code crash
+- the Gemini backend requires one of these environment variables in the current
+  shell:
+  - `GEMINI_API_KEY`
+  - `GOOGLE_API_KEY`
+- fix it with:
+
+```bash
+export GEMINI_API_KEY="your_key_here"
+uv run pi5mic doctor
+```
+
+- if both keys are set, the Google SDK will prefer `GOOGLE_API_KEY`
+- if the Python package is missing, install it with:
+
+```bash
+cd ~/NinjaClawBot/pi5mic
+uv sync --extra dev --extra gemini
+```
+
+### Raspberry Pi powers off or reboots after `pi5mic` finishes recording
+
+- treat this as a likely Raspberry Pi resource or power problem first, not a
+  normal Python exception
+- the current `pi5mic` build now reduces local Whisper load by:
+  - shorter default clip length
+  - safer automatic thread limit on Raspberry Pi when threads are left blank
+  - normalizing WAV clips to `16000` Hz mono before calling `whisper.cpp`
+  - showing Raspberry Pi temperature / throttling / undervoltage warnings in
+    `pi5mic doctor` when available
+- run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+vcgencmd get_throttled
+vcgencmd measure_temp
+```
+
+- if `doctor` or `vcgencmd` shows undervoltage or throttling:
+  - use a stronger Raspberry Pi 5 power supply
+  - reduce the clip length to `8` to `10` seconds
+  - set Whisper threads to `1` or `2`
+  - improve cooling
+  - switch to Gemini if the hardware budget is still too tight
+
 ### `uv` not found in OpenClaw
 
 - check the absolute path:
