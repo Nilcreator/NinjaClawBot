@@ -25,6 +25,11 @@ The target outcome is a voice input path that works in two modes:
 - `Standalone mode`: a local CLI workflow centered around `mic-tool`
 - `Integrated mode`: capture voice locally, transcribe it, submit it into OpenClaw, and keep NinjaClawBot robot output behavior consistent with the current OpenClaw integration
 
+The STT direction is now explicitly locked for planning:
+
+- default local backend: `whisper.cpp` with the multilingual `base` model
+- optional cloud backend: configurable `Gemini Flash` batch transcription, enabled only when the required API key is present
+
 This revision is not a speculative draft. It was re-audited against:
 
 - the current `ninjaclawbot` Python runtime and bridge code
@@ -118,13 +123,17 @@ Audited test coverage surfaces:
 Primary sources reviewed:
 
 - OpenClaw Agent Loop docs
+- OpenClaw Onboarding Wizard docs
+- OpenClaw Doctor docs
 - OpenClaw Plugin Agent Tools docs
 - OpenClaw Plugins docs
+- OpenClaw Plugin Manifest docs
 - OpenClaw Talk Mode docs
 - OpenClaw Voice Wake docs
 - OpenClaw Audio and Voice Notes docs
 - OpenClaw Telegram docs
 - OpenClaw Remote Access docs
+- whisper.cpp README and CLI docs
 - Google Gemini API Audio Understanding docs
 - Google Gen AI Python SDK docs
 - Picovoice Porcupine Python Quick Start docs
@@ -346,21 +355,40 @@ Plan impact:
 - external delivery must be explicit
 - a plugin-facing RPC control path is more useful than an agent-only tool for local presence updates
 
-### 6.2 Gemini facts that matter
+### 6.2 whisper.cpp facts that matter
+Verified upstream behavior:
+
+- `whisper.cpp` provides a maintained local CLI entrypoint, `whisper-cli`
+- upstream docs support model download through the official `download-ggml-model.sh` helper
+- the multilingual `base` model is the correct default shape for mixed Chinese, English, and Japanese use
+- the CLI supports local file transcription, language auto-detect, optional translation, JSON output, and configurable thread counts
+- upstream examples include Raspberry Pi friendly command-line usage and treat real-time microphone streaming as a separate experimental tool, not the main batch CLI path
+
+Plan impact:
+
+- default STT backend should be `whisper.cpp`, not Gemini
+- the default model should be multilingual `ggml-base.bin`, not the English-only `base.en`
+- `pi5mic` should wrap `whisper-cli` through a backend adapter instead of reimplementing Whisper inference in Python
+- the installer flow should detect or optionally build `whisper-cli`, download the default model, and record explicit paths in config
+- the backend contract must keep language auto-detect and optional translate-to-English as explicit config choices
+
+### 6.3 Gemini facts that matter
 Verified upstream behavior:
 
 - Gemini can analyze audio and return transcription-like text output
 - Google’s current audio docs show audio-understanding examples using `gemini-3-flash-preview`
 - Google’s audio docs explicitly state that the Gemini API does not support real-time transcription use cases
 - Google recommends the Live API for real-time voice interactions and Google Cloud Speech-to-Text for dedicated real-time STT
+- the current Python SDK supports `GEMINI_API_KEY` and `GOOGLE_API_KEY` environment variables, with `GOOGLE_API_KEY` taking precedence if both are set
 
 Plan impact:
 
-- do not hard-code `Gemini 2.5 Flash` as an unchangeable requirement
+- do not hard-code one Gemini Flash model id as an unchangeable requirement
 - define a generic STT backend interface
-- use Gemini as a default batch-transcription backend, not as a real-time streaming assumption
+- keep Gemini as an optional batch-transcription backend, not as a real-time streaming assumption
+- require the Gemini credential to come from environment variables, never `mic.json`
 
-### 6.3 Picovoice facts that matter
+### 6.4 Picovoice facts that matter
 Verified upstream behavior:
 
 - Porcupine Python Quick Start explicitly lists Raspberry Pi 5 support
@@ -415,6 +443,8 @@ pi5mic/
 │       ├── driver.py
 │       ├── models.py
 │       ├── errors.py
+│       ├── install/
+│       │   └── whisper_cpp.py
 │       ├── config/
 │       │   └── config_manager.py
 │       ├── core/
@@ -430,6 +460,7 @@ pi5mic/
 │       │   └── silence.py
 │       ├── stt/
 │       │   ├── base.py
+│       │   ├── whisper_cpp.py
 │       │   └── gemini.py
 │       ├── transport/
 │       │   ├── base.py
@@ -443,6 +474,9 @@ pi5mic/
 │           ├── _common.py
 │           ├── cmd.py
 │           ├── config_cmd.py
+│           ├── doctor.py
+│           ├── install_cmd.py
+│           ├── setup_cmd.py
 │           ├── status.py
 │           └── mic_tool.py
 └── tests/
@@ -452,9 +486,12 @@ pi5mic/
     ├── test_listener.py
     ├── test_wakeword.py
     ├── test_vad.py
+    ├── test_stt_whisper_cpp.py
     ├── test_stt_gemini.py
+    ├── test_install_whisper_cpp.py
     ├── test_gateway_agent.py
     ├── test_delivery.py
+    ├── test_doctor.py
     ├── test_cli.py
     └── test_mic_tool.py
 ```
@@ -477,6 +514,15 @@ Because the current `pi5*` libraries are inconsistent, `pi5mic` must choose clea
 
 This is the safest choice for workspace use because users will most often run `uv run pi5mic ...` from the project root.
 
+### Required CLI UX decision
+The most consistent user experience for this repository is:
+
+- `click`-based subcommands for scripting and repeatable automation
+- a simple interactive `mic-tool` menu and guided `setup` flow for first-run users
+- no heavy mandatory TUI dependency in v1
+
+That matches the current `pi5buzzer` and `pi5servo` direction more closely than introducing a brand-new full-screen UI framework.
+
 ## 9. Recommended System Logic
 This is the corrected end-to-end logic for the first stable version.
 
@@ -484,12 +530,13 @@ This is the corrected end-to-end logic for the first stable version.
 `mic.json` should store only non-secret runtime preferences such as:
 
 - input device id or name
+- active runtime profile, for example `standalone` or `openclaw`
 - wake-word backend name
 - wake-word keyword or model path
 - silence timeout
 - maximum clip duration
-- STT backend name
-- default STT model id
+- active STT backend name
+- backend-specific non-secret settings
 - OpenClaw gateway URL
 - OpenClaw agent id
 - OpenClaw session key
@@ -498,6 +545,18 @@ This is the corrected end-to-end logic for the first stable version.
 - explicit delivery channel and target
 - temporary audio retention policy
 
+Recommended backend-specific config shape:
+
+- `stt.selected`: `whisper_cpp` or `gemini`
+- `stt.whisper_cpp.command`: explicit path to `whisper-cli`
+- `stt.whisper_cpp.model_path`: explicit path to `ggml-base.bin`
+- `stt.whisper_cpp.language`: `auto` by default
+- `stt.whisper_cpp.translate_to_english`: `false` by default
+- `stt.whisper_cpp.threads`: optional explicit thread count
+- `stt.gemini.model`: configurable Gemini Flash model id
+- `stt.gemini.timeout_seconds`
+- `stt.gemini.retry_limit`
+
 It must not store:
 
 - Gemini API key
@@ -505,7 +564,45 @@ It must not store:
 - OpenClaw gateway token
 - Telegram credentials
 
-### 9.2 Runtime state machine
+### 9.2 Operator experience and guided setup
+The user-facing workflow should be explicit, guided, and reversible.
+
+Recommended first-version commands:
+
+- `pi5mic setup`
+  - guided first-run wizard
+  - choose `standalone` or `openclaw` profile
+  - select microphone device
+  - choose STT backend
+  - choose whether to enable wake word
+  - optionally test recording and transcription before saving
+- `pi5mic install whispercpp`
+  - detect an existing `whisper-cli`
+  - if missing, guide the user through the official local build path
+  - download the multilingual `ggml-base.bin` model into a dedicated user-owned location
+  - record resolved binary and model paths into config only after confirmation
+- `pi5mic doctor`
+  - verify microphone access
+  - verify `whisper-cli` and model availability when `whisper_cpp` is selected
+  - verify Gemini environment credentials when `gemini` is selected
+  - verify OpenClaw gateway reachability and plugin readiness for the `openclaw` profile
+  - print actionable fix hints instead of opaque failures
+- `pi5mic run`
+  - start the long-running microphone service with the selected profile
+- `pi5mic status`
+  - show effective config, active profile, backend readiness, and degraded-state hints
+- `pi5mic mic-tool`
+  - offer a simple numbered menu for non-programmers who prefer guided actions over subcommands
+
+Important UX rules:
+
+- keep direct subcommands available for scripts and repeatable setups
+- use the guided wizard as the recommended first-run path
+- do not silently rewrite unrelated OpenClaw config files
+- if integration setup needs to touch OpenClaw config, show the exact change first and only apply it after confirmation
+- follow the same operator pattern OpenClaw uses in `onboard` and `doctor`: detect, explain, confirm, then write
+
+### 9.3 Runtime state machine
 `pi5mic` should have an explicit local state machine:
 
 - `idle`
@@ -524,7 +621,7 @@ Rules:
 - always return to `idle` or `armed`
 - never leave the robot stuck in `listening` or `thinking`
 
-### 9.3 Standalone mode
+### 9.4 Standalone mode
 Standalone mode should work without OpenClaw.
 
 Flow:
@@ -541,7 +638,7 @@ Flow:
 5. Show transcript and metadata locally
 6. Delete the temp clip unless debug retention is enabled
 
-### 9.4 OpenClaw integrated mode
+### 9.5 OpenClaw integrated mode
 Integrated mode should use a documented OpenClaw transport.
 
 Preferred flow:
@@ -558,7 +655,20 @@ Preferred flow:
 8. Outbound mirroring happens only if a delivery target is explicitly configured
 9. Robot returns to `idle`
 
-### 9.5 Session policy
+Robust integration rule:
+
+- normal integrated mode should not import or instantiate a second long-running `ninjaclawbot` runtime directly
+- normal integrated mode should talk only to OpenClaw and the plugin-owned persistent bridge path
+- a direct local `ninjaclawbot` integration mode is intentionally out of scope for v1 because it increases process and hardware contention risk
+
+Recommended profile behavior:
+
+- `standalone` profile: local record -> transcribe -> print locally
+- `openclaw` profile: local record -> transcribe -> submit to gateway -> wait for reply -> optionally mirror explicitly
+
+The `setup` wizard should make that choice visible to the user instead of hiding it in advanced config keys.
+
+### 9.6 Session policy
 Default session policy should be:
 
 - dedicated mic session key, for example `voice:local-mic`
@@ -571,7 +681,7 @@ Why:
 
 Only make `main` the default if the user explicitly decides that local mic and other OpenClaw surfaces should share one memory lane.
 
-### 9.6 Delivery policy
+### 9.7 Delivery policy
 There are three safe delivery modes:
 
 - `local_only`
@@ -611,6 +721,14 @@ Without this, repeated triggers can flood OpenClaw and fight the robot lifecycle
 ### 10.6 Presence integration must be best-effort, not a hard failure gate
 If presence update fails, microphone capture and transcription should still be able to continue when safe.
 
+### 10.7 Interactive setup must be explicit about file and dependency changes
+The guided tool must not silently:
+
+- store secrets in config
+- overwrite OpenClaw config without confirmation
+- assume a generic `whisper` binary is `whisper.cpp`
+- leave partially downloaded model files without surfacing the cleanup path
+
 ## 11. Phased Implementation Plan
 This is the corrected phased plan.
 
@@ -640,9 +758,12 @@ Required decisions in this phase:
 
 Important corrected defaults:
 
-- do not hard-lock `Gemini 2.5 Flash`
+- default to `whisper.cpp` with multilingual `ggml-base.bin`
+- keep Gemini Flash as an optional backend, gated by environment credentials
+- do not hard-lock one Gemini Flash model id
 - do not default to unconditional Telegram mirroring
 - do not assume an agent tool is the right external presence API
+- prefer a guided `setup/install/doctor/run` CLI pattern over ad hoc one-off commands
 
 Linting and validation:
 
@@ -681,6 +802,7 @@ Likely files:
 Key implementation points:
 
 - explicit `mic.json` schema
+- active-profile aware config for `standalone` and `openclaw`
 - device listing and selection
 - bounded WAV capture
 - temp-file cleanup behavior
@@ -746,24 +868,29 @@ Documentation updates:
 - `pi5mic/README.md`
 - `InstallationGuide.md`
 
-### Phase 3: STT backend abstraction and default Gemini batch transcription
+### Phase 3: STT backend abstraction with `whisper.cpp` default and Gemini alternative
 Objective: add transcription through a stable backend interface.
 
 Likely files:
 
 - `pi5mic/src/pi5mic/stt/base.py`
+- `pi5mic/src/pi5mic/stt/whisper_cpp.py`
 - `pi5mic/src/pi5mic/stt/gemini.py`
+- `pi5mic/src/pi5mic/install/whisper_cpp.py`
 - `pi5mic/src/pi5mic/models.py`
 - matching tests
 
 Key implementation points:
 
 - backend interface, not hard-coded provider logic
-- default Gemini batch transcription path
-- model id configurable
+- default `whisper.cpp` batch transcription path through `whisper-cli`
+- default multilingual `ggml-base.bin` model path configurable in config
+- Gemini kept as an alternative backend
+- Gemini model id configurable
 - retries and timeout handling
 - transcript metadata and language preservation
 - delete or retain temp audio according to policy
+- do not treat a generic `whisper` executable as equivalent to `whisper.cpp` unless detection proves it
 
 Important design note:
 
@@ -789,13 +916,16 @@ Documentation updates:
 - `pi5mic/README.md`
 - `InstallationGuide.md`
 
-### Phase 4: Local CLI and operator diagnostics
+### Phase 4: Local CLI, guided installer, and operator diagnostics
 Objective: make the package usable by a non-programmer before OpenClaw integration.
 
 Likely files:
 
 - `pi5mic/src/pi5mic/cli/cmd.py`
 - `pi5mic/src/pi5mic/cli/config_cmd.py`
+- `pi5mic/src/pi5mic/cli/doctor.py`
+- `pi5mic/src/pi5mic/cli/install_cmd.py`
+- `pi5mic/src/pi5mic/cli/setup_cmd.py`
 - `pi5mic/src/pi5mic/cli/status.py`
 - `pi5mic/src/pi5mic/cli/_common.py`
 - `pi5mic/src/pi5mic/cli/mic_tool.py`
@@ -803,13 +933,18 @@ Likely files:
 
 Key implementation points:
 
+- guided first-run setup for `standalone` and `openclaw`
+- guided `whisper.cpp` install and model download helper
 - list devices
 - select active mic
+- select active STT backend
 - test recording
 - test wake-word path
 - test transcription path
 - show effective config
 - show degraded-state diagnostics
+- validate backend-specific prerequisites before saving config
+- never write secrets into config files
 
 Linting and validation:
 
@@ -846,6 +981,7 @@ Key implementation points:
 - explicit gateway URL and auth handling
 - explicit session key
 - explicit agent id
+- explicit active profile behavior for `openclaw`
 - typed response parsing
 - local-only fallback when delivery is disabled
 
@@ -899,6 +1035,7 @@ Key implementation points:
 - keep lifecycle hooks intact
 - use explicit delivery targeting for any Telegram mirror behavior
 - default to no external mirroring until target config exists
+- keep the integrated user path centered on `pi5mic setup` + `pi5mic doctor`, not direct manual bridge commands
 
 Important correction:
 
@@ -951,6 +1088,7 @@ Key implementation points:
 - add `pi5mic` to the workspace
 - keep standalone install support
 - document environment variables and secrets setup
+- document the guided `setup/install/doctor/run` path
 - document session policy and delivery policy
 - document Raspberry Pi validation and rollback steps
 
@@ -1019,6 +1157,8 @@ These tests should not move the robot.
 
 - USB microphone is detected
 - selected input device can record a short WAV clip
+- `whisper-cli` is detected or the configured install path is valid
+- multilingual `ggml-base.bin` is present when `whisper_cpp` is selected
 - wake word can be enabled and disabled
 - silence timeout stops capture correctly
 - 30-second maximum capture limit works
@@ -1028,11 +1168,12 @@ These tests should not move the robot.
 ### Device communication tests
 These confirm networked and service dependencies.
 
-- Gemini credentials are valid
+- Gemini credentials are valid if Gemini is selected
 - Picovoice access key is valid if Porcupine is enabled
 - OpenClaw gateway is reachable
 - configured session key works
 - explicit delivery target validates before first outbound mirror
+- switching between `whisper_cpp` and `gemini` does not require rewriting secrets into config
 
 ### Robot-presence tests
 These are conservative robot-state tests.
@@ -1081,12 +1222,16 @@ But the corrected first-version defaults should now be:
 - standalone-first package
 - explicit local voice state machine
 - configurable wake-word backend
-- batch STT backend abstraction with Gemini as the first default backend
+- batch STT backend abstraction with `whisper.cpp` as the default backend
+- multilingual `ggml-base.bin` as the default local model
+- Gemini Flash as the optional cloud backend
+- guided `setup/install/doctor/run` CLI path for both standalone and OpenClaw-integrated use
 - OpenClaw Gateway RPC transport as the preferred integration path
 - dedicated mic session key by default
 - local-only delivery by default
 - outbound channel mirroring only after explicit target configuration
 - plugin-owned external presence control path that reuses the persistent bridge
+- OpenClaw-integrated mode instead of a second direct long-running `ninjaclawbot` runtime
 
 This is the safest version of the architecture:
 
@@ -1110,13 +1255,18 @@ Repository sources:
 Upstream references checked on `2026-03-19`:
 
 - OpenClaw Agent Loop: `https://docs.openclaw.ai/concepts/agent-loop`
+- OpenClaw Onboarding Wizard: `https://docs.openclaw.ai/wizard`
+- OpenClaw Doctor: `https://docs.openclaw.ai/gateway/doctor`
 - OpenClaw Plugin Agent Tools: `https://docs.openclaw.ai/plugins/agent-tools`
 - OpenClaw Plugins: `https://docs.openclaw.ai/tools/plugin`
+- OpenClaw Plugin Manifest: `https://docs.openclaw.ai/plugins/manifest`
 - OpenClaw Talk Mode: `https://docs.openclaw.ai/nodes/talk`
 - OpenClaw Voice Wake: `https://docs.openclaw.ai/nodes/voicewake`
 - OpenClaw Audio and Voice Notes: `https://docs.openclaw.ai/nodes/audio`
 - OpenClaw Telegram: `https://docs.openclaw.ai/channels/telegram`
 - OpenClaw Remote Access: `https://docs.openclaw.ai/gateway/remote`
+- whisper.cpp README: `https://github.com/ggml-org/whisper.cpp`
+- whisper.cpp CLI docs: `https://github.com/ggml-org/whisper.cpp/blob/master/examples/cli/README.md`
 - Google Gemini Audio Understanding: `https://ai.google.dev/gemini-api/docs/audio`
 - Google Gen AI Python SDK: `https://github.com/googleapis/python-genai`
 - Picovoice Porcupine Python Quick Start: `https://picovoice.ai/docs/quick-start/porcupine-python/`

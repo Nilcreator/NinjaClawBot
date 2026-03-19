@@ -2,6 +2,62 @@
 
 ## 2026-03-19
 
+### pi5mic Backend Lock And Guided Setup Planning Refinement
+
+Summary:
+
+- refined the `pi5mic` plan to lock `whisper.cpp` as the default local STT
+  backend using the multilingual `base` model
+- kept Gemini Flash as the optional cloud STT backend, with credentials coming
+  from environment variables instead of `mic.json`
+- expanded the plan so `pi5mic` now includes a user-friendly first-run
+  operator workflow:
+  - `setup`
+  - `install whispercpp`
+  - `doctor`
+  - `run`
+  - `status`
+  - `mic-tool`
+- made the integration recommendation more explicit:
+  - standalone mode and OpenClaw-integrated mode should be visible user
+    profiles
+  - normal NinjaClawBot integration should go through the existing OpenClaw
+    plugin and persistent bridge path, not a second direct long-running robot
+    runtime
+- added planning detail for:
+  - `whisper-cli` detection and model install behavior
+  - config keys for `whisper_cpp` and `gemini`
+  - confirmation rules before writing config or changing integration settings
+  - Raspberry Pi validation checks for backend switching and local model
+    availability
+
+Files changed:
+
+- [MicDevelopment.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/MicDevelopment.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the prior corrected plan was structurally sound, but it still described
+  Gemini too centrally and did not yet spell out the first-run user experience
+  clearly enough for a Raspberry Pi builder
+- the repository already favors interactive-tool-first setup for hardware
+  libraries, so the microphone plan needed to reflect the same operator style
+  before implementation begins
+
+Validation:
+
+- targeted repository audit of current `pi5buzzer`, `pi5servo`,
+  `ninjaclawbot`, and OpenClaw plugin patterns
+- upstream documentation fact-check for `whisper.cpp`, Gemini SDK credential
+  handling, and OpenClaw wizard/doctor workflow patterns
+- markdown rewrite review
+
+Raspberry Pi validation status:
+
+- not applicable yet
+- this change is planning and documentation only
+
 ### pi5mic Planning Audit And Fact-Checked MicDevelopment Rewrite
 
 Summary:
