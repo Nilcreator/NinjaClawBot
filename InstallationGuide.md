@@ -26,6 +26,7 @@
 - [7. Wire the hardware](#7-wire-the-hardware)
 - [8. Run the guided setup tools](#8-run-the-guided-setup-tools)
 - [9. Run quick local tests](#9-run-quick-local-tests)
+- [9.5 Optional `pi5mic` preview](#95-optional-pi5mic-preview)
 - [10. Save paths and back up OpenClaw config](#10-save-paths-and-back-up-openclaw-config)
 - [11. Patch `openclaw.json` safely](#11-patch-openclawjson-safely)
 - [12. Create `BOOT.md` and `AGENTS.md`](#12-create-bootmd-and-agentsmd)
@@ -242,11 +243,12 @@ uv sync --extra dev
 
 ```bash
 cd ~/NinjaClawBot
-uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5vl53l0x; print('imports-ok')"
+uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5mic, pi5vl53l0x; print('imports-ok')"
 uv run ninjaclawbot --help
 uv run pi5servo --help
 uv run pi5disp --help
 uv run pi5buzzer --help
+uv run pi5mic --help
 uv run pi5vl53l0x --help
 ```
 
@@ -440,6 +442,44 @@ Expected result:
 - expressions show correctly on the display
 - `movement-tool` opens normally
 - `using_root_config` is `true`
+
+### 9.5 Optional `pi5mic` preview
+
+Purpose:
+- verify the new local microphone path before you rely on it on Raspberry Pi
+
+Important note:
+- this is a preview path
+- package-level tests pass, but real Raspberry Pi microphone validation is still required
+- the current user-friendly path is guided/manual, not an always-on wake-word daemon yet
+
+Recommended first run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic mic-tool
+```
+
+If you prefer direct commands:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+Backend notes:
+
+- default STT backend: local `whisper.cpp` with the multilingual `base` model
+- optional fallback: Gemini audio transcription with `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+- OpenClaw profile uses the local `openclaw` CLI plus the NinjaClawBot plugin presence method
+
+Expected result:
+
+- `pi5mic doctor` reports the selected backend and any missing dependency clearly
+- `pi5mic run --once` records one clip, transcribes it, and prints the transcript locally
+- if the profile is `openclaw`, the command also submits the transcript to OpenClaw and prints the reply locally
 
 Need help later?
 - [Appendix D: Local test help](#appendix-d-local-test-help)

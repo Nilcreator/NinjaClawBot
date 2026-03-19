@@ -648,8 +648,8 @@ Preferred flow:
 3. Clip is recorded locally
 4. STT backend returns transcript
 5. `pi5mic` submits transcript to OpenClaw through:
-   - Gateway RPC `agent` + `agent.wait` as the preferred backend
-   - a CLI fallback backend only if RPC transport is unavailable
+   - the current v1 implementation: documented `openclaw agent --json` CLI handoff
+   - a future direct Gateway RPC backend if we later need to bypass the CLI wrapper
 6. While OpenClaw is processing, robot presence can switch to `thinking`
 7. Final reply is shown locally
 8. Outbound mirroring happens only if a delivery target is explicitly configured
@@ -977,7 +977,8 @@ Likely files:
 
 Key implementation points:
 
-- Gateway RPC `agent` + `agent.wait` as the preferred backend
+- the current v1 implementation uses the documented `openclaw agent --json` CLI
+- keep the transport abstraction so a direct Gateway RPC backend can be added later without changing user config
 - explicit gateway URL and auth handling
 - explicit session key
 - explicit agent id
@@ -1226,7 +1227,7 @@ But the corrected first-version defaults should now be:
 - multilingual `ggml-base.bin` as the default local model
 - Gemini Flash as the optional cloud backend
 - guided `setup/install/doctor/run` CLI path for both standalone and OpenClaw-integrated use
-- OpenClaw Gateway RPC transport as the preferred integration path
+- OpenClaw CLI transport as the current implemented integration path, with room for a future direct RPC backend
 - dedicated mic session key by default
 - local-only delivery by default
 - outbound channel mirroring only after explicit target configuration

@@ -70,6 +70,7 @@ The current validated build supports this flow:
 | **Brain** | Raspberry Pi 5 |
 | **Display** | SPI display supported by `pi5disp` |
 | **Distance Sensor** | VL53L0X supported by `pi5vl53l0x` |
+| **Microphone** | `pi5mic` voice-input preview |
 | **Sound** | Passive buzzer supported by `pi5buzzer` |
 | **Movement** | Servos supported by `pi5servo` |
 | **Integration** | OpenClaw + Telegram validated |
@@ -83,6 +84,7 @@ The current validated build supports this flow:
 | **Servo library** | `pi5servo` |
 | **Display library** | `pi5disp` |
 | **Buzzer library** | `pi5buzzer` |
+| **Microphone library** | `pi5mic` |
 | **Distance sensor library** | `pi5vl53l0x` |
 | **Agent integration** | OpenClaw plugin + workspace `BOOT.md` / `AGENTS.md` |
 
@@ -93,6 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
+- `pi5mic`: microphone capture, `whisper.cpp` default STT, optional Gemini STT, and guided `mic-tool`
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer
@@ -128,6 +131,7 @@ uv run ninjaclawbot health-check
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
+uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
@@ -143,6 +147,7 @@ For the full Raspberry Pi build, OpenClaw setup, `openclaw.json` patching, and T
 | [pi5servo/README.md](pi5servo/README.md) | Servo setup and calibration |
 | [pi5disp/README.md](pi5disp/README.md) | Display wiring and setup |
 | [pi5buzzer/README.md](pi5buzzer/README.md) | Buzzer setup and sounds |
+| [pi5mic/README.md](pi5mic/README.md) | Microphone setup, STT backends, and OpenClaw handoff |
 | [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | Distance sensor setup |
 | [backup/README.md](backup/README.md) | Archived plans and logs |
 
@@ -157,6 +162,8 @@ Validated outcomes:
 - idle / thinking / reply / sleepy lifecycle
 - Telegram text reply plus robot reaction
 - deployment diagnostics through `ninjaclawbot_diagnostics`
+- `pi5mic` preview package implemented with package-level tests passing
+- Raspberry Pi microphone validation for the new voice path is still pending
 
 ## License
 
@@ -199,6 +206,7 @@ This project is licensed under the **MIT License**.
 | **本体** | Raspberry Pi 5 |
 | **表示** | `pi5disp` 対応の SPI ディスプレイ |
 | **距離センサー** | `pi5vl53l0x` 対応の VL53L0X |
+| **マイク** | `pi5mic` 音声入力プレビュー |
 | **音** | `pi5buzzer` 対応のパッシブブザー |
 | **動作** | `pi5servo` 対応のサーボ |
 | **連携** | OpenClaw + Telegram 検証済み |
@@ -212,6 +220,7 @@ This project is licensed under the **MIT License**.
 | **サーボ** | `pi5servo` |
 | **ディスプレイ** | `pi5disp` |
 | **ブザー** | `pi5buzzer` |
+| **マイク** | `pi5mic` |
 | **距離センサー** | `pi5vl53l0x` |
 | **エージェント連携** | OpenClaw plugin + `BOOT.md` / `AGENTS.md` |
 
@@ -222,6 +231,7 @@ This project is licensed under the **MIT License**.
 - `pi5servo`: キャリブレーション、モーション制御、`servo-tool`
 - `pi5disp`: 画面初期化、描画、`display-tool`
 - `pi5buzzer`: 音再生、`buzzer-tool`
+- `pi5mic`: マイク録音、標準 `whisper.cpp` STT、任意の Gemini STT、`mic-tool`
 - `pi5vl53l0x`: センサー読み取り、`sensor-tool`
 
 ### 統合ロボットレイヤー
@@ -250,6 +260,7 @@ uv run ninjaclawbot health-check
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
+uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
@@ -265,6 +276,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 | [pi5servo/README.md](pi5servo/README.md) | サーボ設定 |
 | [pi5disp/README.md](pi5disp/README.md) | ディスプレイ設定 |
 | [pi5buzzer/README.md](pi5buzzer/README.md) | ブザー設定 |
+| [pi5mic/README.md](pi5mic/README.md) | マイク設定、STT バックエンド、OpenClaw 連携 |
 | [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | 距離センサー設定 |
 | [backup/README.md](backup/README.md) | 過去計画と履歴 |
 
@@ -279,6 +291,8 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 - idle / thinking / reply / sleepy のライフサイクル
 - Telegram テキスト返信とロボット反応
 - `ninjaclawbot_diagnostics`
+- `pi5mic` プレビュー実装とパッケージテスト完了
+- 新しい音声経路の Raspberry Pi 実機検証はまだ必要
 
 ## ライセンス
 
@@ -321,6 +335,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 | **主機** | Raspberry Pi 5 |
 | **顯示器** | `pi5disp` 支援的 SPI 顯示器 |
 | **距離感測器** | `pi5vl53l0x` 支援的 VL53L0X |
+| **麥克風** | `pi5mic` 語音輸入預覽 |
 | **聲音** | `pi5buzzer` 支援的被動式蜂鳴器 |
 | **動作** | `pi5servo` 支援的伺服馬達 |
 | **整合** | 已驗證 OpenClaw + Telegram |
@@ -334,6 +349,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 | **伺服馬達** | `pi5servo` |
 | **顯示器** | `pi5disp` |
 | **蜂鳴器** | `pi5buzzer` |
+| **麥克風** | `pi5mic` |
 | **距離感測器** | `pi5vl53l0x` |
 | **代理整合** | OpenClaw plugin + `BOOT.md` / `AGENTS.md` |
 
@@ -344,6 +360,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 - `pi5servo`: 校正、動作控制、`servo-tool`
 - `pi5disp`: 顯示初始化、畫面測試、`display-tool`
 - `pi5buzzer`: 聲音播放、`buzzer-tool`
+- `pi5mic`: 麥克風錄音、預設 `whisper.cpp` STT、可選 Gemini STT、`mic-tool`
 - `pi5vl53l0x`: 感測器讀值、`sensor-tool`
 
 ### 整合式機器人層
@@ -372,6 +389,7 @@ uv run ninjaclawbot health-check
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
+uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
@@ -387,6 +405,7 @@ uv run pi5vl53l0x sensor-tool
 | [pi5servo/README.md](pi5servo/README.md) | 伺服馬達設定 |
 | [pi5disp/README.md](pi5disp/README.md) | 顯示器設定 |
 | [pi5buzzer/README.md](pi5buzzer/README.md) | 蜂鳴器設定 |
+| [pi5mic/README.md](pi5mic/README.md) | 麥克風設定、STT 後端與 OpenClaw 交接 |
 | [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | 距離感測器設定 |
 | [backup/README.md](backup/README.md) | 歷史規劃與記錄 |
 
@@ -401,6 +420,8 @@ uv run pi5vl53l0x sensor-tool
 - idle / thinking / reply / sleepy 生命週期
 - Telegram 文字回覆與機器人反應
 - `ninjaclawbot_diagnostics`
+- `pi5mic` 預覽套件已完成，套件測試通過
+- 新語音路徑仍需要 Raspberry Pi 實機驗證
 
 ## 授權
 

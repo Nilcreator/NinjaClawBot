@@ -2,6 +2,80 @@
 
 ## 2026-03-19
 
+### pi5mic Preview Implementation, OpenClaw Handoff, And Workspace Integration
+
+Summary:
+
+- implemented the first runnable `pi5mic` preview package in the workspace
+- added the default `whisper.cpp` STT backend and kept Gemini as the optional
+  alternative backend
+- added user-facing operator flows:
+  - `pi5mic setup`
+  - `pi5mic install whispercpp`
+  - `pi5mic doctor`
+  - `pi5mic status`
+  - `pi5mic run`
+  - `pi5mic mic-tool`
+- added an OpenClaw-integrated preview path that:
+  - records locally
+  - transcribes locally
+  - submits the transcript through the documented `openclaw agent --json` CLI
+  - uses a dedicated session key by default
+  - keeps delivery local-only unless an explicit channel target is configured
+- added a plugin-owned gateway method:
+  - `ninjaclawbot.presence.set`
+  - this lets `pi5mic` request `idle`, `thinking`, and `listening` through the
+    existing persistent bridge instead of starting a competing long-running
+    robot runtime
+- integrated `pi5mic` into the root workspace installer and root Python test
+  paths
+- updated project docs to describe the real current voice-input preview rather
+  than the earlier scaffold-only state
+
+Files changed:
+
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [pi5mic/src/pi5mic/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/__init__.py)
+- [pi5mic/src/pi5mic/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/__main__.py)
+- [pi5mic/src/pi5mic/cli](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli)
+- [pi5mic/src/pi5mic/integration](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration)
+- [pi5mic/src/pi5mic/transport](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/transport)
+- [pi5mic/tests](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests)
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [MicDevelopment.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/MicDevelopment.md)
+- [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml)
+
+Why:
+
+- the earlier implementation only covered the local scaffold and basic STT work,
+  which was not enough to make the approved standalone/OpenClaw split truly
+  usable
+- the new preview path keeps the architecture safe by reusing the OpenClaw
+  plugin bridge for robot presence while keeping the microphone process
+  separate from direct robot-runtime ownership
+
+Validation:
+
+- `cd pi5mic && uv run --extra dev python -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `cd integrations/openclaw/ninjaclawbot-plugin && npm run typecheck`
+- `cd integrations/openclaw/ninjaclawbot-plugin && npm test`
+
+Raspberry Pi validation status:
+
+- still required for the new microphone path
+- especially important for:
+  - real USB microphone device selection
+  - `whisper.cpp` runtime behavior on Pi 5
+  - OpenClaw profile round-trip with local audio capture
+  - long-run wake/listen behavior in future phases
+
 ### pi5mic Backend Lock And Guided Setup Planning Refinement
 
 Summary:

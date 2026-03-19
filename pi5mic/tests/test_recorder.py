@@ -1,0 +1,73 @@
+"""Tests for bounded WAV recording."""
+
+from __future__ import annotations
+
+import wave
+
+import pytest
+
+from pi5mic.core import recorder as recorder_module
+from pi5mic.models import RecorderSettings
+
+
+class _FakeRawInputStream:
+    def __init__(self, *, samplerate, blocksize, device, channels, dtype) -> None:
+        self.samplerate = samplerate
+        self.blocksize = blocksize
+        self.device = device
+        self.channels = channels
+        self.dtype = dtype
+        self._reads = 0
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self, frames):
+        self._reads += 1
+        return (b"\x00\x01" * frames * self.channels, self._reads == 1)
+
+
+class _FakeSoundDevice:
+    RawInputStream = _FakeRawInputStream
+
+
+def test_record_wav_writes_valid_file(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(recorder_module, "_get_sounddevice", lambda: _FakeSoundDevice())
+    monkeypatch.setattr(recorder_module, "resolve_input_device", lambda selector: selector)
+
+    settings = RecorderSettings(
+        device=1, sample_rate=8_000, channels=1, block_size=400, duration_seconds=0.1
+    )
+    clip = recorder_module.record_wav(tmp_path / "clip.wav", settings)
+
+    assert clip.path.exists()
+    assert clip.frames == 800
+    assert clip.overflowed is True
+
+    with wave.open(str(clip.path), "rb") as wav_file:
+        assert wav_file.getframerate() == 8_000
+        assert wav_file.getnchannels() == 1
+        assert wav_file.getnframes() == 800
+
+
+def test_record_temp_wav_uses_temp_directory(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(recorder_module, "_get_sounddevice", lambda: _FakeSoundDevice())
+    monkeypatch.setattr(recorder_module, "resolve_input_device", lambda selector: selector)
+
+    clip = recorder_module.record_temp_wav(
+        RecorderSettings(sample_rate=8_000, duration_seconds=0.05),
+        directory=tmp_path,
+        prefix="capture-",
+    )
+
+    assert clip.path.parent == tmp_path
+    assert clip.path.name.startswith("capture-")
+    assert clip.path.suffix == ".wav"
+
+
+def test_recorder_settings_validate_sample_width() -> None:
+    with pytest.raises(ValueError, match="16-bit PCM"):
+        RecorderSettings(sample_width_bytes=1).validate()

@@ -54,6 +54,7 @@ Top-level folders you will work with most often:
 - [pi5servo](pi5servo): servo driver and calibration tooling
 - [pi5disp](pi5disp): display driver and display tooling
 - [pi5buzzer](pi5buzzer): buzzer driver and sound tooling
+- [pi5mic](pi5mic): microphone capture, STT, and OpenClaw handoff tooling
 - [pi5vl53l0x](pi5vl53l0x): distance sensor driver and sensor tooling
 - [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin): official OpenClaw plugin
 - [ninjaclawbot_data](ninjaclawbot_data): saved movement and expression assets
@@ -239,6 +240,36 @@ NinjaClawBot/
 │       ├── test_config.py
 │       ├── test_i2c.py
 │       └── test_sensor.py
+├── pi5mic/
+│   ├── LICENSE
+│   ├── README.md
+│   ├── pyproject.toml
+│   ├── src/
+│   │   └── pi5mic/
+│   │       ├── __init__.py
+│   │       ├── __main__.py
+│   │       ├── driver.py
+│   │       ├── cli/
+│   │       ├── config/
+│   │       ├── core/
+│   │       ├── install/
+│   │       ├── integration/
+│   │       ├── stt/
+│   │       ├── transport/
+│   │       ├── vad/
+│   │       └── wakeword/
+│   └── tests/
+│       ├── test_cli.py
+│       ├── test_config.py
+│       ├── test_doctor.py
+│       ├── test_listener.py
+│       ├── test_mic_tool.py
+│       ├── test_recorder.py
+│       ├── test_stt_gemini.py
+│       ├── test_stt_whisper_cpp.py
+│       ├── test_transport_openclaw.py
+│       ├── test_vad.py
+│       └── test_wakeword.py
 └── integrations/
     └── openclaw/
         └── ninjaclawbot-plugin/
@@ -266,6 +297,7 @@ Use these first if you are touching one hardware area only:
 - Display: [pi5disp/README.md](pi5disp/README.md)
 - Buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
 - Distance sensor: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- Microphone: [pi5mic/README.md](pi5mic/README.md)
 - Integrated robot layer: [ninjaclawbot/README.md](ninjaclawbot/README.md)
 
 What each README is best for:
@@ -274,6 +306,7 @@ What each README is best for:
 - `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
 - `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
 - `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
+- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, and `mic-tool`
 - `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
 
 ## Validated Runtime Model
@@ -283,6 +316,7 @@ The final validated build is hybrid. That matters for future development.
 ### What owns what
 
 - Standalone driver libraries own direct hardware behavior
+- `pi5mic` owns local microphone capture, STT selection, and the preview OpenClaw voice handoff
 - `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
 - the OpenClaw plugin owns the persistent bridge and the operator-facing tool surface
 - startup greeting is validated through:
@@ -297,6 +331,7 @@ The final validated build is hybrid. That matters for future development.
 ### What this means in practice
 
 - do not assume the Python service `startup_sequence()` is the only startup path
+- do not assume `pi5mic` is already an always-on validated voice daemon; the current build is a guided preview path
 - do not assume plugin config alone makes replies work
 - when debugging reply behavior, always check:
   - allowlist

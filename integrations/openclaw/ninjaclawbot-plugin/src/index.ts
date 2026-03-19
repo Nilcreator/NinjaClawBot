@@ -84,6 +84,45 @@ function registerLifecycleHook(
   }
 }
 
+function registerGatewayPresenceMethod(api: any) {
+  if (typeof api.registerGatewayMethod !== "function") {
+    return;
+  }
+
+  api.registerGatewayMethod(
+    "ninjaclawbot.presence.set",
+    async ({ params, respond }: { params?: ToolParams; respond: (ok: boolean, payload?: unknown) => void }) => {
+      try {
+        const mode = typeof params?.mode === "string" ? params.mode.trim() : "";
+        const reason =
+          typeof params?.reason === "string" && params.reason.trim()
+            ? params.reason.trim()
+            : "gateway_call";
+
+        if (!["idle", "thinking", "listening"].includes(mode)) {
+          respond(false, { error: "mode must be one of: idle, thinking, listening" });
+          return;
+        }
+
+        const result = await setPersistentPresenceMode(
+          api,
+          mode as "idle" | "thinking" | "listening",
+          reason,
+        );
+        respond(true, {
+          mode,
+          applied: result !== null,
+          result,
+        });
+      } catch (error) {
+        respond(false, {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    },
+  );
+}
+
 export default function registerNinjaClawbotPlugin(api: any) {
   if (typeof api.registerService === "function") {
     api.registerService({
@@ -142,6 +181,7 @@ export default function registerNinjaClawbotPlugin(api: any) {
       await runShutdownSequence(api, "gateway_stop");
     },
   );
+  registerGatewayPresenceMethod(api);
 
   api.registerTool(
     {
