@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any
 
 from pi5mic.errors import IntegrationError, TransportError
+from pi5mic.integration.openclaw_session import (
+    DEFAULT_OPENCLAW_SESSION_ID,
+    normalize_openclaw_session_id,
+)
 from pi5mic.integration.presence import OpenClawPresenceController
 from pi5mic.transport.openclaw_cli import (
     build_gateway_cli_args,
@@ -18,7 +22,7 @@ from pi5mic.transport.openclaw_cli import (
 DEFAULT_OPENCLAW_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789"
 DEFAULT_AGENT_ID = "main"
-DEFAULT_SESSION_KEY = "voice:local-mic"
+DEFAULT_SESSION_KEY = DEFAULT_OPENCLAW_SESSION_ID
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +114,7 @@ def discover_openclaw_auto_config(
     if _detect_agent_id(payload) is None:
         used_defaults.append("agent_id")
 
-    session_key = (saved_session_key or DEFAULT_SESSION_KEY).strip() or DEFAULT_SESSION_KEY
+    session_key = normalize_openclaw_session_id(saved_session_key or DEFAULT_SESSION_KEY)
     if not saved_session_key:
         used_defaults.append("session_key")
 

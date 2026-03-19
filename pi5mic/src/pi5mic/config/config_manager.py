@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import Any
 
 from pi5mic.errors import ConfigError
+from pi5mic.integration.openclaw_session import (
+    DEFAULT_OPENCLAW_SESSION_ID,
+    normalize_openclaw_session_id,
+)
 from pi5mic.models import deep_copy_dict
 
 CONFIG_FILE_NAME = "mic.json"
@@ -50,7 +54,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "command": None,
             "gateway_url": "ws://127.0.0.1:18789",
             "agent_id": "main",
-            "session_key": "voice:local-mic",
+            "session_key": DEFAULT_OPENCLAW_SESSION_ID,
             "request_timeout_seconds": 180,
             "reply_channel": None,
             "reply_to": None,
@@ -88,6 +92,20 @@ def _merge_config(
     return merged
 
 
+def _apply_runtime_migrations(config: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy config values that are known to break current runtimes."""
+    integration = config.get("integration")
+    if not isinstance(integration, dict):
+        return config
+
+    openclaw = integration.get("openclaw")
+    if not isinstance(openclaw, dict):
+        return config
+
+    openclaw["session_key"] = normalize_openclaw_session_id(openclaw.get("session_key"))
+    return config
+
+
 class MicConfigManager:
     """Manage `mic.json` loading, saving, export, and import."""
 
@@ -122,7 +140,7 @@ class MicConfigManager:
         if not isinstance(data, dict):
             raise ConfigError(f"Config file '{self._path}' must contain a JSON object.")
 
-        self._config = _merge_config(DEFAULT_CONFIG, data, path="config")
+        self._config = _apply_runtime_migrations(_merge_config(DEFAULT_CONFIG, data, path="config"))
         return self.config
 
     def save(self) -> None:
@@ -138,7 +156,9 @@ class MicConfigManager:
         """Replace the active config after validating its structure."""
         if not isinstance(config, dict):
             raise ConfigError("Config replacement payload must be a JSON object.")
-        self._config = _merge_config(DEFAULT_CONFIG, config, path="config")
+        self._config = _apply_runtime_migrations(
+            _merge_config(DEFAULT_CONFIG, config, path="config")
+        )
         return self.config
 
     def export_config(self, export_path: Path | str) -> Path:

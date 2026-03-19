@@ -267,7 +267,7 @@ def test_doctor_reports_actionable_openclaw_pairing_failure(monkeypatch, tmp_pat
       "command": "/usr/local/bin/openclaw",
       "gateway_url": "ws://127.0.0.1:18789",
       "agent_id": "main",
-      "session_key": "voice:local-mic"
+      "session_key": "voice-local-mic"
     }
   }
 }
@@ -304,7 +304,7 @@ def test_doctor_reports_actionable_openclaw_pairing_failure(monkeypatch, tmp_pat
             config_path=tmp_path / "openclaw.json",
             gateway_url="ws://127.0.0.1:18789",
             agent_id="main",
-            session_key="voice:local-mic",
+            session_key="voice-local-mic",
             gateway_mode="local",
             gateway_bind="loopback",
             plugin_enabled=True,

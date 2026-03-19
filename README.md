@@ -95,7 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, and OpenClaw auto-setup with pairing guidance
+- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, OpenClaw auto-setup with pairing guidance, and automatic legacy session-id migration
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer

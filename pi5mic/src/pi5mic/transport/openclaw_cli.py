@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from pi5mic.errors import TransportError
+from pi5mic.integration.openclaw_session import normalize_openclaw_session_id
 from pi5mic.models import DispatchResult
 
 from .base import TextTransport
@@ -167,7 +168,7 @@ class OpenClawAgentTransport(TextTransport):
         self.command = resolve_openclaw_command(command)
         self.gateway_args = build_gateway_cli_args(gateway_url)
         self.agent_id = agent_id.strip()
-        self.session_key = session_key.strip()
+        self.session_key = normalize_openclaw_session_id(session_key)
         self.delivery_mode = delivery_mode.strip()
         self.reply_channel = reply_channel.strip() if reply_channel else None
         self.reply_to = reply_to.strip() if reply_to else None

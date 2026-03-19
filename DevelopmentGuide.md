@@ -728,6 +728,28 @@ uv run pi5mic run --once
 - if pairing succeeds, `doctor` should stop failing on the OpenClaw readiness
   path and `run --once` should print the OpenClaw reply
 
+### `pi5mic` says `Invalid session ID` in OpenClaw mode
+
+- this is an OpenClaw handoff-format problem, not a microphone recording failure
+- older `pi5mic` configs used the legacy value `voice:local-mic`
+- current OpenClaw validates `--session-id` more strictly and rejects `:`
+- the current `pi5mic` build now migrates that legacy value automatically to the
+  safe session id `voice-local-mic`
+- safest recovery path:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+- if you want to verify the OpenClaw side directly, this should work:
+
+```bash
+openclaw agent --agent main --session-id voice-local-mic --message "hello" --json
+```
+
 ### Raspberry Pi powers off or reboots after `pi5mic` finishes recording
 
 - treat this as a likely Raspberry Pi resource or power problem first, not a

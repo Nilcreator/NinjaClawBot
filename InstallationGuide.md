@@ -563,6 +563,8 @@ Expected result:
 - the wizard saves `mic.json`
 - `pi5mic` auto-detects the local OpenClaw CLI, config file, gateway URL, agent
   id, and session key when possible
+- if an older `mic.json` still uses the legacy value `voice:local-mic`,
+  `pi5mic` now repairs it automatically to `voice-local-mic`
 - it prints a short summary of the detected OpenClaw settings
 - it prints either `Configured STT backend looks ready.` or a clear warning
   about what is still missing

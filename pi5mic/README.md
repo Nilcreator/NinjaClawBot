@@ -558,6 +558,8 @@ What `pi5mic` now does automatically in OpenClaw mode:
 - finds the local `openclaw` CLI when possible
 - reads the local OpenClaw config file when available
 - fills in the gateway URL, agent id, and session key automatically
+- automatically repairs the old legacy value `voice:local-mic` to the current
+  safe OpenClaw session id `voice-local-mic`
 - keeps the safer `local_only` reply delivery mode unless you already finished a
   more advanced reply target setup
 - explains whether the NinjaClawBot plugin looks ready
@@ -796,7 +798,44 @@ What you should expect after the fix:
 - `uv run pi5mic run --once` should record, transcribe, and print the OpenClaw
   reply text
 
-## 10. What Counts As A Successful Standalone Test
+## 10. Common Problem: OpenClaw says `Invalid session ID`
+
+If you see an error like this:
+
+```text
+Invalid session ID
+```
+
+it means:
+
+- recording and transcription already worked
+- the failure happened only when `pi5mic` handed the text to OpenClaw
+- the old legacy session value used colons, which newer OpenClaw builds reject
+  for `--session-id`
+
+What `pi5mic` now does automatically:
+
+- changes the old value `voice:local-mic` into `voice-local-mic`
+- uses the repaired value when loading `mic.json`
+- saves the repaired value the next time setup or another save path runs
+
+The easiest recovery path is:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+What you should expect:
+
+- setup shows the detected OpenClaw settings
+- `doctor` should stop failing on `Invalid session ID`
+- `run --once` should print the OpenClaw reply instead of stopping after
+  transcription
+
+## 11. What Counts As A Successful Standalone Test
 
 You have tested the current standalone `pi5mic` build successfully if all of these work:
 
@@ -808,7 +847,7 @@ You have tested the current standalone `pi5mic` build successfully if all of the
 6. `uv run pi5mic run --once`
 7. `uv run pi5mic mic-tool`
 
-## 11. Common Problem: `Invalid sample rate`
+## 12. Common Problem: `Invalid sample rate`
 
 If you see an error like this:
 
@@ -840,7 +879,7 @@ Why this happens:
 - many Raspberry Pi microphones prefer their hardware default rate
 - this is often `44100` Hz or `48000` Hz, not `16000` Hz
 
-## 12. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
+## 13. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
 
 If the Raspberry Pi itself powers off or reboots after the `Recording...` step,
 that is usually different from a normal Python error.

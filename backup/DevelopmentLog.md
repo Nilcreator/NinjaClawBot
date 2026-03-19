@@ -2,6 +2,73 @@
 
 ## 2026-03-20
 
+### pi5mic OpenClaw Session-ID Migration Fix
+
+Summary:
+
+- reviewed the Raspberry Pi validation result after the OpenClaw auto-setup work
+- confirmed that recording and Whisper transcription succeeded, but the
+  OpenClaw handoff still failed after that with:
+  - `Invalid session ID: voice:local-mic`
+- verified against the current OpenClaw source that:
+  - `openclaw agent --session-id` is validated with a safe session-id regex
+  - `:` is not allowed in that field
+  - `voice:local-mic` was therefore a legacy-invalid value for newer OpenClaw
+    builds
+- patched `pi5mic` so the OpenClaw profile now uses a safe default session id:
+  - new default: `voice-local-mic`
+- added automatic migration so existing `mic.json` files are repaired in memory
+  on load and then persisted on the next save
+- hardened the transport path so even if a stale config somehow reaches runtime,
+  `pi5mic` still normalizes the OpenClaw session id before dispatch
+- updated the docs so users can understand what `Invalid session ID` means and
+  how the new automatic fix works
+
+Files changed:
+
+- [pi5mic/src/pi5mic/config/config_manager.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/config/config_manager.py)
+- [pi5mic/src/pi5mic/integration/openclaw_session.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration/openclaw_session.py)
+- [pi5mic/src/pi5mic/integration/openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration/openclaw_setup.py)
+- [pi5mic/src/pi5mic/transport/openclaw_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/transport/openclaw_cli.py)
+- [pi5mic/tests/test_config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_config.py)
+- [pi5mic/tests/test_transport_openclaw.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_transport_openclaw.py)
+- [pi5mic/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_cli.py)
+- [pi5mic/tests/test_doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_doctor.py)
+- [pi5mic/tests/test_openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_openclaw_setup.py)
+- [pi5mic/tests/test_openclaw_session.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_openclaw_session.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the earlier OpenClaw integration work fixed pairing and auto-discovery, but
+  the legacy session-id default still broke the final transcript handoff on the
+  user's real Raspberry Pi gateway
+- this needed an actual code migration, not just a docs workaround, because old
+  configs were already saved in the field
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `65 passed`
+
+Raspberry Pi validation status:
+
+- local package validation passed
+- Raspberry Pi follow-up still required:
+  - rerun `uv run pi5mic setup` in `openclaw` mode
+  - rerun `uv run pi5mic doctor`
+  - rerun `uv run pi5mic run --once`
+  - confirm the OpenClaw reply appears after transcription
+  - optional direct OpenClaw check:
+    `openclaw agent --agent main --session-id voice-local-mic --message "hello" --json`
+
 ### pi5mic OpenClaw Auto-Setup And Guided Pairing Repair
 
 Summary:

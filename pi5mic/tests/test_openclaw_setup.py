@@ -51,6 +51,6 @@ def test_discover_openclaw_auto_config_reads_local_config(monkeypatch, tmp_path)
     assert discovery.config_path == config_path
     assert discovery.gateway_url == "ws://127.0.0.1:18789"
     assert discovery.agent_id == "main"
-    assert discovery.session_key == "voice:local-mic"
+    assert discovery.session_key == "voice-local-mic"
     assert discovery.plugin_ready is True
     assert discovery.used_defaults == ("session_key",)

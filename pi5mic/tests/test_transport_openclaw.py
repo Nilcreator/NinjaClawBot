@@ -42,7 +42,7 @@ def test_openclaw_transport_dispatches_agent_request(monkeypatch, tmp_path) -> N
         "--agent",
         "main",
         "--session-id",
-        "voice:local-mic",
+        "voice-local-mic",
         "--message",
         "hello ninja",
         "--json",

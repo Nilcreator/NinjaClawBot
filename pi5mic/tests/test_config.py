@@ -28,6 +28,7 @@ def test_load_returns_defaults_when_file_is_missing(tmp_path) -> None:
     assert config["audio"]["sample_rate"] == DEFAULT_CONFIG["audio"]["sample_rate"]
     assert config["stt"]["selected"] == "whisper_cpp"
     assert config["integration"]["openclaw"]["gateway_url"] == "ws://127.0.0.1:18789"
+    assert config["integration"]["openclaw"]["session_key"] == "voice-local-mic"
 
 
 def test_save_roundtrip_preserves_nested_values(tmp_path) -> None:
@@ -45,7 +46,28 @@ def test_save_roundtrip_preserves_nested_values(tmp_path) -> None:
     assert loaded["profile"] == "openclaw"
     assert loaded["audio"]["input_device"] == "USB Microphone"
     assert loaded["stt"]["gemini"]["retry_limit"] == 4
-    assert loaded["integration"]["openclaw"]["session_key"] == "voice:local-mic"
+    assert loaded["integration"]["openclaw"]["session_key"] == "voice-local-mic"
+
+
+def test_load_migrates_legacy_openclaw_session_id(tmp_path) -> None:
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "profile": "openclaw",
+  "integration": {
+    "openclaw": {
+      "session_key": "voice:local-mic"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loaded = MicConfigManager(config_path).load()
+
+    assert loaded["integration"]["openclaw"]["session_key"] == "voice-local-mic"
 
 
 def test_load_rejects_invalid_json(tmp_path) -> None:
