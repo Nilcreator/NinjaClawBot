@@ -95,7 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, and guided `mic-tool`
+- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, and OpenClaw auto-setup with pairing guidance
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer
@@ -163,7 +163,7 @@ Validated outcomes:
 - Telegram text reply plus robot reaction
 - deployment diagnostics through `ninjaclawbot_diagnostics`
 - `pi5mic` preview package implemented with package-level tests passing
-- Raspberry Pi microphone validation for the new voice path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, and Raspberry Pi health warnings
+- Raspberry Pi microphone validation for the new voice path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, Raspberry Pi health warnings, and OpenClaw handoff readiness guidance
 
 ## License
 

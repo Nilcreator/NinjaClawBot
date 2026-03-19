@@ -178,6 +178,8 @@ What this is doing:
 - creates or updates `mic.json`
 - asks you which profile, microphone, and STT backend you want
 - asks for a sample rate that matches your selected microphone
+- if you choose `Profile: openclaw`, `pi5mic` now tries to detect your local
+  OpenClaw settings automatically and then runs a safe readiness check
 
 ### Recommended choices for standalone testing
 
@@ -518,11 +520,107 @@ What you should expect:
 - transcript output only
 - useful when debugging STT without speaking again
 
+## Optional OpenClaw Mode Inside NinjaClawBot
+
+Use this after the standalone path already works.
+
+### Step 18. Start from the NinjaClawBot root
+
+```bash
+cd ~/NinjaClawBot
+```
+
+What this is doing:
+
+- makes sure `mic.json` is written into the NinjaClawBot project folder
+- lets `pi5mic` reuse the same OpenClaw installation and Python environment
+
+### Step 19. Run the setup wizard or `mic-tool`
+
+```bash
+uv run pi5mic mic-tool
+```
+
+Then choose:
+
+- `1. Run setup wizard`
+
+Recommended OpenClaw choices:
+
+- `Profile`: `openclaw`
+- `Input device`: your USB microphone or `default`
+- `Sample rate (Hz)`: accept the recommended value
+- `STT backend`: `whisper_cpp` or `gemini`
+- `Maximum clip length`: start with `8`, `10`, or `12`
+
+What `pi5mic` now does automatically in OpenClaw mode:
+
+- finds the local `openclaw` CLI when possible
+- reads the local OpenClaw config file when available
+- fills in the gateway URL, agent id, and session key automatically
+- keeps the safer `local_only` reply delivery mode unless you already finished a
+  more advanced reply target setup
+- explains whether the NinjaClawBot plugin looks ready
+- runs a safe readiness check after saving the config
+
+What you should expect:
+
+- a summary of the detected OpenClaw settings
+- `Configured STT backend looks ready.` if the selected STT backend is usable
+- then either:
+  - `OpenClaw voice handoff is ready.`
+  - or a warning that explains what still needs attention
+
+### Step 20. If the wizard says OpenClaw needs one-time pairing approval
+
+Sometimes OpenClaw may say `pairing required`.
+
+What this means:
+
+- your microphone and STT backend may already be fine
+- OpenClaw created a local device request, but it has not been approved yet
+
+What `pi5mic` does now:
+
+- explains the problem in plain language
+- asks whether it should approve the newest local request for you
+- retries the readiness check automatically if you say yes
+
+What you should expect:
+
+- a prompt such as:
+  - `Approve the newest local OpenClaw device request now?`
+- if you answer `y`, `pi5mic` tries:
+  - `openclaw devices approve --latest`
+- if approval works, the wizard prints:
+  - `OpenClaw voice handoff is ready.`
+
+### Step 21. Verify the OpenClaw path
+
+```bash
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+What this is doing:
+
+- checks the saved OpenClaw profile
+- confirms the gateway is reachable
+- confirms the voice handoff path is ready
+- records one clip, transcribes it, and sends the transcript into OpenClaw
+
+What you should expect:
+
+- `doctor` shows the OpenClaw command, config file, delivery mode, and readiness
+  result
+- `run --once` shows the transcript and, in OpenClaw mode, the OpenClaw reply
+  text
+
 ## 6. Optional Gemini Setup
 
 Gemini is optional. Only use this if you want to test the alternative cloud backend.
 
-### Step 18. No extra Gemini package install is needed
+### Step 22. No extra Gemini package install is needed
 
 ```bash
 cd ~/NinjaClawBot
@@ -539,7 +637,7 @@ What you should expect:
 - the command finishes without errors
 - after this, `pi5mic` can use Gemini if the API key is present
 
-### Step 19. Set your Gemini API key
+### Step 23. Set your Gemini API key
 
 ```bash
 export GOOGLE_API_KEY="your_key_here"
@@ -562,7 +660,7 @@ What you should expect:
   profile
 - if both variables are set, the Google SDK uses `GOOGLE_API_KEY` first
 
-### Step 20. Switch the backend in setup
+### Step 24. Switch the backend in setup
 
 ```bash
 uv run pi5mic setup
@@ -580,7 +678,7 @@ What you should expect:
 - the wizard reminds you that Gemini needs an environment variable
 - it also tells you which export command format to use
 
-### Step 21. Verify Gemini with doctor
+### Step 25. Verify Gemini with doctor
 
 ```bash
 uv run pi5mic doctor
@@ -658,7 +756,47 @@ What you should expect:
 - doctor should stop failing on Gemini credentials
 - it should tell you which environment variable it found
 
-## 9. What Counts As A Successful Standalone Test
+## 9. Common Problem: OpenClaw says `pairing required`
+
+If you see an error like this:
+
+```text
+pairing required
+```
+
+it means:
+
+- `pi5mic` already reached the OpenClaw CLI
+- but the OpenClaw gateway still wants a one-time local device approval before
+  it will accept the request
+
+The easiest fix is:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+
+- choose `Profile: openclaw`
+- let the wizard detect your OpenClaw settings automatically
+- answer `y` if it asks to approve the newest local OpenClaw device request
+
+Manual fallback:
+
+```bash
+openclaw devices approve --latest
+uv run pi5mic doctor
+```
+
+What you should expect after the fix:
+
+- `pi5mic doctor` should stop failing on pairing
+- `uv run pi5mic run --once` should record, transcribe, and print the OpenClaw
+  reply text
+
+## 10. What Counts As A Successful Standalone Test
 
 You have tested the current standalone `pi5mic` build successfully if all of these work:
 
@@ -670,7 +808,7 @@ You have tested the current standalone `pi5mic` build successfully if all of the
 6. `uv run pi5mic run --once`
 7. `uv run pi5mic mic-tool`
 
-## 10. Common Problem: `Invalid sample rate`
+## 11. Common Problem: `Invalid sample rate`
 
 If you see an error like this:
 
@@ -702,7 +840,7 @@ Why this happens:
 - many Raspberry Pi microphones prefer their hardware default rate
 - this is often `44100` Hz or `48000` Hz, not `16000` Hz
 
-## 11. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
+## 12. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
 
 If the Raspberry Pi itself powers off or reboots after the `Recording...` step,
 that is usually different from a normal Python error.

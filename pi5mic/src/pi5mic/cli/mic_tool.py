@@ -33,16 +33,20 @@ def mic_tool(ctx: click.Context) -> None:
             show_choices=False,
         )
 
-        if choice == "1":
-            ctx.invoke(setup_cmd)
-        elif choice == "2":
-            ctx.invoke(install_whispercpp, command_override=None, model_path=None, save=True)
-        elif choice == "3":
-            ctx.invoke(doctor)
-        elif choice == "4":
-            ctx.invoke(status)
-        elif choice == "5":
-            ctx.invoke(run_cmd, once=True, audio_file=None, duration=None, keep_audio=False)
-        else:
-            click.echo("Leaving pi5mic mic-tool.")
-            break
+        try:
+            if choice == "1":
+                ctx.invoke(setup_cmd)
+            elif choice == "2":
+                ctx.invoke(install_whispercpp, command_override=None, model_path=None, save=True)
+            elif choice == "3":
+                ctx.invoke(doctor)
+            elif choice == "4":
+                ctx.invoke(status)
+            elif choice == "5":
+                ctx.invoke(run_cmd, once=True, audio_file=None, duration=None, keep_audio=False)
+            else:
+                click.echo("Leaving pi5mic mic-tool.")
+                break
+        except click.ClickException as exc:
+            click.echo(f"\nERROR: {exc}")
+            click.echo("Fix the issue above, then choose the action again from this menu.")

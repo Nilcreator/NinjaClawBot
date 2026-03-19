@@ -5,11 +5,13 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
+import click
 from click.testing import CliRunner
 
 from pi5mic.__main__ import cli
 from pi5mic.errors import DeviceError
 
+mic_tool_module = importlib.import_module("pi5mic.cli.mic_tool")
 setup_cmd_module = importlib.import_module("pi5mic.cli.setup_cmd")
 
 
@@ -63,4 +65,22 @@ def test_mic_tool_setup_warns_instead_of_crashing_when_audio_backend_is_unavaila
 
     assert result.exit_code == 0, result.output
     assert "WARNING: Could not list audio devices yet:" in result.output
+    assert "Leaving pi5mic mic-tool." in result.output
+
+
+def test_mic_tool_returns_to_menu_after_click_exception(monkeypatch) -> None:
+    runner = CliRunner()
+
+    @click.command("doctor")
+    @click.pass_context
+    def _failing_doctor(ctx: click.Context) -> None:
+        raise click.ClickException("doctor failed on purpose")
+
+    monkeypatch.setattr(mic_tool_module, "doctor", _failing_doctor)
+
+    result = runner.invoke(cli, ["mic-tool"], input="3\n6\n")
+
+    assert result.exit_code == 0, result.output
+    assert "ERROR: doctor failed on purpose" in result.output
+    assert "Fix the issue above" in result.output
     assert "Leaving pi5mic mic-tool." in result.output

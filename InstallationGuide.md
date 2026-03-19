@@ -561,7 +561,16 @@ Purpose:
 
 Expected result:
 - the wizard saves `mic.json`
-- it prints either `Configured STT backend looks ready.` or a clear warning about what is still missing
+- `pi5mic` auto-detects the local OpenClaw CLI, config file, gateway URL, agent
+  id, and session key when possible
+- it prints a short summary of the detected OpenClaw settings
+- it prints either `Configured STT backend looks ready.` or a clear warning
+  about what is still missing
+- it then runs a safe OpenClaw readiness check
+- if the gateway asks for one-time local pairing approval, `pi5mic` explains the
+  problem and offers to approve the newest local request for you
+- if everything is ready, it ends with:
+  - `OpenClaw voice handoff is ready.`
 
 ### 9.5.6 Run doctor
 
@@ -579,7 +588,11 @@ Purpose:
 Expected result:
 - for Whisper: command path, model path, and runtime summary are shown
 - for Gemini: `doctor` shows which API key variable it found
-- if the profile is `openclaw`, `doctor` also checks the OpenClaw command and delivery mode
+- if the profile is `openclaw`, `doctor` also checks:
+  - the OpenClaw command
+  - the detected OpenClaw config file
+  - the delivery mode
+  - the gateway readiness path
 - success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
 
 ### 9.5.7 Run one real capture cycle
@@ -599,6 +612,38 @@ Expected result:
 - `pi5mic doctor` reports the selected backend and any missing dependency clearly
 - `pi5mic run --once` records one clip, transcribes it, and prints the transcript locally
 - if the profile is `openclaw`, the command also submits the transcript to OpenClaw and prints the reply locally
+
+### 9.5.8 If OpenClaw says `pairing required`
+
+What this means:
+- the microphone part usually worked
+- `pi5mic` reached the OpenClaw CLI
+- but the OpenClaw gateway still wants a one-time approval for the local device
+
+Recommended fix:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+- choose `Profile: openclaw`
+- let the wizard auto-detect the OpenClaw settings
+- answer `y` if it asks:
+  - `Approve the newest local OpenClaw device request now?`
+
+Manual fallback:
+
+```bash
+openclaw devices approve --latest
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+Expected result after the fix:
+- `pi5mic doctor` should stop failing on pairing
+- `uv run pi5mic run --once` should print both the transcript and the OpenClaw reply
 
 Need help later?
 - [Appendix D: Local test help](#appendix-d-local-test-help)

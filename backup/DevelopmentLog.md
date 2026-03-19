@@ -2,6 +2,87 @@
 
 ## 2026-03-20
 
+### pi5mic OpenClaw Auto-Setup And Guided Pairing Repair
+
+Summary:
+
+- reviewed the real OpenClaw failure mode reported during Raspberry Pi testing:
+  - `pi5mic` recorded and transcribed correctly
+  - the OpenClaw handoff failed with `pairing required`
+  - the old setup flow still asked the user to type OpenClaw details manually
+- identified the main usability gap:
+  - `pi5mic` already had enough information to reuse most local OpenClaw
+    settings, but the setup wizard did not read them automatically
+  - pairing recovery also required manual shell commands even though the local
+    CLI supports `openclaw devices approve --latest`
+- added a new OpenClaw setup helper layer that:
+  - locates the local `openclaw` CLI
+  - reads `~/.openclaw/openclaw.json` when available
+  - derives the gateway URL, agent id, session key, and plugin readiness hints
+  - explains common OpenClaw failures in plain language
+- refined `pi5mic setup` so `Profile: openclaw` now:
+  - auto-discovers the local OpenClaw settings
+  - applies them to `mic.json`
+  - summarizes what was detected and what fell back to defaults
+  - warns clearly if the NinjaClawBot plugin does not look ready
+  - runs a safe OpenClaw readiness check after saving
+  - offers one-click approval of the newest local pairing request when OpenClaw
+    asks for it
+- refined the runtime UX:
+  - `doctor` now reports the detected OpenClaw config path and readiness result
+  - `run --once` now wraps OpenClaw transport/presence errors with actionable
+    recovery guidance
+  - `mic-tool` now catches command-level `ClickException`s and returns to the
+    menu instead of dropping the user out immediately
+- updated the user-facing docs so the new OpenClaw flow is explained step by
+  step for non-developers
+
+Files changed:
+
+- [pi5mic/src/pi5mic/cli/setup_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/setup_cmd.py)
+- [pi5mic/src/pi5mic/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/doctor.py)
+- [pi5mic/src/pi5mic/cli/run_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/run_cmd.py)
+- [pi5mic/src/pi5mic/cli/mic_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/mic_tool.py)
+- [pi5mic/src/pi5mic/integration/openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration/openclaw_setup.py)
+- [pi5mic/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_cli.py)
+- [pi5mic/tests/test_doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_doctor.py)
+- [pi5mic/tests/test_mic_tool_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_mic_tool_setup.py)
+- [pi5mic/tests/test_openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_openclaw_setup.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the previous `openclaw` profile still depended on manual gateway detail entry,
+  which made the guided setup promise weaker than the actual local config
+  information already available on the Raspberry Pi
+- pairing failures were understandable once diagnosed, but the repair path
+  belonged inside the setup wizard so non-developers could reach a working
+  voice handoff without dropping into OpenClaw commands first
+- the operator-facing documentation needed to match the new “detect, explain,
+  approve, retry” flow exactly
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `60 passed`
+
+Raspberry Pi validation status:
+
+- package-level validation passed locally
+- Raspberry Pi follow-up is still required for the new auto-approval flow:
+  - choose `Profile: openclaw` in `pi5mic setup`
+  - confirm the wizard auto-detects the OpenClaw settings
+  - approve the local pairing request if prompted
+  - rerun `uv run pi5mic doctor`
+  - rerun `uv run pi5mic run --once`
+
 ### pi5mic Gemini Default Dependency And OpenClaw Doctor Crash Fix
 
 Summary:

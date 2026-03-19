@@ -306,7 +306,7 @@ What each README is best for:
 - `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
 - `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
 - `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
-- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, and `mic-tool`
+- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, and OpenClaw auto-setup
 - `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
 
 ## Validated Runtime Model
@@ -316,7 +316,7 @@ The final validated build is hybrid. That matters for future development.
 ### What owns what
 
 - Standalone driver libraries own direct hardware behavior
-- `pi5mic` owns local microphone capture, STT selection, and the preview OpenClaw voice handoff
+- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, and the preview OpenClaw voice handoff
 - `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
 - the OpenClaw plugin owns the persistent bridge and the operator-facing tool surface
 - startup greeting is validated through:
@@ -700,6 +700,33 @@ uv run pi5mic doctor
 cd ~/NinjaClawBot
 uv sync --extra dev
 ```
+
+### `pi5mic` says `pairing required` in OpenClaw mode
+
+- this is usually not a microphone or STT problem
+- it means `pi5mic` reached the local OpenClaw CLI, but the gateway still wants
+  a one-time local device approval
+- the preferred recovery path is now:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+- then:
+  - choose `Profile: openclaw`
+  - let `pi5mic` auto-detect the OpenClaw settings
+  - answer `y` if it offers to approve the newest local device request
+- manual fallback:
+
+```bash
+openclaw devices approve --latest
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+- if pairing succeeds, `doctor` should stop failing on the OpenClaw readiness
+  path and `run --once` should print the OpenClaw reply
 
 ### Raspberry Pi powers off or reboots after `pi5mic` finishes recording
 

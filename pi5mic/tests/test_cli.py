@@ -8,6 +8,8 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from pi5mic.__main__ import cli
+from pi5mic.errors import IntegrationError
+from pi5mic.integration.openclaw_setup import OpenClawAutoConfig
 from pi5mic.models import AudioDeviceInfo, DispatchResult, RecordedClip, TranscriptionResult
 
 status_module = importlib.import_module("pi5mic.cli.status")
@@ -160,6 +162,90 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
     assert "/usr/local/bin/whisper-cli" in saved
     assert str(tmp_path / "ggml-base.bin") in saved
     assert '"threads": 2' in saved
+
+
+def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    discovered = OpenClawAutoConfig(
+        command=tmp_path / "openclaw",
+        config_path=tmp_path / "openclaw.json",
+        gateway_url="ws://127.0.0.1:18789",
+        agent_id="main",
+        session_key="voice:local-mic",
+        gateway_mode="local",
+        gateway_bind="loopback",
+        plugin_enabled=True,
+        plugin_allowlisted=True,
+        plugin_install_found=True,
+    )
+    probe_calls = {"count": 0}
+
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "list_input_devices",
+        lambda: [
+            AudioDeviceInfo(
+                index=1, name="USB Mic", max_input_channels=1, default_samplerate=16_000
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "get_recommended_sample_rate",
+        lambda selector, fallback_rate: 16_000,
+    )
+    monkeypatch.setattr(setup_cmd_module, "is_raspberry_pi", lambda: False)
+    monkeypatch.setattr(setup_cmd_module, "build_stt_backend", lambda config: object())
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "discover_openclaw_auto_config",
+        lambda **kwargs: discovered,
+    )
+
+    def _probe(**kwargs):
+        probe_calls["count"] += 1
+        if probe_calls["count"] == 1:
+            raise IntegrationError(
+                "OpenClaw presence update failed: gateway connect failed: Error: pairing required"
+            )
+        return ["OpenClaw gateway responded.", "NinjaClawBot presence method responded."]
+
+    monkeypatch.setattr(setup_cmd_module, "probe_openclaw_voice_ready", _probe)
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "approve_latest_openclaw_pairing",
+        lambda command: "Approved the latest OpenClaw device request.",
+    )
+
+    inputs = "\n".join(
+        [
+            "openclaw",
+            "default",
+            "16000",
+            "gemini",
+            "gemini-2.5-flash",
+            "60",
+            "2",
+            "12",
+            "y",
+        ]
+    )
+
+    result = runner.invoke(
+        cli,
+        ["--config-file", str(tmp_path / "mic.json"), "setup"],
+        input=inputs,
+    )
+
+    assert result.exit_code == 0, result.output
+    saved = (tmp_path / "mic.json").read_text(encoding="utf-8")
+    assert str(discovered.command) in saved
+    assert discovered.gateway_url in saved
+    assert discovered.agent_id in saved
+    assert discovered.session_key in saved
+    assert "Approve the newest local OpenClaw device request now?" in result.output
+    assert "Approved the latest OpenClaw device request." in result.output
+    assert "OpenClaw voice handoff is ready." in result.output
 
 
 def test_transcribe_command_uses_backend_builder(monkeypatch, tmp_path) -> None:

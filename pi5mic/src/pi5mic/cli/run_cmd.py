@@ -17,6 +17,7 @@ from pi5mic.errors import (
     STTError,
     TransportError,
 )
+from pi5mic.integration.openclaw_setup import explain_openclaw_error
 from pi5mic.models import DispatchResult, RecorderSettings, TranscriptionResult
 
 from ._common import (
@@ -48,7 +49,15 @@ def _best_effort_presence(controller, mode: str, *, reason: str) -> None:
     try:
         controller.set_mode(mode, reason=reason)
     except (IntegrationError, TransportError) as exc:
-        click.echo(f"WARNING: Presence update '{mode}' failed: {exc}")
+        click.echo(f"WARNING: Presence update '{mode}' failed: {explain_openclaw_error(str(exc))}")
+
+
+def _format_cycle_error(config: dict, exc: Exception) -> str:
+    """Return a user-facing run error with OpenClaw guidance when relevant."""
+    message = str(exc)
+    if str(config.get("profile", "standalone")) == "openclaw":
+        return explain_openclaw_error(message)
+    return message
 
 
 def _echo_cycle_result(
@@ -217,9 +226,10 @@ def run_cmd(
             TransportError,
             ValueError,
         ) as exc:
+            message = _format_cycle_error(config, exc)
             if once:
-                raise click.ClickException(str(exc)) from exc
-            click.echo(f"ERROR: {exc}")
+                raise click.ClickException(message) from exc
+            click.echo(f"ERROR: {message}")
             continue
 
         _echo_cycle_result(

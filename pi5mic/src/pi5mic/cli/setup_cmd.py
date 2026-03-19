@@ -8,14 +8,181 @@ import click
 
 from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
 from pi5mic.core.system_info import is_raspberry_pi
-from pi5mic.errors import ConfigError, DeviceError, STTError
+from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
 from pi5mic.integration.delivery import SUPPORTED_DELIVERY_MODES
+from pi5mic.integration.openclaw_setup import (
+    approve_latest_openclaw_pairing,
+    discover_openclaw_auto_config,
+    explain_openclaw_error,
+    is_pairing_required_error,
+    probe_openclaw_voice_ready,
+    summarize_openclaw_auto_config,
+)
 from pi5mic.stt.gemini import describe_gemini_env_help
 from pi5mic.stt.whisper_cpp import recommend_whisper_threads
 from pi5mic.transport.openclaw_cli import find_openclaw_command
 
 from ._common import build_stt_backend, load_manager
+
+
+def _configure_openclaw_profile(config: dict) -> None:
+    """Auto-discover the local OpenClaw settings and apply them to the config."""
+    integration_config = config["integration"]
+    openclaw_config = integration_config["openclaw"]
+    click.echo("\nOpenClaw auto-setup")
+    click.echo("pi5mic will look for your local OpenClaw configuration and reuse it automatically.")
+    click.echo(
+        "This avoids typing gateway settings by hand and prepares the profile for "
+        "`Run one capture cycle` or `uv run pi5mic run --once`."
+    )
+
+    try:
+        discovery = discover_openclaw_auto_config(
+            command=openclaw_config.get("command"),
+            saved_gateway_url=openclaw_config.get("gateway_url"),
+            saved_agent_id=openclaw_config.get("agent_id"),
+            saved_session_key=openclaw_config.get("session_key"),
+        )
+    except TransportError as exc:
+        detected_openclaw = find_openclaw_command(openclaw_config.get("command"))
+        if detected_openclaw is not None:
+            openclaw_config["command"] = str(detected_openclaw)
+        click.echo("WARNING: pi5mic could not finish automatic OpenClaw discovery.")
+        click.echo(explain_openclaw_error(str(exc)))
+        click.echo(
+            "pi5mic kept the saved OpenClaw values for now. After fixing OpenClaw, rerun "
+            "`uv run pi5mic setup` or `uv run pi5mic doctor`."
+        )
+        return
+
+    openclaw_config["command"] = str(discovery.command)
+    openclaw_config["gateway_url"] = discovery.gateway_url
+    openclaw_config["agent_id"] = discovery.agent_id
+    openclaw_config["session_key"] = discovery.session_key
+
+    delivery_mode = str(integration_config.get("delivery_mode", "local_only"))
+    if delivery_mode not in SUPPORTED_DELIVERY_MODES:
+        delivery_mode = "local_only"
+    if delivery_mode == "local_plus_explicit_channel_target":
+        reply_channel = str(openclaw_config.get("reply_channel") or "").strip()
+        reply_to = str(openclaw_config.get("reply_to") or "").strip()
+        if not reply_channel or not reply_to:
+            click.echo(
+                "OpenClaw reply mirroring was incomplete, so pi5mic switched back to the "
+                "safer `local_only` delivery mode."
+            )
+            delivery_mode = "local_only"
+    integration_config["delivery_mode"] = delivery_mode
+    if delivery_mode == "local_only":
+        openclaw_config["reply_channel"] = None
+        openclaw_config["reply_to"] = None
+        openclaw_config["reply_account"] = None
+
+    click.echo("\nDetected OpenClaw settings:")
+    for line in summarize_openclaw_auto_config(discovery):
+        click.echo(f"  - {line}")
+
+    if delivery_mode == "local_only":
+        click.echo(
+            "Replies will stay local to OpenClaw by default. You can enable channel mirroring "
+            "later by editing `mic.json` or rerunning setup."
+        )
+
+    if discovery.plugin_ready:
+        return
+
+    click.echo(
+        "WARNING: The local OpenClaw config does not yet look fully ready for the "
+        "NinjaClawBot plugin."
+    )
+    if not discovery.plugin_install_found:
+        click.echo("  - OpenClaw does not show a NinjaClawBot plugin install/load path yet.")
+    if not discovery.plugin_allowlisted:
+        click.echo("  - The plugin is not listed in `plugins.allow`.")
+    if not discovery.plugin_enabled:
+        click.echo("  - The plugin entry does not look enabled.")
+    click.echo(
+        "pi5mic can still save the profile now, but OpenClaw may reject presence updates or "
+        "voice handoff until the plugin is installed, allowlisted, and enabled. After fixing "
+        "that, restart the gateway and run `uv run pi5mic doctor`."
+    )
+
+
+def _run_openclaw_readiness_check(config: dict) -> None:
+    """Run a post-save OpenClaw preflight and guide the user through pairing if needed."""
+    integration_config = config["integration"]
+    openclaw_config = integration_config["openclaw"]
+    check_presence = bool(integration_config.get("presence_enabled", True))
+
+    click.echo("\nOpenClaw readiness check")
+    click.echo(
+        "pi5mic will make a safe local call to OpenClaw to confirm the voice handoff path is ready."
+    )
+
+    try:
+        lines = probe_openclaw_voice_ready(
+            command=openclaw_config.get("command"),
+            gateway_url=openclaw_config.get("gateway_url"),
+            check_presence=check_presence,
+        )
+        for line in lines:
+            click.echo(f"OK   {line}")
+        click.echo(
+            "OpenClaw voice handoff is ready. You can now use `5. Run one capture cycle` or "
+            "`uv run pi5mic run --once`."
+        )
+        return
+    except (IntegrationError, TransportError) as exc:
+        message = explain_openclaw_error(str(exc))
+        click.echo("WARNING: OpenClaw is not fully ready yet.")
+        click.echo(message)
+
+    if not is_pairing_required_error(message):
+        click.echo(
+            "After fixing the issue above, rerun `uv run pi5mic doctor` to verify the "
+            "OpenClaw path."
+        )
+        return
+
+    click.echo(
+        "This usually means OpenClaw created a local device request that still needs a "
+        "one-time approval."
+    )
+    should_approve = click.confirm(
+        "Approve the newest local OpenClaw device request now?",
+        default=True,
+    )
+    if not should_approve:
+        click.echo(
+            "OpenClaw was not approved yet. When you're ready, run "
+            "`openclaw devices approve --latest` and then `uv run pi5mic doctor`."
+        )
+        return
+
+    try:
+        approval_message = approve_latest_openclaw_pairing(openclaw_config.get("command"))
+        click.echo(f"OK   {approval_message}")
+        lines = probe_openclaw_voice_ready(
+            command=openclaw_config.get("command"),
+            gateway_url=openclaw_config.get("gateway_url"),
+            check_presence=check_presence,
+        )
+    except (IntegrationError, TransportError) as exc:
+        click.echo("WARNING: Automatic OpenClaw approval did not finish cleanly.")
+        click.echo(explain_openclaw_error(str(exc)))
+        click.echo(
+            "If needed, run `openclaw devices list`, approve the pending local request, "
+            "then rerun `uv run pi5mic doctor`."
+        )
+        return
+
+    for line in lines:
+        click.echo(f"OK   {line}")
+    click.echo(
+        "OpenClaw voice handoff is ready. You can now use `5. Run one capture cycle` or "
+        "`uv run pi5mic run --once`."
+    )
 
 
 @click.command("setup")
@@ -153,56 +320,7 @@ def setup_cmd(ctx: click.Context) -> None:
     config["audio"]["max_clip_seconds"] = max_clip_seconds
 
     if profile == "openclaw":
-        integration_config = config["integration"]
-        openclaw_config = config["integration"]["openclaw"]
-        detected_openclaw = find_openclaw_command(openclaw_config.get("command"))
-        default_openclaw_command = str(
-            detected_openclaw or openclaw_config.get("command") or "openclaw"
-        )
-        openclaw_config["command"] = click.prompt(
-            "OpenClaw CLI command",
-            default=default_openclaw_command,
-        ).strip()
-        openclaw_config["gateway_url"] = click.prompt(
-            "OpenClaw gateway URL",
-            default=str(openclaw_config["gateway_url"]),
-        ).strip()
-        openclaw_config["agent_id"] = click.prompt(
-            "OpenClaw agent id",
-            default=str(openclaw_config["agent_id"]),
-        ).strip()
-        openclaw_config["session_key"] = click.prompt(
-            "OpenClaw session key",
-            default=str(openclaw_config["session_key"]),
-        ).strip()
-        delivery_mode = click.prompt(
-            "Delivery mode",
-            type=click.Choice(list(SUPPORTED_DELIVERY_MODES)),
-            default=str(integration_config.get("delivery_mode", "local_only")),
-            show_choices=True,
-        )
-        integration_config["delivery_mode"] = delivery_mode
-        if delivery_mode == "local_plus_explicit_channel_target":
-            openclaw_config["reply_channel"] = click.prompt(
-                "Reply channel",
-                default=str(openclaw_config.get("reply_channel") or ""),
-            ).strip()
-            openclaw_config["reply_to"] = click.prompt(
-                "Reply target",
-                default=str(openclaw_config.get("reply_to") or ""),
-            ).strip()
-            openclaw_config["reply_account"] = (
-                click.prompt(
-                    "Reply account (optional)",
-                    default=str(openclaw_config.get("reply_account") or ""),
-                    show_default=False,
-                ).strip()
-                or None
-            )
-        else:
-            openclaw_config["reply_channel"] = None
-            openclaw_config["reply_to"] = None
-            openclaw_config["reply_account"] = None
+        _configure_openclaw_profile(config)
 
     try:
         manager.replace(config)
@@ -216,3 +334,6 @@ def setup_cmd(ctx: click.Context) -> None:
         click.echo("Configured STT backend looks ready.")
     except (ConfigError, STTError) as exc:
         click.echo(f"WARNING: STT backend still needs attention: {exc}")
+
+    if profile == "openclaw":
+        _run_openclaw_readiness_check(config)

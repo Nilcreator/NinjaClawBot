@@ -14,13 +14,18 @@ from pi5mic.core.system_info import (
     read_raspberry_pi_temperature_celsius,
     read_raspberry_pi_throttled_state,
 )
-from pi5mic.errors import ConfigError, DeviceError, STTError, TransportError
+from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
 from pi5mic.install.whisper_cpp import resolve_model_path, resolve_whisper_cpp_command
 from pi5mic.integration.delivery import describe_delivery_mode
+from pi5mic.integration.openclaw_setup import (
+    discover_openclaw_auto_config,
+    explain_openclaw_error,
+    probe_openclaw_voice_ready,
+)
 from pi5mic.stt.gemini import describe_gemini_env_help, resolve_gemini_api_key
 from pi5mic.stt.whisper_cpp import describe_whisper_runtime, recommend_whisper_threads
 
-from ._common import build_openclaw_transport, build_presence_controller, load_manager
+from ._common import build_openclaw_transport, load_manager
 
 
 @click.command("doctor")
@@ -155,11 +160,32 @@ def doctor(ctx: click.Context) -> None:
                     reply_to=openclaw_config.get("reply_to"),
                 )
             )
-            if bool(config["integration"].get("presence_enabled", True)):
-                build_presence_controller(config)
-                click.echo("OK   OpenClaw presence control is configured")
-        except (ConfigError, TransportError) as exc:
-            failures.append(str(exc))
+            discovery = discover_openclaw_auto_config(
+                command=openclaw_config.get("command"),
+                saved_gateway_url=openclaw_config.get("gateway_url"),
+                saved_agent_id=openclaw_config.get("agent_id"),
+                saved_session_key=openclaw_config.get("session_key"),
+            )
+            config_display = (
+                str(discovery.config_path)
+                if discovery.config_path is not None
+                else "not found (using pi5mic saved values/defaults)"
+            )
+            click.echo(f"OK   OpenClaw config:   {config_display}")
+            if not discovery.plugin_ready:
+                warnings.append(
+                    "The local OpenClaw config does not yet look fully ready for the "
+                    "NinjaClawBot plugin. If voice handoff fails, confirm the plugin is "
+                    "installed, allowlisted, and enabled, then restart the gateway."
+                )
+            for line in probe_openclaw_voice_ready(
+                command=openclaw_config.get("command"),
+                gateway_url=openclaw_config.get("gateway_url"),
+                check_presence=bool(config["integration"].get("presence_enabled", True)),
+            ):
+                click.echo(f"OK   {line}")
+        except (ConfigError, IntegrationError, TransportError) as exc:
+            failures.append(explain_openclaw_error(str(exc)))
 
     if failures:
         click.echo("\nFailures:")
