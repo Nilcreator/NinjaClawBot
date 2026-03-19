@@ -645,6 +645,34 @@ Use four buckets whenever hardware-facing behavior changes.
 
 ## Troubleshooting Shortcuts
 
+### `pi5mic` says `SyntaxError: unterminated string literal` in `run_cmd.py`
+
+- this is a Python-code issue from an older `pi5mic` build, not a Raspberry Pi
+  microphone wiring problem
+- the broken build failed during import, so `uv run pi5mic setup` and
+  `uv run pi5mic mic-tool` crashed before they could even open
+- fix it by updating the workspace environment and then rerunning the command:
+
+```bash
+cd ~/NinjaClawBot
+git pull
+uv sync --extra dev
+uv run pi5mic setup
+```
+
+- if you want to check the repair before opening the wizard, run:
+
+```bash
+cd ~/NinjaClawBot
+python3 -m compileall pi5mic/src pi5mic/tests
+uv run pi5mic --help
+```
+
+- expected result:
+  - `compileall` finishes without syntax errors
+  - `uv run pi5mic --help` prints the CLI help text
+  - `setup` and `mic-tool` open normally again
+
 ### `pi5mic` says `PortAudio library not found`
 
 - this is usually a Raspberry Pi system-library issue, not a Python-code issue

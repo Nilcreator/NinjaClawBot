@@ -201,17 +201,13 @@ def run_cmd(
     click.echo(f"STT:     {config['stt']['selected']}")
     if str(config.get("profile")) == "openclaw":
         openclaw_config = config["integration"]["openclaw"]
-        click.echo(
-            "Delivery:"
-            f" {
-                describe_delivery_mode(
-                    str(config['integration'].get('delivery_mode', 'local_only')),
-                    reply_channel=openclaw_config.get('reply_channel'),
-                    reply_to=openclaw_config.get('reply_to'),
-                    reply_account=openclaw_config.get('reply_account'),
-                )
-            }"
+        delivery_mode = describe_delivery_mode(
+            str(config["integration"].get("delivery_mode", "local_only")),
+            reply_channel=openclaw_config.get("reply_channel"),
+            reply_to=openclaw_config.get("reply_to"),
+            reply_account=openclaw_config.get("reply_account"),
         )
+        click.echo(f"Delivery: {delivery_mode}")
 
     while True:
         if not once:

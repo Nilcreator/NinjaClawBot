@@ -702,6 +702,41 @@ What you should expect:
 - if the Gemini SDK is somehow missing, `doctor` now reports that cleanly
   instead of crashing
 
+## Common Problem: `SyntaxError: unterminated string literal` when starting `setup` or `mic-tool`
+
+If you see an error like this:
+
+```text
+SyntaxError: unterminated string literal
+```
+
+it means:
+
+- you are still running an older `pi5mic` source file
+- the crash happens before microphone setup starts
+- this is a code version problem, not a microphone hardware problem
+
+Fix it with:
+
+```bash
+cd ~/NinjaClawBot
+git pull
+uv sync --extra dev
+uv run pi5mic --help
+```
+
+Then rerun:
+
+```bash
+uv run pi5mic setup
+```
+
+What you should expect:
+
+- `uv run pi5mic --help` prints the command list normally
+- `setup` opens instead of crashing
+- `mic-tool` opens instead of crashing
+
 ## 7. Common Problem: `PortAudio library not found`
 
 If you see this error:

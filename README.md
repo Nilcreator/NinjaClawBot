@@ -163,6 +163,9 @@ Validated outcomes:
 - Telegram text reply plus robot reaction
 - deployment diagnostics through `ninjaclawbot_diagnostics`
 - `pi5mic` preview package implemented with package-level tests passing
+- `pi5mic` CLI import path repaired, so `uv run pi5mic setup` and
+  `uv run pi5mic mic-tool` no longer fail on the OpenClaw delivery-status
+  banner parser bug
 - Raspberry Pi microphone validation for the new voice path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, Raspberry Pi health warnings, and OpenClaw handoff readiness guidance
 
 ## License

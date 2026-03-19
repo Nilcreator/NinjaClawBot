@@ -2,6 +2,63 @@
 
 ## 2026-03-20
 
+### pi5mic CLI Import Syntax Fix For `setup` And `mic-tool`
+
+Summary:
+
+- audited the Raspberry Pi traceback showing:
+  - `SyntaxError: unterminated string literal`
+  - import failure in `pi5mic/src/pi5mic/cli/run_cmd.py`
+- confirmed the root cause was a malformed multiline f-string in the OpenClaw
+  delivery-status banner inside `run_cmd`
+- ran a repo-wide Python AST parse sanity check and confirmed that this was the
+  only syntax error in the workspace at the time of the audit
+- simplified the `run` banner rendering so the delivery label is built first and
+  then echoed with one straightforward f-string
+- added a regression test that loads an OpenClaw config and verifies that the
+  `run` command prints the delivery mode correctly before the cycle starts
+- updated the user docs so non-developer Raspberry Pi users can identify this
+  exact error quickly and recover with `git pull`, `uv sync --extra dev`, and a
+  retry of `pi5mic setup`
+
+Files changed:
+
+- [pi5mic/src/pi5mic/cli/run_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/run_cmd.py)
+- [pi5mic/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_cli.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the broken string literal prevented the entire `pi5mic` CLI package from
+  importing, so the user could not open `setup` or `mic-tool` at all
+- because the failure happened during import, it looked like a Raspberry Pi
+  runtime issue even though the real problem was a Python syntax regression
+- the fix needed both a code repair and a regression test so future OpenClaw
+  delivery-label changes do not silently break the CLI entry points again
+
+Lint and test results:
+
+- `python3 -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `69 passed`
+
+Raspberry Pi validation status:
+
+- local validation passed
+- Raspberry Pi follow-up still required:
+  - `cd ~/NinjaClawBot`
+  - `git pull`
+  - `uv sync --extra dev`
+  - `uv run pi5mic --help`
+  - `uv run pi5mic setup`
+  - `uv run pi5mic mic-tool`
+  - confirm both commands open normally without the old syntax traceback
+
 ### pi5mic OpenClaw Dual Reply Delivery And Telegram Route Discovery
 
 Summary:

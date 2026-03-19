@@ -364,3 +364,67 @@ def test_run_command_reports_transcript_and_reply(monkeypatch, tmp_path) -> None
     assert result.exit_code == 0, result.output
     assert "hello ninja" in result.output
     assert "Hello back" in result.output
+
+
+def test_run_command_shows_openclaw_delivery_mode(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    audio_path = tmp_path / "clip.wav"
+    audio_path.write_bytes(b"RIFF")
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "profile": "openclaw",
+  "stt": {
+    "selected": "whisper_cpp"
+  },
+  "integration": {
+    "delivery_mode": "local_plus_explicit_channel_target",
+    "openclaw": {
+      "command": "/usr/local/bin/openclaw",
+      "gateway_url": "ws://127.0.0.1:18789",
+      "agent_id": "main",
+      "session_key": "voice-local-mic",
+      "reply_channel": "telegram",
+      "reply_to": "-1001234567890:topic:42",
+      "reply_account": "default"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        run_cmd_module,
+        "_run_cycle",
+        lambda **kwargs: (
+            TranscriptionResult(
+                text="hello ninja",
+                backend="whisper_cpp",
+                model="ggml-base.bin",
+                language="en",
+            ),
+            DispatchResult(transcript="hello ninja", reply_text="Hello back"),
+            audio_path,
+            False,
+        ),
+    )
+
+    result = runner.invoke(
+        cli,
+        [
+            "--config-file",
+            str(config_path),
+            "run",
+            "--once",
+            "--audio-file",
+            str(audio_path),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        "Delivery: local + explicit channel target (telegram:-1001234567890:topic:42 (account default))"
+        in result.output
+    )
