@@ -310,6 +310,10 @@ def test_doctor_reports_actionable_openclaw_pairing_failure(monkeypatch, tmp_pat
             plugin_enabled=True,
             plugin_allowlisted=True,
             plugin_install_found=True,
+            telegram_enabled=False,
+            telegram_accounts=(),
+            telegram_default_account=None,
+            telegram_reply_target=None,
         ),
     )
     monkeypatch.setattr(
@@ -327,6 +331,98 @@ def test_doctor_reports_actionable_openclaw_pairing_failure(monkeypatch, tmp_pat
     assert result.exit_code != 0
     assert "pairing required" in result.output
     assert "openclaw devices approve --latest" in result.output
+
+
+def test_doctor_fails_when_telegram_delivery_is_configured_but_openclaw_telegram_is_disabled(
+    monkeypatch, tmp_path
+) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "profile": "openclaw",
+  "audio": {
+    "input_device": 0,
+    "sample_rate": 44100,
+    "channels": 1
+  },
+  "stt": {
+    "selected": "whisper_cpp",
+    "whisper_cpp": {
+      "command": "/usr/local/bin/whisper-cli",
+      "model_path": "/models/ggml-base.bin"
+    }
+  },
+  "integration": {
+    "presence_enabled": true,
+    "delivery_mode": "local_plus_explicit_channel_target",
+    "openclaw": {
+      "command": "/usr/local/bin/openclaw",
+      "gateway_url": "ws://127.0.0.1:18789",
+      "agent_id": "main",
+      "session_key": "voice-local-mic",
+      "reply_channel": "telegram",
+      "reply_to": "-1001234567890:topic:42",
+      "reply_account": "default"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor_module, "list_input_devices", lambda: [object()])
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (0, 44_100, None, None),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_whisper_cpp_command",
+        lambda command: Path("/usr/local/bin/whisper-cli"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_model_path",
+        lambda model_path: Path("/models/ggml-base.bin"),
+    )
+    monkeypatch.setattr(doctor_module, "is_raspberry_pi", lambda: False)
+    monkeypatch.setattr(
+        doctor_module,
+        "build_openclaw_transport",
+        lambda config: type("Transport", (), {"command": Path("/usr/local/bin/openclaw")})(),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "discover_openclaw_auto_config",
+        lambda **kwargs: OpenClawAutoConfig(
+            command=Path("/usr/local/bin/openclaw"),
+            config_path=tmp_path / "openclaw.json",
+            gateway_url="ws://127.0.0.1:18789",
+            agent_id="main",
+            session_key="voice-local-mic",
+            gateway_mode="local",
+            gateway_bind="loopback",
+            plugin_enabled=True,
+            plugin_allowlisted=True,
+            plugin_install_found=True,
+            telegram_enabled=False,
+            telegram_accounts=(),
+            telegram_default_account=None,
+            telegram_reply_target=None,
+        ),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "probe_openclaw_voice_ready",
+        lambda **kwargs: ["OpenClaw gateway responded.", "NinjaClawBot presence method responded."],
+    )
+
+    result = runner.invoke(cli, ["--config-file", str(config_path), "doctor"])
+
+    assert result.exit_code != 0
+    assert "configured to mirror replies to Telegram" in result.output
 
 
 def test_install_whispercpp_saves_detected_paths(monkeypatch, tmp_path) -> None:

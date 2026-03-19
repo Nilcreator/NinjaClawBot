@@ -10,7 +10,6 @@ from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
 from pi5mic.core.system_info import is_raspberry_pi
 from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
-from pi5mic.integration.delivery import SUPPORTED_DELIVERY_MODES
 from pi5mic.integration.openclaw_setup import (
     approve_latest_openclaw_pairing,
     discover_openclaw_auto_config,
@@ -24,6 +23,88 @@ from pi5mic.stt.whisper_cpp import recommend_whisper_threads
 from pi5mic.transport.openclaw_cli import find_openclaw_command
 
 from ._common import build_stt_backend, load_manager
+
+
+def _set_local_only_delivery(integration_config: dict, openclaw_config: dict) -> None:
+    integration_config["delivery_mode"] = "local_only"
+    openclaw_config["reply_channel"] = None
+    openclaw_config["reply_to"] = None
+    openclaw_config["reply_account"] = None
+
+
+def _configure_openclaw_delivery(
+    *,
+    integration_config: dict,
+    openclaw_config: dict,
+    discovery,
+) -> None:
+    if discovery.telegram_reply_target is not None:
+        click.echo("\nOpenClaw reply delivery")
+        click.echo(
+            "pi5mic found a Telegram conversation target that OpenClaw can reuse for voice turns."
+        )
+        click.echo(f"Detected Telegram target: {discovery.telegram_reply_target.describe()}")
+        use_telegram = click.confirm(
+            "Ask OpenClaw to reply both here and in Telegram?",
+            default=True,
+        )
+        if use_telegram:
+            integration_config["delivery_mode"] = "local_plus_explicit_channel_target"
+            openclaw_config["reply_channel"] = discovery.telegram_reply_target.channel
+            openclaw_config["reply_to"] = discovery.telegram_reply_target.target
+            openclaw_config["reply_account"] = discovery.telegram_reply_target.account_id
+            click.echo(
+                "pi5mic will keep showing the OpenClaw reply locally and will also ask "
+                "OpenClaw to deliver the same reply to Telegram."
+            )
+            return
+
+        _set_local_only_delivery(integration_config, openclaw_config)
+        click.echo("pi5mic will keep replies local only for now.")
+        return
+
+    if discovery.telegram_enabled:
+        click.echo("\nOpenClaw reply delivery")
+        click.echo(
+            "OpenClaw Telegram is enabled, but pi5mic could not find a recent Telegram "
+            "conversation target to mirror voice replies automatically."
+        )
+        if discovery.telegram_reply_target_error:
+            click.echo(discovery.telegram_reply_target_error)
+        click.echo(
+            "Fastest fix: send one short message to your OpenClaw Telegram bot from the chat "
+            "or topic where you want replies, then rerun `uv run pi5mic setup`."
+        )
+        if click.confirm("Enter a Telegram target manually now?", default=False):
+            target = click.prompt(
+                "Telegram target (chat id or -100...:topic:123)",
+            ).strip()
+            account_default = (
+                discovery.telegram_default_account
+                or str(openclaw_config.get("reply_account") or "").strip()
+            )
+            account = click.prompt(
+                "Telegram account id (leave blank for default account)",
+                default=account_default,
+                show_default=bool(account_default),
+            ).strip()
+            integration_config["delivery_mode"] = "local_plus_explicit_channel_target"
+            openclaw_config["reply_channel"] = "telegram"
+            openclaw_config["reply_to"] = target
+            openclaw_config["reply_account"] = account or None
+            click.echo(
+                "pi5mic saved the manual Telegram target. Test it with `uv run pi5mic doctor` "
+                "before relying on it."
+            )
+            return
+
+    _set_local_only_delivery(integration_config, openclaw_config)
+    if not discovery.telegram_enabled:
+        click.echo(
+            "Replies will stay local because OpenClaw Telegram is not enabled in its config yet."
+        )
+    else:
+        click.echo("Replies will stay local until pi5mic can discover or save a Telegram target.")
 
 
 def _configure_openclaw_profile(config: dict) -> None:
@@ -43,6 +124,9 @@ def _configure_openclaw_profile(config: dict) -> None:
             saved_gateway_url=openclaw_config.get("gateway_url"),
             saved_agent_id=openclaw_config.get("agent_id"),
             saved_session_key=openclaw_config.get("session_key"),
+            saved_reply_channel=openclaw_config.get("reply_channel"),
+            saved_reply_to=openclaw_config.get("reply_to"),
+            saved_reply_account=openclaw_config.get("reply_account"),
         )
     except TransportError as exc:
         detected_openclaw = find_openclaw_command(openclaw_config.get("command"))
@@ -61,33 +145,15 @@ def _configure_openclaw_profile(config: dict) -> None:
     openclaw_config["agent_id"] = discovery.agent_id
     openclaw_config["session_key"] = discovery.session_key
 
-    delivery_mode = str(integration_config.get("delivery_mode", "local_only"))
-    if delivery_mode not in SUPPORTED_DELIVERY_MODES:
-        delivery_mode = "local_only"
-    if delivery_mode == "local_plus_explicit_channel_target":
-        reply_channel = str(openclaw_config.get("reply_channel") or "").strip()
-        reply_to = str(openclaw_config.get("reply_to") or "").strip()
-        if not reply_channel or not reply_to:
-            click.echo(
-                "OpenClaw reply mirroring was incomplete, so pi5mic switched back to the "
-                "safer `local_only` delivery mode."
-            )
-            delivery_mode = "local_only"
-    integration_config["delivery_mode"] = delivery_mode
-    if delivery_mode == "local_only":
-        openclaw_config["reply_channel"] = None
-        openclaw_config["reply_to"] = None
-        openclaw_config["reply_account"] = None
-
     click.echo("\nDetected OpenClaw settings:")
     for line in summarize_openclaw_auto_config(discovery):
         click.echo(f"  - {line}")
 
-    if delivery_mode == "local_only":
-        click.echo(
-            "Replies will stay local to OpenClaw by default. You can enable channel mirroring "
-            "later by editing `mic.json` or rerunning setup."
-        )
+    _configure_openclaw_delivery(
+        integration_config=integration_config,
+        openclaw_config=openclaw_config,
+        discovery=discovery,
+    )
 
     if discovery.plugin_ready:
         return

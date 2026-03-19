@@ -560,14 +560,19 @@ What `pi5mic` now does automatically in OpenClaw mode:
 - fills in the gateway URL, agent id, and session key automatically
 - automatically repairs the old legacy value `voice:local-mic` to the current
   safe OpenClaw session id `voice-local-mic`
-- keeps the safer `local_only` reply delivery mode unless you already finished a
-  more advanced reply target setup
+- checks whether OpenClaw Telegram is enabled
+- looks for the most recent Telegram chat or topic target from OpenClaw session
+  data when Telegram is enabled
+- asks whether you want each voice turn to reply both locally and in Telegram
+- saves the detected Telegram reply target if you answer `y`
 - explains whether the NinjaClawBot plugin looks ready
 - runs a safe readiness check after saving the config
 
 What you should expect:
 
 - a summary of the detected OpenClaw settings
+- if OpenClaw already knows a recent Telegram route, the wizard shows it and
+  asks whether it should mirror replies there too
 - `Configured STT backend looks ready.` if the selected STT backend is usable
 - then either:
   - `OpenClaw voice handoff is ready.`
@@ -609,6 +614,7 @@ What this is doing:
 - checks the saved OpenClaw profile
 - confirms the gateway is reachable
 - confirms the voice handoff path is ready
+- shows whether replies are local only or local plus Telegram
 - records one clip, transcribes it, and sends the transcript into OpenClaw
 
 What you should expect:
@@ -617,6 +623,8 @@ What you should expect:
   result
 - `run --once` shows the transcript and, in OpenClaw mode, the OpenClaw reply
   text
+- if you enabled Telegram mirroring during setup, the same voice turn should
+  also appear in the detected Telegram chat or topic
 
 ## 6. Optional Gemini Setup
 
@@ -797,6 +805,38 @@ What you should expect after the fix:
 - `pi5mic doctor` should stop failing on pairing
 - `uv run pi5mic run --once` should record, transcribe, and print the OpenClaw
   reply text
+
+### OpenClaw reply stays local instead of Telegram
+
+If `pi5mic` records correctly and OpenClaw replies in the terminal, but nothing
+appears in Telegram, it usually means:
+
+- OpenClaw Telegram is enabled, but `pi5mic` does not yet have a concrete
+  Telegram reply target saved
+- or the saved Telegram target is stale and points at an older chat or topic
+
+The easiest recovery path is:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+
+- choose `Profile: openclaw`
+- if you want a specific Telegram chat or forum topic, send one short message
+  to your OpenClaw bot there first
+- answer `y` when setup asks:
+  - `Ask OpenClaw to reply both here and in Telegram?`
+
+What you should expect after the fix:
+
+- `pi5mic status` shows a `Reply target:` line
+- `pi5mic doctor` shows either the detected Telegram target or a clear warning
+  about why it could not be found
+- `uv run pi5mic run --once` shows the OpenClaw reply locally and the same turn
+  should also appear in Telegram
 
 ## 10. Common Problem: OpenClaw says `Invalid session ID`
 

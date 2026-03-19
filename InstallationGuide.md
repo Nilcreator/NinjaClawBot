@@ -565,6 +565,10 @@ Expected result:
   id, and session key when possible
 - if an older `mic.json` still uses the legacy value `voice:local-mic`,
   `pi5mic` now repairs it automatically to `voice-local-mic`
+- if OpenClaw Telegram is enabled, `pi5mic` looks for the most recent Telegram
+  chat or topic target from OpenClaw session data
+- if a Telegram target is found, the wizard asks whether OpenClaw should reply
+  both locally and in Telegram for voice turns
 - it prints a short summary of the detected OpenClaw settings
 - it prints either `Configured STT backend looks ready.` or a clear warning
   about what is still missing
@@ -593,7 +597,9 @@ Expected result:
 - if the profile is `openclaw`, `doctor` also checks:
   - the OpenClaw command
   - the detected OpenClaw config file
+  - whether OpenClaw Telegram is enabled
   - the delivery mode
+  - the saved reply target when Telegram mirroring is enabled
   - the gateway readiness path
 - success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
 
@@ -608,12 +614,16 @@ Purpose:
 - record one short clip
 - transcribe it with the selected backend
 - if the profile is `openclaw`, hand the transcript to OpenClaw and print the reply locally
+- if Telegram mirroring is enabled, ask OpenClaw to send the same reply back to
+  Telegram too
 
 Expected result:
 
 - `pi5mic doctor` reports the selected backend and any missing dependency clearly
 - `pi5mic run --once` records one clip, transcribes it, and prints the transcript locally
 - if the profile is `openclaw`, the command also submits the transcript to OpenClaw and prints the reply locally
+- if setup enabled dual delivery, the same reply should also appear in the
+  detected Telegram chat or topic
 
 ### 9.5.8 If OpenClaw says `pairing required`
 
@@ -646,6 +656,42 @@ uv run pi5mic run --once
 Expected result after the fix:
 - `pi5mic doctor` should stop failing on pairing
 - `uv run pi5mic run --once` should print both the transcript and the OpenClaw reply
+
+### 9.5.9 If the OpenClaw reply only appears locally
+
+What this means:
+- recording and transcription worked
+- OpenClaw handled the voice turn
+- but `pi5mic` is still in `local_only` mode or does not have a Telegram reply
+  target saved yet
+
+Recommended fix:
+
+1. Send one short message to your OpenClaw bot in the Telegram chat or topic
+   where you want voice replies to appear.
+2. Rerun:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+3. Choose `Profile: openclaw`.
+4. Answer `y` if setup asks:
+   - `Ask OpenClaw to reply both here and in Telegram?`
+5. Verify:
+
+```bash
+uv run pi5mic status
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+Expected result:
+- `status` shows a `Reply target:` line
+- `doctor` shows the OpenClaw delivery mode and any detected Telegram target
+- `run --once` prints the reply locally and the same turn should also appear in
+  Telegram
 
 Need help later?
 - [Appendix D: Local test help](#appendix-d-local-test-help)

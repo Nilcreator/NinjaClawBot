@@ -95,7 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, OpenClaw auto-setup with pairing guidance, and automatic legacy session-id migration
+- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, OpenClaw auto-setup with pairing guidance, automatic legacy session-id migration, and optional local-plus-Telegram voice reply mirroring
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer
@@ -231,7 +231,7 @@ This project is licensed under the **MIT License**.
 - `pi5servo`: キャリブレーション、モーション制御、`servo-tool`
 - `pi5disp`: 画面初期化、描画、`display-tool`
 - `pi5buzzer`: 音再生、`buzzer-tool`
-- `pi5mic`: マイク録音、Raspberry Pi 向けに安全寄りにした `whisper.cpp` 既定値、任意の Gemini STT、`mic-tool`
+- `pi5mic`: マイク録音、Raspberry Pi 向けに安全寄りにした `whisper.cpp` 既定値、任意の Gemini STT、`mic-tool`、OpenClaw のローカル＋Telegram 音声返信ミラー
 - `pi5vl53l0x`: センサー読み取り、`sensor-tool`
 
 ### 統合ロボットレイヤー
@@ -360,7 +360,7 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 - `pi5servo`: 校正、動作控制、`servo-tool`
 - `pi5disp`: 顯示初始化、畫面測試、`display-tool`
 - `pi5buzzer`: 聲音播放、`buzzer-tool`
-- `pi5mic`: 麥克風錄音、較安全的 Raspberry Pi `whisper.cpp` 預設值、可選 Gemini STT、`mic-tool`
+- `pi5mic`: 麥克風錄音、較安全的 Raspberry Pi `whisper.cpp` 預設值、可選 Gemini STT、`mic-tool`，以及 OpenClaw 本地加 Telegram 的語音回覆鏡像
 - `pi5vl53l0x`: 感測器讀值、`sensor-tool`
 
 ### 整合式機器人層

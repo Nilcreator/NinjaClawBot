@@ -2,6 +2,84 @@
 
 ## 2026-03-20
 
+### pi5mic OpenClaw Dual Reply Delivery And Telegram Route Discovery
+
+Summary:
+
+- reviewed the latest Raspberry Pi validation result after the OpenClaw handoff
+  fixes
+- confirmed the remaining behavior gap:
+  - `pi5mic` could record, transcribe, and hand the text to OpenClaw
+  - the local terminal showed the OpenClaw reply
+  - Telegram did not receive the same reply for voice-triggered turns
+- verified against the current OpenClaw docs and source that:
+  - `openclaw agent` can both print locally and deliver outbound replies when
+    `--deliver` is used
+  - Telegram delivery needs a concrete target such as a chat id or topic target
+  - the safest way to discover that target is from OpenClaw session metadata
+- refined `pi5mic` so OpenClaw mode now:
+  - inspects the local OpenClaw config to see whether Telegram is enabled
+  - probes recent OpenClaw session data for the newest Telegram reply target
+  - offers a one-step setup choice to reply both locally and in Telegram
+  - saves the explicit Telegram reply target into `mic.json` when the user
+    approves it
+- improved runtime visibility so:
+  - `status` now shows the saved reply target
+  - `doctor` now shows Telegram enablement, detected targets, and delivery-mode
+    mismatches clearly
+  - `run --once` now prints the current delivery mode at the start
+- updated the user docs so the OpenClaw + Telegram voice path is explained in
+  plain language, including the recovery path when replies still stay local
+
+Files changed:
+
+- [pi5mic/src/pi5mic/integration/openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration/openclaw_setup.py)
+- [pi5mic/src/pi5mic/integration/delivery.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/integration/delivery.py)
+- [pi5mic/src/pi5mic/cli/setup_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/setup_cmd.py)
+- [pi5mic/src/pi5mic/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/doctor.py)
+- [pi5mic/src/pi5mic/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/status.py)
+- [pi5mic/src/pi5mic/cli/run_cmd.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/run_cmd.py)
+- [pi5mic/tests/test_openclaw_setup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_openclaw_setup.py)
+- [pi5mic/tests/test_cli.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_cli.py)
+- [pi5mic/tests/test_doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_doctor.py)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the previous OpenClaw setup work made local voice handoff reliable, but it
+  still defaulted to local-only replies
+- for the real Raspberry Pi workflow, the user wanted the same voice turn to
+  show a local terminal reply and also appear in Telegram
+- this needed an explicit OpenClaw delivery target, not just more plugin-side
+  logic
+
+Lint and test results:
+
+- `cd pi5mic && uv run --extra dev python -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `68 passed`
+
+Raspberry Pi validation status:
+
+- local package validation passed
+- Raspberry Pi follow-up still required:
+  - send one short Telegram message to the OpenClaw bot in the chat or topic
+    that should receive voice replies
+  - rerun `uv run pi5mic setup` and answer `y` when asked to reply both locally
+    and in Telegram
+  - rerun `uv run pi5mic status`
+  - rerun `uv run pi5mic doctor`
+  - rerun `uv run pi5mic run --once`
+  - confirm the reply appears both:
+    - in the local terminal output
+    - in the chosen Telegram chat or topic
+
 ### pi5mic OpenClaw Session-ID Migration Fix
 
 Summary:

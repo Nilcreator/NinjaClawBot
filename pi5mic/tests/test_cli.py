@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 from pi5mic.__main__ import cli
 from pi5mic.errors import IntegrationError
-from pi5mic.integration.openclaw_setup import OpenClawAutoConfig
+from pi5mic.integration.openclaw_setup import OpenClawAutoConfig, OpenClawReplyTarget
 from pi5mic.models import AudioDeviceInfo, DispatchResult, RecordedClip, TranscriptionResult
 
 status_module = importlib.import_module("pi5mic.cli.status")
@@ -108,6 +108,39 @@ def test_status_command_reports_device_count(monkeypatch) -> None:
     assert "Default device:   2" in result.output
 
 
+def test_status_command_shows_openclaw_reply_target(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "profile": "openclaw",
+  "integration": {
+    "delivery_mode": "local_plus_explicit_channel_target",
+    "openclaw": {
+      "command": "/usr/local/bin/openclaw",
+      "gateway_url": "ws://127.0.0.1:18789",
+      "agent_id": "main",
+      "session_key": "voice-local-mic",
+      "reply_channel": "telegram",
+      "reply_to": "-1001234567890:topic:42",
+      "reply_account": "default"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(status_module, "list_input_devices", lambda: [])
+    monkeypatch.setattr(status_module, "get_default_input_device", lambda: None)
+
+    result = runner.invoke(cli, ["--config-file", str(config_path), "status"])
+
+    assert result.exit_code == 0, result.output
+    assert "Delivery mode:    local + explicit channel target" in result.output
+    assert "Reply target:     telegram:-1001234567890:topic:42 (account default)" in result.output
+
+
 def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     monkeypatch.setattr(
@@ -177,6 +210,17 @@ def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, 
         plugin_enabled=True,
         plugin_allowlisted=True,
         plugin_install_found=True,
+        telegram_enabled=True,
+        telegram_accounts=("default",),
+        telegram_default_account="default",
+        telegram_reply_target=OpenClawReplyTarget(
+            channel="telegram",
+            target="-1001234567890:topic:42",
+            account_id="default",
+            source_session_key="agent:main:telegram:direct:12345",
+            updated_at=1_700_000_000_000,
+            source="gateway sessions.list",
+        ),
     )
     probe_calls = {"count": 0}
 
@@ -228,6 +272,7 @@ def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, 
             "2",
             "12",
             "y",
+            "y",
         ]
     )
 
@@ -243,6 +288,9 @@ def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, 
     assert discovered.gateway_url in saved
     assert discovered.agent_id in saved
     assert discovered.session_key in saved
+    assert '"delivery_mode": "local_plus_explicit_channel_target"' in saved
+    assert '"reply_channel": "telegram"' in saved
+    assert '"reply_to": "-1001234567890:topic:42"' in saved
     assert "Approve the newest local OpenClaw device request now?" in result.output
     assert "Approved the latest OpenClaw device request." in result.output
     assert "OpenClaw voice handoff is ready." in result.output

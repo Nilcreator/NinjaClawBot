@@ -16,7 +16,7 @@ from pi5mic.core.system_info import (
 )
 from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
 from pi5mic.install.whisper_cpp import resolve_model_path, resolve_whisper_cpp_command
-from pi5mic.integration.delivery import describe_delivery_mode
+from pi5mic.integration.delivery import describe_delivery_mode, format_reply_target
 from pi5mic.integration.openclaw_setup import (
     discover_openclaw_auto_config,
     explain_openclaw_error,
@@ -149,15 +149,22 @@ def doctor(ctx: click.Context) -> None:
 
     if config["profile"] == "openclaw":
         openclaw_config = config["integration"]["openclaw"]
+        delivery_mode = str(config["integration"].get("delivery_mode", "local_only"))
+        configured_reply_target = format_reply_target(
+            openclaw_config.get("reply_channel"),
+            openclaw_config.get("reply_to"),
+            reply_account=openclaw_config.get("reply_account"),
+        )
         try:
             transport = build_openclaw_transport(config)
             click.echo(f"OK   OpenClaw command:  {transport.command}")
             click.echo(
                 "OK   OpenClaw delivery: "
                 + describe_delivery_mode(
-                    str(config["integration"].get("delivery_mode", "local_only")),
+                    delivery_mode,
                     reply_channel=openclaw_config.get("reply_channel"),
                     reply_to=openclaw_config.get("reply_to"),
+                    reply_account=openclaw_config.get("reply_account"),
                 )
             )
             discovery = discover_openclaw_auto_config(
@@ -165,6 +172,9 @@ def doctor(ctx: click.Context) -> None:
                 saved_gateway_url=openclaw_config.get("gateway_url"),
                 saved_agent_id=openclaw_config.get("agent_id"),
                 saved_session_key=openclaw_config.get("session_key"),
+                saved_reply_channel=openclaw_config.get("reply_channel"),
+                saved_reply_to=openclaw_config.get("reply_to"),
+                saved_reply_account=openclaw_config.get("reply_account"),
             )
             config_display = (
                 str(discovery.config_path)
@@ -172,6 +182,62 @@ def doctor(ctx: click.Context) -> None:
                 else "not found (using pi5mic saved values/defaults)"
             )
             click.echo(f"OK   OpenClaw config:   {config_display}")
+            click.echo(
+                "OK   OpenClaw telegram: "
+                + ("enabled" if discovery.telegram_enabled else "not enabled")
+            )
+            if discovery.telegram_reply_target is not None:
+                click.echo("OK   Telegram target:  " + discovery.telegram_reply_target.describe())
+            elif discovery.telegram_enabled:
+                warnings.append(
+                    "OpenClaw Telegram is enabled, but pi5mic could not detect a recent Telegram "
+                    "chat or topic target yet. Send one short Telegram message to the bot, then "
+                    "rerun `uv run pi5mic setup` to mirror voice replies there."
+                )
+                if discovery.telegram_reply_target_error:
+                    warnings.append(discovery.telegram_reply_target_error)
+
+            if delivery_mode == "local_plus_explicit_channel_target":
+                if not configured_reply_target:
+                    failures.append(
+                        "OpenClaw delivery is set to local+channel, but pi5mic does not have a "
+                        "complete reply target saved."
+                    )
+                elif (
+                    not discovery.telegram_enabled
+                    and str(openclaw_config.get("reply_channel")) == "telegram"
+                ):
+                    failures.append(
+                        "pi5mic is configured to mirror replies to Telegram, but OpenClaw "
+                        "Telegram is not enabled in openclaw.json."
+                    )
+                else:
+                    click.echo(f"OK   Saved reply target: {configured_reply_target}")
+                    discovered_target = (
+                        format_reply_target(
+                            discovery.telegram_reply_target.channel,
+                            discovery.telegram_reply_target.target,
+                            reply_account=discovery.telegram_reply_target.account_id,
+                        )
+                        if discovery.telegram_reply_target is not None
+                        else None
+                    )
+                    if (
+                        discovered_target
+                        and configured_reply_target != discovered_target
+                        and str(openclaw_config.get("reply_channel")) == "telegram"
+                    ):
+                        warnings.append(
+                            "OpenClaw's latest Telegram route differs from the reply target saved "
+                            "in pi5mic. If replies are going to the wrong chat, rerun "
+                            "`uv run pi5mic setup` to switch to the current Telegram target."
+                        )
+            elif discovery.telegram_reply_target is not None:
+                warnings.append(
+                    "OpenClaw already has a Telegram reply target available, but pi5mic is still "
+                    "set to local-only delivery. Rerun `uv run pi5mic setup` if you want each "
+                    "voice turn to reply both locally and in Telegram."
+                )
             if not discovery.plugin_ready:
                 warnings.append(
                     "The local OpenClaw config does not yet look fully ready for the "

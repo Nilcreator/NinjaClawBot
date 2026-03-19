@@ -17,6 +17,7 @@ from pi5mic.errors import (
     STTError,
     TransportError,
 )
+from pi5mic.integration.delivery import describe_delivery_mode
 from pi5mic.integration.openclaw_setup import explain_openclaw_error
 from pi5mic.models import DispatchResult, RecorderSettings, TranscriptionResult
 
@@ -198,6 +199,19 @@ def run_cmd(
     config = manager.config
     click.echo(f"Profile: {config['profile']}")
     click.echo(f"STT:     {config['stt']['selected']}")
+    if str(config.get("profile")) == "openclaw":
+        openclaw_config = config["integration"]["openclaw"]
+        click.echo(
+            "Delivery:"
+            f" {
+                describe_delivery_mode(
+                    str(config['integration'].get('delivery_mode', 'local_only')),
+                    reply_channel=openclaw_config.get('reply_channel'),
+                    reply_to=openclaw_config.get('reply_to'),
+                    reply_account=openclaw_config.get('reply_account'),
+                )
+            }"
+        )
 
     while True:
         if not once:

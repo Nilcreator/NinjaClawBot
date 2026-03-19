@@ -16,6 +16,7 @@ from pi5mic.integration.openclaw_session import (
 from pi5mic.integration.presence import OpenClawPresenceController
 from pi5mic.transport.openclaw_cli import (
     build_gateway_cli_args,
+    parse_json_output,
     resolve_openclaw_command,
 )
 
@@ -23,6 +24,29 @@ DEFAULT_OPENCLAW_CONFIG_PATH = Path.home() / ".openclaw" / "openclaw.json"
 DEFAULT_GATEWAY_URL = "ws://127.0.0.1:18789"
 DEFAULT_AGENT_ID = "main"
 DEFAULT_SESSION_KEY = DEFAULT_OPENCLAW_SESSION_ID
+
+
+@dataclass(frozen=True, slots=True)
+class OpenClawReplyTarget:
+    """A concrete outbound reply target that pi5mic can hand back to OpenClaw."""
+
+    channel: str
+    target: str
+    account_id: str | None = None
+    source_session_key: str | None = None
+    updated_at: int | None = None
+    source: str = "saved"
+
+    def describe(self) -> str:
+        """Return a short user-facing description of the reply target."""
+        parts = [f"{self.channel}:{self.target}"]
+        if self.account_id:
+            parts.append(f"account={self.account_id}")
+        if self.source_session_key:
+            parts.append(f"session={self.source_session_key}")
+        if self.source:
+            parts.append(f"source={self.source}")
+        return " | ".join(parts)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +63,11 @@ class OpenClawAutoConfig:
     plugin_enabled: bool
     plugin_allowlisted: bool
     plugin_install_found: bool
+    telegram_enabled: bool
+    telegram_accounts: tuple[str, ...]
+    telegram_default_account: str | None
+    telegram_reply_target: OpenClawReplyTarget | None
+    telegram_reply_target_error: str | None = None
     used_defaults: tuple[str, ...] = ()
 
     @property
@@ -77,6 +106,9 @@ def discover_openclaw_auto_config(
     saved_gateway_url: str | None = None,
     saved_agent_id: str | None = None,
     saved_session_key: str | None = None,
+    saved_reply_channel: str | None = None,
+    saved_reply_to: str | None = None,
+    saved_reply_account: str | None = None,
 ) -> OpenClawAutoConfig:
     """Read the local OpenClaw config and derive a ready-to-use pi5mic profile."""
     resolved_command = resolve_openclaw_command(command)
@@ -119,6 +151,16 @@ def discover_openclaw_auto_config(
         used_defaults.append("session_key")
 
     plugin_enabled, plugin_allowlisted, plugin_install_found = _detect_plugin_state(payload)
+    telegram_enabled, telegram_accounts, telegram_default_account = _detect_telegram_state(payload)
+    telegram_reply_target, telegram_reply_target_error = _discover_telegram_reply_target(
+        command=resolved_command,
+        gateway_url=gateway_url,
+        agent_id=agent_id,
+        telegram_enabled=telegram_enabled,
+        saved_reply_channel=saved_reply_channel,
+        saved_reply_to=saved_reply_to,
+        saved_reply_account=saved_reply_account,
+    )
 
     return OpenClawAutoConfig(
         command=resolved_command,
@@ -131,6 +173,11 @@ def discover_openclaw_auto_config(
         plugin_enabled=plugin_enabled,
         plugin_allowlisted=plugin_allowlisted,
         plugin_install_found=plugin_install_found,
+        telegram_enabled=telegram_enabled,
+        telegram_accounts=telegram_accounts,
+        telegram_default_account=telegram_default_account,
+        telegram_reply_target=telegram_reply_target,
+        telegram_reply_target_error=telegram_reply_target_error,
         used_defaults=tuple(dict.fromkeys(used_defaults)),
     )
 
@@ -150,6 +197,17 @@ def summarize_openclaw_auto_config(discovery: OpenClawAutoConfig) -> list[str]:
         f"Gateway mode: {discovery.gateway_mode}",
         f"NinjaClawBot plugin: {plugin_state}",
     ]
+    if discovery.telegram_enabled:
+        accounts = (
+            ", ".join(discovery.telegram_accounts) if discovery.telegram_accounts else "default"
+        )
+        lines.append(f"Telegram channel: enabled ({accounts})")
+        if discovery.telegram_reply_target is not None:
+            lines.append("Telegram reply target: " + discovery.telegram_reply_target.describe())
+        else:
+            lines.append("Telegram reply target: not detected yet")
+    else:
+        lines.append("Telegram channel: not enabled in OpenClaw config")
     if discovery.used_defaults:
         lines.append("Defaults used for: " + ", ".join(discovery.used_defaults))
     return lines
@@ -195,6 +253,13 @@ def explain_openclaw_error(message: str) -> str:
         return (
             f"{message} The configured OpenClaw agent id does not exist. Check "
             "`openclaw config get agents.list` and rerun `uv run pi5mic setup`."
+        )
+
+    if "unknown channel" in normalized or "delivery channel is required" in normalized:
+        return (
+            f"{message} pi5mic could not determine a Telegram reply target for this voice session. "
+            "Send one short Telegram message to your OpenClaw bot, then rerun "
+            "`uv run pi5mic setup` so pi5mic can reuse that Telegram route automatically."
         )
 
     return message
@@ -340,3 +405,235 @@ def _detect_plugin_state(payload: dict[str, Any]) -> tuple[bool, bool, bool]:
     plugin_install_found = path_found or "ninjaclawbot" in install_config
 
     return plugin_enabled, plugin_allowlisted, plugin_install_found
+
+
+def _detect_telegram_state(payload: dict[str, Any]) -> tuple[bool, tuple[str, ...], str | None]:
+    channels = payload.get("channels")
+    channels_config = channels if isinstance(channels, dict) else {}
+
+    telegram = channels_config.get("telegram")
+    telegram_config = telegram if isinstance(telegram, dict) else {}
+    enabled = bool(telegram_config.get("enabled", False))
+
+    accounts = telegram_config.get("accounts")
+    if isinstance(accounts, dict):
+        account_ids = tuple(
+            key.strip() for key in accounts.keys() if isinstance(key, str) and key.strip()
+        )
+    else:
+        account_ids = ()
+
+    bot_token = str(telegram_config.get("botToken", "")).strip()
+    if bot_token and not account_ids:
+        account_ids = ("default",)
+
+    default_account = None
+    if "default" in account_ids:
+        default_account = "default"
+    elif len(account_ids) == 1:
+        default_account = account_ids[0]
+
+    return enabled, account_ids, default_account
+
+
+def _run_openclaw_json_command(
+    command: list[str],
+    *,
+    timeout_seconds: int,
+    error_prefix: str,
+) -> dict[str, Any]:
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TransportError(f"{error_prefix} timed out.") from exc
+    except OSError as exc:
+        raise TransportError(f"Could not start the OpenClaw CLI: {exc}") from exc
+
+    if result.returncode != 0:
+        stderr = result.stderr.strip() or result.stdout.strip() or "unknown error"
+        raise TransportError(f"{error_prefix} failed: {stderr}")
+    return parse_json_output(result.stdout)
+
+
+def _extract_sessions_from_payload(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates = [payload]
+    result = payload.get("result")
+    if isinstance(result, dict):
+        candidates.append(result)
+
+    for candidate in candidates:
+        sessions = candidate.get("sessions")
+        if isinstance(sessions, list):
+            return [item for item in sessions if isinstance(item, dict)]
+    return []
+
+
+def _coerce_updated_at(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    if isinstance(value, str) and value.strip():
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _reply_target_from_session_row(
+    row: dict[str, Any],
+    *,
+    source: str,
+) -> OpenClawReplyTarget | None:
+    delivery_context = row.get("deliveryContext")
+    context = delivery_context if isinstance(delivery_context, dict) else {}
+
+    channel = str(context.get("channel") or row.get("lastChannel") or "").strip().lower()
+    if channel != "telegram":
+        return None
+
+    target = str(context.get("to") or row.get("lastTo") or "").strip()
+    if not target:
+        return None
+
+    account_id = str(context.get("accountId") or row.get("lastAccountId") or "").strip() or None
+    source_session_key = str(row.get("key", "")).strip() or None
+    updated_at = _coerce_updated_at(row.get("updatedAt"))
+    return OpenClawReplyTarget(
+        channel="telegram",
+        target=target,
+        account_id=account_id,
+        source_session_key=source_session_key,
+        updated_at=updated_at,
+        source=source,
+    )
+
+
+def _pick_latest_reply_target(targets: list[OpenClawReplyTarget]) -> OpenClawReplyTarget | None:
+    if not targets:
+        return None
+    return max(targets, key=lambda item: item.updated_at or -1)
+
+
+def _discover_reply_target_via_gateway(
+    *,
+    command: Path,
+    gateway_url: str,
+    agent_id: str,
+) -> OpenClawReplyTarget | None:
+    payload = _run_openclaw_json_command(
+        [
+            str(command),
+            "gateway",
+            "call",
+            "sessions.list",
+            "--params",
+            json.dumps(
+                {
+                    "agentId": agent_id,
+                    "limit": 50,
+                    "includeGlobal": False,
+                    "includeUnknown": False,
+                }
+            ),
+            *build_gateway_cli_args(gateway_url),
+        ],
+        timeout_seconds=20,
+        error_prefix="OpenClaw sessions.list probe",
+    )
+    rows = _extract_sessions_from_payload(payload)
+    targets = [
+        target
+        for row in rows
+        if (target := _reply_target_from_session_row(row, source="gateway sessions.list"))
+        is not None
+    ]
+    return _pick_latest_reply_target(targets)
+
+
+def _discover_reply_target_via_sessions_cli(
+    *,
+    command: Path,
+    agent_id: str,
+) -> OpenClawReplyTarget | None:
+    payload = _run_openclaw_json_command(
+        [str(command), "sessions", "--agent", agent_id, "--json"],
+        timeout_seconds=20,
+        error_prefix="OpenClaw sessions probe",
+    )
+    rows = _extract_sessions_from_payload(payload)
+    targets = [
+        target
+        for row in rows
+        if (target := _reply_target_from_session_row(row, source="sessions --json")) is not None
+    ]
+    return _pick_latest_reply_target(targets)
+
+
+def _build_saved_reply_target(
+    *,
+    reply_channel: str | None,
+    reply_to: str | None,
+    reply_account: str | None,
+) -> OpenClawReplyTarget | None:
+    channel = str(reply_channel or "").strip().lower()
+    target = str(reply_to or "").strip()
+    if channel != "telegram" or not target:
+        return None
+    account_id = str(reply_account or "").strip() or None
+    return OpenClawReplyTarget(
+        channel="telegram",
+        target=target,
+        account_id=account_id,
+        source="saved pi5mic config",
+    )
+
+
+def _discover_telegram_reply_target(
+    *,
+    command: Path,
+    gateway_url: str,
+    agent_id: str,
+    telegram_enabled: bool,
+    saved_reply_channel: str | None,
+    saved_reply_to: str | None,
+    saved_reply_account: str | None,
+) -> tuple[OpenClawReplyTarget | None, str | None]:
+    saved_target = _build_saved_reply_target(
+        reply_channel=saved_reply_channel,
+        reply_to=saved_reply_to,
+        reply_account=saved_reply_account,
+    )
+    if not telegram_enabled:
+        return saved_target, None
+
+    discovery_errors: list[str] = []
+    for strategy in (
+        lambda: _discover_reply_target_via_gateway(
+            command=command, gateway_url=gateway_url, agent_id=agent_id
+        ),
+        lambda: _discover_reply_target_via_sessions_cli(command=command, agent_id=agent_id),
+    ):
+        try:
+            target = strategy()
+        except TransportError as exc:
+            discovery_errors.append(str(exc))
+            continue
+        if target is not None:
+            return target, None
+
+    if saved_target is not None:
+        return saved_target, None
+
+    if discovery_errors:
+        return None, explain_openclaw_error(discovery_errors[0])
+    return None, None

@@ -6,7 +6,7 @@ import click
 
 from pi5mic.core.devices import get_default_input_device, list_input_devices
 from pi5mic.errors import ConfigError, DeviceError, STTError
-from pi5mic.integration.delivery import describe_delivery_mode
+from pi5mic.integration.delivery import describe_delivery_mode, format_reply_target
 from pi5mic.stt.gemini import resolve_gemini_api_key
 from pi5mic.stt.whisper_cpp import describe_whisper_runtime
 
@@ -61,8 +61,16 @@ def status(ctx: click.Context) -> None:
                 str(config["integration"].get("delivery_mode", "local_only")),
                 reply_channel=openclaw_config.get("reply_channel"),
                 reply_to=openclaw_config.get("reply_to"),
+                reply_account=openclaw_config.get("reply_account"),
             )
         )
+        reply_target = format_reply_target(
+            openclaw_config.get("reply_channel"),
+            openclaw_config.get("reply_to"),
+            reply_account=openclaw_config.get("reply_account"),
+        )
+        if reply_target:
+            click.echo(f"  Reply target:     {reply_target}")
 
     try:
         devices = list_input_devices()

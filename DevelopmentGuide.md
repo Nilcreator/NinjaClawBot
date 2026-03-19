@@ -306,7 +306,7 @@ What each README is best for:
 - `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
 - `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
 - `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
-- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, and OpenClaw auto-setup
+- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, OpenClaw auto-setup, and optional local-plus-Telegram voice reply mirroring
 - `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
 
 ## Validated Runtime Model
@@ -316,7 +316,7 @@ The final validated build is hybrid. That matters for future development.
 ### What owns what
 
 - Standalone driver libraries own direct hardware behavior
-- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, and the preview OpenClaw voice handoff
+- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, Telegram reply-target discovery for voice turns, and the preview OpenClaw voice handoff
 - `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
 - the OpenClaw plugin owns the persistent bridge and the operator-facing tool surface
 - startup greeting is validated through:
@@ -802,6 +802,11 @@ uv run ninjaclawbot health-check
   - workspace `AGENTS.md`
   - `ninjaclawbot_control` skill
   - allowlist contains `ninjaclawbot_reply`
+- if this happened on a `pi5mic` voice turn:
+  - rerun `uv run pi5mic status`
+  - confirm it shows a `Reply target:` line
+  - if it does not, send one short Telegram message to the OpenClaw bot in the
+    desired chat or topic, then rerun `uv run pi5mic setup`
 - the correct behavior is:
   - robot animation first
   - normal visible text reply after that
