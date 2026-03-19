@@ -1,5 +1,76 @@
 # Development Log
 
+## 2026-03-20
+
+### pi5mic Gemini Default Dependency And OpenClaw Doctor Crash Fix
+
+Summary:
+
+- reviewed the latest Raspberry Pi validation report:
+  - standalone Whisper passed
+  - standalone Gemini passed
+  - OpenClaw Whisper passed
+  - OpenClaw Gemini failed in `mic-tool -> doctor`
+- identified the direct root cause of the OpenClaw Gemini doctor crash:
+  - `doctor` used `importlib.util.find_spec("google.genai")`
+  - on environments where the parent `google` package is missing, that call can
+    raise `ModuleNotFoundError` instead of returning `None`
+  - because that exception was not caught, `doctor` crashed instead of showing a
+    normal configuration failure
+- fixed the Gemini doctor path so missing SDK discovery now fails gracefully
+- changed package installation behavior so Gemini support is now installed by
+  default:
+  - `pi5mic` now depends on `google-genai` directly
+  - the NinjaClawBot root workspace install now also lists `google-genai`
+    explicitly
+  - users no longer need `--extra gemini` for the normal workspace path
+- updated the docs so the current operator flow is now:
+  - `uv sync --extra dev`
+  - build/register `whisper.cpp` if using local STT
+  - export `GEMINI_API_KEY` or `GOOGLE_API_KEY` if using Gemini
+  - run `pi5mic setup`, `doctor`, and `run --once`
+- expanded the installation guide section `9.5` into a clearer step-by-step
+  `pi5mic` path for running inside the NinjaClawBot project
+
+Files changed:
+
+- [pi5mic/src/pi5mic/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/src/pi5mic/cli/doctor.py)
+- [pi5mic/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/pyproject.toml)
+- [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml)
+- [pi5mic/tests/test_doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/tests/test_doctor.py)
+- [pi5mic/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5mic/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the latest Raspberry Pi result showed that the main remaining gap was no
+  longer STT correctness but packaging and operator experience
+- Gemini is part of the intended supported voice path now, so making it install
+  by default removes an unnecessary setup branch and aligns the docs with the
+  real recommended workflow
+
+Validation:
+
+- `uv lock`
+- `cd pi5mic && uv run --extra dev python -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `uv run --extra dev python -m compileall src ninjaclawbot/src pi5mic/src`
+- `uv run --extra dev ruff check .`
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- previous field result already confirmed:
+  - standalone Whisper passed
+  - standalone Gemini passed
+  - OpenClaw Whisper passed
+- OpenClaw Gemini must be retested after this dependency and doctor-fix update
+
 ## 2026-03-19
 
 ### pi5mic Raspberry Pi Whisper Hardening And Gemini Doctor Audit

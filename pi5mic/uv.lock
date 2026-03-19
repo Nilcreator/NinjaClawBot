@@ -294,6 +294,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },
+    { name = "google-genai" },
     { name = "sounddevice" },
 ]
 
@@ -302,9 +303,6 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
-gemini = [
-    { name = "google-genai" },
-]
 wakeword = [
     { name = "pvporcupine" },
 ]
@@ -312,13 +310,13 @@ wakeword = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
-    { name = "google-genai", marker = "extra == 'gemini'", specifier = ">=1.33.0" },
+    { name = "google-genai", specifier = ">=1.33.0" },
     { name = "pvporcupine", marker = "extra == 'wakeword'", specifier = ">=3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "sounddevice", specifier = ">=0.5" },
 ]
-provides-extras = ["gemini", "wakeword", "dev"]
+provides-extras = ["wakeword", "dev"]
 
 [[package]]
 name = "pluggy"

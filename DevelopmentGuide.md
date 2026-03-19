@@ -697,8 +697,8 @@ uv run pi5mic doctor
 - if the Python package is missing, install it with:
 
 ```bash
-cd ~/NinjaClawBot/pi5mic
-uv sync --extra dev --extra gemini
+cd ~/NinjaClawBot
+uv sync --extra dev
 ```
 
 ### Raspberry Pi powers off or reboots after `pi5mic` finishes recording

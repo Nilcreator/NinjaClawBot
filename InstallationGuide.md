@@ -453,6 +453,88 @@ Important note:
 - package-level tests pass, but real Raspberry Pi microphone validation is still required
 - the current user-friendly path is guided/manual, not an always-on wake-word daemon yet
 
+Backend notes:
+- default STT backend: local `whisper.cpp` with the multilingual `base` model
+- optional fallback: Gemini audio transcription with `GOOGLE_API_KEY` or `GEMINI_API_KEY`
+- OpenClaw profile uses the local `openclaw` CLI plus the NinjaClawBot plugin presence method
+
+### 9.5.1 Confirm the workspace install
+
+```bash
+cd ~/NinjaClawBot
+uv sync --extra dev
+```
+
+Purpose:
+- install the full NinjaClawBot workspace in one environment
+- install `pi5mic`
+- install the Gemini Python SDK automatically through the current `pi5mic` dependency set
+
+Expected result:
+- the sync finishes without errors
+- `uv run pi5mic --help` works
+
+### 9.5.2 Build the local Whisper backend
+
+```bash
+cd ~
+git clone https://github.com/ggml-org/whisper.cpp.git
+cd ~/whisper.cpp
+sh ./models/download-ggml-model.sh base
+cmake -B build
+cmake --build build -j
+```
+
+Purpose:
+- download and build the local speech-to-text engine used by the default `pi5mic` path
+- install the multilingual `ggml-base.bin` model
+
+Expected result:
+- `~/whisper.cpp/build/bin/whisper-cli` exists
+- `~/whisper.cpp/models/ggml-base.bin` exists
+
+### 9.5.3 Register Whisper with `pi5mic`
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic install whispercpp \
+  --command ~/whisper.cpp/build/bin/whisper-cli \
+  --model-path ~/whisper.cpp/models/ggml-base.bin
+```
+
+Purpose:
+- tell `pi5mic` exactly where the Whisper command and model are stored
+
+Expected result:
+- the resolved command path is printed
+- the resolved model path is printed
+- the values are saved into `mic.json`
+
+### 9.5.4 Optional Gemini API key setup
+
+If you want to use Gemini instead of Whisper for STT, set one of these first:
+
+```bash
+cd ~/NinjaClawBot
+export GEMINI_API_KEY="your_key_here"
+```
+
+or:
+
+```bash
+cd ~/NinjaClawBot
+export GOOGLE_API_KEY="your_key_here"
+```
+
+Purpose:
+- give the current shell permission to call the Gemini Developer API
+
+Expected result:
+- no output is normal
+- if both keys are set, the Google SDK uses `GOOGLE_API_KEY`
+
+### 9.5.5 Run the guided setup
+
 Recommended first run:
 
 ```bash
@@ -460,20 +542,57 @@ cd ~/NinjaClawBot
 uv run pi5mic mic-tool
 ```
 
-If you prefer direct commands:
+Then choose:
+- `1. Run setup wizard`
+
+Recommended choices for NinjaClawBot integration:
+- `Profile`: `openclaw`
+- `Input device`: your USB microphone or `default`
+- `Sample rate (Hz)`: accept the recommended value
+- `STT backend`: choose `whisper_cpp` or `gemini`
+- if `whisper_cpp`: use your `whisper-cli` path and `ggml-base.bin` path
+- if `whisper_cpp`: accept the suggested `threads` value on Raspberry Pi
+- if `gemini`: keep the default model unless you have a reason to change it
+- `Maximum clip length`: start with `8`, `10`, or `12`
+
+Purpose:
+- write the actual microphone profile into `~/NinjaClawBot/mic.json`
+- connect `pi5mic` to the OpenClaw/NinjaClawBot runtime path
+
+Expected result:
+- the wizard saves `mic.json`
+- it prints either `Configured STT backend looks ready.` or a clear warning about what is still missing
+
+### 9.5.6 Run doctor
 
 ```bash
 cd ~/NinjaClawBot
-uv run pi5mic setup
 uv run pi5mic doctor
+```
+
+Purpose:
+- verify the microphone settings
+- verify the selected STT backend
+- verify the OpenClaw profile wiring
+- show Raspberry Pi health warnings when available
+
+Expected result:
+- for Whisper: command path, model path, and runtime summary are shown
+- for Gemini: `doctor` shows which API key variable it found
+- if the profile is `openclaw`, `doctor` also checks the OpenClaw command and delivery mode
+- success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
+
+### 9.5.7 Run one real capture cycle
+
+```bash
+cd ~/NinjaClawBot
 uv run pi5mic run --once
 ```
 
-Backend notes:
-
-- default STT backend: local `whisper.cpp` with the multilingual `base` model
-- optional fallback: Gemini audio transcription with `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-- OpenClaw profile uses the local `openclaw` CLI plus the NinjaClawBot plugin presence method
+Purpose:
+- record one short clip
+- transcribe it with the selected backend
+- if the profile is `openclaw`, hand the transcript to OpenClaw and print the reply locally
 
 Expected result:
 

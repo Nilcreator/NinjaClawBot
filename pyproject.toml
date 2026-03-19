@@ -6,6 +6,7 @@ authors = [
     {name = "Nil Creator", email = "nilcreator@gmail.com"},
 ]
 dependencies = [
+    "google-genai>=1.33.0",
     "ninjaclawbot",
     "pi5buzzer[pi]",
     "pi5servo[pi]",

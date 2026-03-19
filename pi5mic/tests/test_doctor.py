@@ -148,6 +148,42 @@ def test_doctor_reports_actionable_gemini_credential_failure(monkeypatch, tmp_pa
     assert "export GEMINI_API_KEY" in result.output
 
 
+def test_doctor_handles_missing_google_parent_package_gracefully(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "stt": {
+    "selected": "gemini",
+    "gemini": {
+      "model": "gemini-2.5-flash"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor_module, "list_input_devices", lambda: [object()])
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (0, 44_100, None, None),
+    )
+    monkeypatch.setattr(doctor_module, "is_raspberry_pi", lambda: False)
+
+    def _raise_module_not_found(name):
+        raise ModuleNotFoundError("No module named 'google'")
+
+    monkeypatch.setattr(doctor_module.importlib.util, "find_spec", _raise_module_not_found)
+
+    result = runner.invoke(cli, ["--config-file", str(config_path), "doctor"])
+
+    assert result.exit_code != 0
+    assert "google-genai" in result.output
+    assert "uv sync --extra dev" in result.output
+
+
 def test_doctor_reports_raspberry_pi_throttle_warning(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     config_path = tmp_path / "mic.json"

@@ -83,6 +83,7 @@ What this is doing:
 
 - installs all Python packages in the workspace
 - includes `pi5mic`
+- also includes the Gemini SDK that `pi5mic` uses for the optional cloud backend
 
 What you should expect:
 
@@ -521,15 +522,17 @@ What you should expect:
 
 Gemini is optional. Only use this if you want to test the alternative cloud backend.
 
-### Step 18. Install the Gemini extra
+### Step 18. No extra Gemini package install is needed
 
 ```bash
-uv sync --extra dev --extra gemini
+cd ~/NinjaClawBot
+uv sync --extra dev
 ```
 
 What this is doing:
 
-- installs the Google Gemini SDK used by the optional cloud backend
+- confirms the normal NinjaClawBot workspace install is present
+- this already includes the Google Gemini SDK used by `pi5mic`
 
 What you should expect:
 
@@ -588,6 +591,8 @@ What you should expect:
 - `INFO active STT backend: gemini`
 - `OK   Gemini credentials found in environment (GEMINI_API_KEY)` or
   `OK   Gemini credentials found in environment (GOOGLE_API_KEY)`
+- if the Gemini SDK is somehow missing, `doctor` now reports that cleanly
+  instead of crashing
 
 ## 7. Common Problem: `PortAudio library not found`
 

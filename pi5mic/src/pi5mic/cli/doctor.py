@@ -125,10 +125,14 @@ def doctor(ctx: click.Context) -> None:
         except STTError as exc:
             failures.append(str(exc))
     elif selected_backend == "gemini":
-        if importlib.util.find_spec("google.genai") is None:
+        try:
+            gemini_spec = importlib.util.find_spec("google.genai")
+        except ModuleNotFoundError:
+            gemini_spec = None
+        if gemini_spec is None:
             failures.append(
-                "The 'google-genai' package is not installed. Run 'uv sync --extra gemini' "
-                "before using the Gemini backend."
+                "The 'google-genai' package is not installed. Run 'uv sync --extra dev' "
+                "from the NinjaClawBot root so pi5mic can use the Gemini backend."
             )
         try:
             credential_name, _api_key = resolve_gemini_api_key()
