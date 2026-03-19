@@ -3,247 +3,410 @@
 ## Contents
 - [1. What This Document Is For](#1-what-this-document-is-for)
 - [2. Simple Word List](#2-simple-word-list)
-- [3. Audit Scope](#3-audit-scope)
-- [4. What The Current Ninjaclawbot Code Already Supports](#4-what-the-current-ninjaclawbot-code-already-supports)
+- [3. Audit Scope And Fact-Check Inputs](#3-audit-scope-and-fact-check-inputs)
+- [4. What The Current Codebase Already Supports](#4-what-the-current-codebase-already-supports)
 - [5. What Is Missing Today](#5-what-is-missing-today)
-- [6. Feasibility Verdict](#6-feasibility-verdict)
-- [7. Recommended pi5mic Library Structure](#7-recommended-pi5mic-library-structure)
-- [8. Recommended System Logic](#8-recommended-system-logic)
-- [9. OpenClaw And Telegram Integration Model](#9-openclaw-and-telegram-integration-model)
-- [10. Phased Implementation Plan](#10-phased-implementation-plan)
-- [11. Quality Gate After Every Phase](#11-quality-gate-after-every-phase)
-- [12. Raspberry Pi Validation Plan](#12-raspberry-pi-validation-plan)
-- [13. Final Recommendation Before Coding](#13-final-recommendation-before-coding)
+- [6. External Fact Check Summary](#6-external-fact-check-summary)
+- [7. Feasibility Verdict](#7-feasibility-verdict)
+- [8. Recommended pi5mic Package Shape](#8-recommended-pi5mic-package-shape)
+- [9. Recommended System Logic](#9-recommended-system-logic)
+- [10. Required Safety And Robustness Rules](#10-required-safety-and-robustness-rules)
+- [11. Phased Implementation Plan](#11-phased-implementation-plan)
+- [12. Quality Gate After Every Phase](#12-quality-gate-after-every-phase)
+- [13. Raspberry Pi Validation Plan](#13-raspberry-pi-validation-plan)
+- [14. Final Recommendation Before Coding](#14-final-recommendation-before-coding)
+- [15. References](#15-references)
 
 ## 1. What This Document Is For
-This document explains how to build a new USB microphone library named `pi5mic` for the NinjaClawBot project.
+This document defines the build plan for a new standalone-first microphone library named `pi5mic` inside the NinjaClawBot workspace.
 
-The goal is to make voice input work in two ways:
+The target outcome is a voice input path that works in two modes:
 
-- `Standalone mode`: a local interactive tool named `mic-tool`
-- `Integrated mode`: send the recognized voice command into the OpenClaw agent, while keeping Telegram text chat working
+- `Standalone mode`: a local CLI workflow centered around `mic-tool`
+- `Integrated mode`: capture voice locally, transcribe it, submit it into OpenClaw, and keep NinjaClawBot robot output behavior consistent with the current OpenClaw integration
 
-This plan is based on a code audit of the current `ninjaclawbot` library and the existing OpenClaw integration that already powers robot replies, startup actions, shutdown actions, and Telegram text replies.
+This revision is not a speculative draft. It was re-audited against:
 
-No code changes are made in this document. This is the build plan we should follow before implementation starts.
+- the current `ninjaclawbot` Python runtime and bridge code
+- the current OpenClaw plugin implementation in this repository
+- the current package patterns used by the existing `pi5*` libraries
+- upstream OpenClaw and vendor documentation checked on `2026-03-19`
+
+The main purpose of this document is to prevent us from building the wrong thing. The earlier version was directionally good, but it left a few important gaps:
+
+- it assumed a public OpenClaw presence tool was the right external control surface
+- it hard-locked Gemini 2.5 Flash too early
+- it treated Telegram mirroring as if it were automatically safe
+- it did not define session isolation, secret handling, or audio-retention policy clearly enough
+- it did not fully account for the fact that current OpenClaw and `ninjaclawbot` already expose some of the pieces we need
+
+No `pi5mic` code is implemented in this document. This is the corrected plan we should follow before implementation starts.
 
 ## 2. Simple Word List
-These short explanations are included so the plan is easier to read.
+Short explanations are included here so the plan stays readable.
 
-- `STT`: `speech-to-text`. This means turning recorded voice into text.
-- `Wake word`: the word that starts recording. In this project the default word is `Ninja`.
-- `VAD`: `voice activity detection`. This is a simple way to detect whether the user is still speaking.
-- `CLI`: `command line interface`. This is the tool you run in Terminal.
-- `API`: `application programming interface`. This means the way one program talks to another program.
-- `Bridge`: a small connector process that passes requests between OpenClaw and `ninjaclawbot`.
-- `Session`: the conversation state used by OpenClaw.
-- `Telegram mirror`: sending the final reply from a mic-originated request to Telegram as well as showing local feedback.
+- `STT`: speech-to-text
+- `Wake word`: the keyword that starts voice capture
+- `VAD`: voice activity detection
+- `CLI`: command line interface
+- `Gateway RPC`: a request sent to the OpenClaw gateway over its documented RPC interface
+- `Session key`: the OpenClaw conversation identity that controls memory, queueing, and turn serialization
+- `Delivery target`: the explicit chat or channel destination used for an outbound reply
+- `Single-flight`: only one active microphone request is allowed at a time
+- `Retention`: whether recorded audio is deleted immediately or kept temporarily for debugging
 
-## 3. Audit Scope
-The current audit reviewed the important `ninjaclawbot` and OpenClaw integration files line by line.
+## 3. Audit Scope And Fact-Check Inputs
+This revision reviewed the current repository and the external contracts that matter for voice integration.
+
+### 3.1 Local repository inputs reviewed
+Planning and workspace docs:
+
+- `MicDevelopment.md`
+- `README.md`
+- `DevelopmentGuide.md`
+- `InstallationGuide.md`
+- `backup/developmentPlan.md`
+- `backup/DevelopmentLog.md`
+
+Important repository correction:
+
+- the old migration plan is archived at `backup/developmentPlan.md`, not root `developmentPlan.md`
+- the development log is archived at `backup/DevelopmentLog.md`, not root `DevelopmentLog.md`
 
 Audited `ninjaclawbot` files:
 
 - `ninjaclawbot/src/ninjaclawbot/config.py`
 - `ninjaclawbot/src/ninjaclawbot/actions.py`
-- `ninjaclawbot/src/ninjaclawbot/locks.py`
-- `ninjaclawbot/src/ninjaclawbot/presence.py`
+- `ninjaclawbot/src/ninjaclawbot/adapters.py`
 - `ninjaclawbot/src/ninjaclawbot/executor.py`
 - `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/cli/common.py`
-- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `ninjaclawbot/src/ninjaclawbot/presence.py`
 - `ninjaclawbot/src/ninjaclawbot/expressions/player.py`
 - `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
 - `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
+- `ninjaclawbot/src/ninjaclawbot/__main__.py`
 
-Audited OpenClaw plugin files:
+Audited OpenClaw plugin files in this repository:
 
 - `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
 - `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
 - `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+
+Audited existing `pi5*` package patterns:
+
+- root `pyproject.toml`
+- `ninjaclawbot/pyproject.toml`
+- `pi5servo/pyproject.toml`
+- `pi5disp/pyproject.toml`
+- `pi5buzzer/pyproject.toml`
+- `pi5vl53l0x/pyproject.toml`
+- representative `__init__.py`, `__main__.py`, `driver.py`, and config-manager files from each package
 
 Audited test coverage surfaces:
 
 - `ninjaclawbot/tests/test_actions.py`
 - `ninjaclawbot/tests/test_executor.py`
 - `ninjaclawbot/tests/test_runtime.py`
-- `ninjaclawbot/tests/test_adapters.py`
 - `ninjaclawbot/tests/test_openclaw_bridge.py`
 - `ninjaclawbot/tests/test_cli_tools.py`
+- plugin tests under `integrations/openclaw/ninjaclawbot-plugin/tests`
 
-## 4. What The Current Ninjaclawbot Code Already Supports
-The current codebase already gives us several pieces that make `pi5mic` practical.
+### 3.2 External upstream inputs fact-checked
+Primary sources reviewed:
 
-### 4.1 Robot output control is already cleanly separated
-`NinjaClawbotRuntime` is already a composed runtime for robot outputs:
+- OpenClaw Agent Loop docs
+- OpenClaw Plugin Agent Tools docs
+- OpenClaw Plugins docs
+- OpenClaw Talk Mode docs
+- OpenClaw Voice Wake docs
+- OpenClaw Audio and Voice Notes docs
+- OpenClaw Telegram docs
+- OpenClaw Remote Access docs
+- Google Gemini API Audio Understanding docs
+- Google Gen AI Python SDK docs
+- Picovoice Porcupine Python Quick Start docs
+
+These external references changed the plan in meaningful ways, especially around transport choice, wake-word policy, and Telegram delivery safety.
+
+## 4. What The Current Codebase Already Supports
+The current codebase already gives us more than the earlier draft credited.
+
+### 4.1 Robot output is already cleanly separated
+`NinjaClawbotRuntime` is a composed runtime that owns:
 
 - servo control
 - buzzer control
 - display control
-- distance sensor control
+- distance sensing
 - expression orchestration
 
-This means `pi5mic` does not need to solve robot hardware control. It only needs to produce text commands and optionally ask the robot to show a listening or thinking state.
+That means `pi5mic` should not try to solve robot hardware itself. It should produce text input, request presence changes when appropriate, and reuse the existing robot action layer.
 
-### 4.2 The action system is already stable
-`ActionRequest`, `ActionType`, and `ActionExecutor` already define stable robot actions like:
+### 4.2 The robot action contract is already stable
+`ActionType` already includes stable actions such as:
 
 - `perform_reply`
 - `perform_expression`
+- `set_idle`
 - `set_presence_mode`
 - `shutdown_sequence`
 - `health_check`
+- `stop_all`
 
-This is important because the robot reaction side does not need a redesign for microphone support.
+This is important because microphone integration does not need a new robot action model.
 
-### 4.3 Presence modes already exist
-The runtime already supports persistent presence states:
+### 4.3 Presence support already exists end to end in Python
+This is one of the most important audit findings.
 
-- `idle`
-- `thinking`
-- `listening`
+The current code already supports:
 
-That is very useful for microphone integration. A voice workflow can show:
+- `normalize_presence_mode()` with valid modes `idle`, `thinking`, `listening`
+- `ActionType.SET_PRESENCE_MODE`
+- `ActionExecutor` dispatch for `set_presence_mode`
+- `NinjaClawbotRuntime.set_presence_mode()`
+- `OpenClawServiceCore.set_presence_mode()`
+- bridge protocol request type `set_presence_mode`
 
-- `listening` while the user speaks
-- `thinking` while transcription or agent work is happening
-- `idle` when the system returns to waiting
+So the missing part is not Python support. The missing part is the right reusable external control surface for `pi5mic`.
 
-### 4.4 OpenClaw already has a persistent bridge
-The current OpenClaw integration already supports:
+### 4.4 The OpenClaw plugin already has a persistent-bridge helper
+The plugin runner already contains `setPersistentPresenceMode()` and uses it in lifecycle hooks for:
 
-- a persistent Python bridge process
-- startup sequence
-- shutdown sequence
-- diagnostics
-- reply expressions
+- `gateway_start`
+- `message_received`
+- `agent_end`
+- `gateway_stop`
 
-This means OpenClaw can already control the robot in a structured way. `pi5mic` does not need to invent a new robot bridge.
+This means the plugin already knows how to talk to the persistent bridge for presence changes. Adding a reusable external control path is a small plugin extension, not a large redesign.
 
-### 4.5 The plugin already supports visible chat replies after robot animation
-The public tool `ninjaclawbot_reply` already tells the agent:
+### 4.5 Execution is already serialized inside the robot layer
+Two locks matter:
 
-- animate the robot first
-- then continue with the normal visible text reply
+- `ActionExecutor` runs through `runtime.execution_lock`
+- `OpenClawServiceCore` uses its own service lock
 
-That is the correct behavior for voice input too. Once `pi5mic` turns speech into text and sends it into OpenClaw, the agent can keep using the same reply pattern that already works with Telegram.
+That is good news for action correctness, but it also means `pi5mic` must not create a second uncontrolled hardware-control path. If it spawns competing robot runtimes, we risk process-level contention even if single-runtime locking is correct.
 
-### 4.6 Diagnostics already exist
-The plugin already exposes `ninjaclawbot_diagnostics`.
+### 4.6 Existing tests already cover the bridge and lifecycle model
+The current test suite already covers:
 
-That means the future `pi5mic` library can reuse the existing health and readiness information instead of inventing a second diagnostics system for robot state.
+- startup sequence behavior
+- `set_presence_mode` bridge request handling
+- stale idle suppression
+- repeated thinking coalescing
+- plugin hook registration
+- plugin bridge command construction
+
+This gives us a strong place to extend tests for microphone-related integration without starting from zero.
+
+### 4.7 Existing `pi5*` libraries give us the right package style, but not one single config convention
+The current standalone libraries are consistent in broad shape:
+
+- `pyproject.toml`
+- `README.md`
+- `src/<package>/__init__.py`
+- `src/<package>/__main__.py`
+- `driver.py`
+- `config/*`
+- `cli/*`
+- `tests/*`
+
+But their config-path behavior is not fully consistent:
+
+- `pi5buzzer` defaults to `buzzer.json` in the working directory
+- `pi5disp` defaults to package-local `display.json`
+- `pi5servo` defaults to package-local `servo.json`
+
+So `pi5mic` must choose its config strategy deliberately instead of assuming the repo already has one unified rule.
 
 ## 5. What Is Missing Today
-The audit also showed clear gaps. These are not blockers, but they define the real implementation work.
+The current audit showed the following real gaps.
 
-### 5.1 There is no microphone device layer in `ninjaclawbot`
-The current runtime has adapters for:
+### 5.1 There is no microphone input layer in the project
+There is no current package for:
 
-- servo
-- buzzer
-- display
-- distance sensor
-
-There is no microphone adapter or audio input service today.
-
-### 5.2 There is no speech or text-input pipeline inside `ninjaclawbot`
-The current `ninjaclawbot` library is built around robot output actions. It does not contain:
-
-- microphone capture
+- microphone device enumeration
+- local audio capture
+- always-on listening
+- silence auto-stop
 - wake-word detection
-- silence auto-stop logic
-- cloud transcription
-- agent input routing from external speech
+- transcription
 
-### 5.3 There is no public OpenClaw tool for arbitrary presence changes
-The runtime and service layer support `set_presence_mode`, but the public plugin tools do not expose a tool like:
+### 5.2 There is no voice-session state machine
+The current project has output-oriented state and lifecycle handling, but it does not have a voice-input state machine such as:
 
-- `ninjaclawbot_set_presence_mode`
-- or a simpler `ninjaclawbot_set_listening`
+- armed
+- listening
+- transcribing
+- dispatching
+- waiting for reply
+- error recovery
 
-This matters because `pi5mic` will likely want to set the robot to `listening` and `thinking` from outside the agent lifecycle hooks.
+That state machine must exist inside `pi5mic`.
 
-### 5.4 Telegram mirroring for mic-originated requests does not exist yet
-Telegram text replies already work when the user types in Telegram.
+### 5.3 The earlier plan picked the wrong external control shape for presence
+The previous draft proposed a public OpenClaw agent tool like `ninjaclawbot_set_presence_mode`.
 
-What does not exist yet is a built-in flow that says:
+That is not the best primary control surface for `pi5mic`.
 
-- local mic request comes in
-- OpenClaw processes it
-- final answer is mirrored to Telegram by default
+Why:
 
-That must be added deliberately. It will not happen by itself.
+- agent tools are designed for LLM calls inside agent runs
+- `pi5mic` is an external local process, not the model itself
+- exposing an agent tool does not automatically give a local process a clean direct-call path
 
-### 5.5 The `ninjaclawbot` CLI is not the right place for always-on microphone behavior
-The current `ninjaclawbot` CLI is designed for:
+The stronger design is:
 
-- direct robot actions
-- local asset tools
-- OpenClaw bridge serving
+- keep optional agent tooling available if useful later
+- add a small plugin-owned gateway-facing control path for `presence.set`
+- let `pi5mic` call that path through the documented gateway transport
 
-It is not designed for a long-running microphone capture loop. That is another reason `pi5mic` should be a sibling library, not a feature stuffed directly into `ninjaclawbot`.
+### 5.4 There is no defined OpenClaw transport client for local microphone input
+The current plugin is designed to animate the robot during agent runs that were started elsewhere. There is no current local `pi5mic` client for:
 
-## 6. Feasibility Verdict
-The audit result is positive.
+- submitting text into OpenClaw through documented gateway entry points
+- waiting for final output
+- choosing a session key safely
+- deciding whether the request is local-only or mirrored to a channel
 
-### 6.1 Can `pi5mic` be integrated into the NinjaClawBot project?
+### 5.5 Telegram mirroring is not safe without an explicit delivery target
+The earlier draft treated Telegram mirroring as if it should happen automatically.
+
+That is not robust enough.
+
+The OpenClaw docs make two relevant points:
+
+- Telegram inbound traffic naturally replies back to Telegram
+- local mic-originated requests do not automatically inherit a Telegram target
+
+So `pi5mic` must require an explicit delivery target before mirroring outward. Otherwise it risks:
+
+- sending to the wrong chat
+- leaking private local voice interactions
+- producing inconsistent session history
+
+### 5.6 The previous plan did not define session isolation
+OpenClaw serializes work per session key. A mic-originated request therefore needs an explicit session policy.
+
+We must choose and document whether `pi5mic` uses:
+
+- a dedicated mic session like `voice:local-mic`
+- or a shared session like `main`
+
+For safety and predictability, the default should be a dedicated mic session.
+
+### 5.7 The previous plan did not define secret handling
+`mic.json` must not contain:
+
+- Gemini API keys
+- OpenClaw gateway tokens
+- Telegram bot credentials
+
+Those must come from environment variables or the gateway configuration already managed by OpenClaw.
+
+### 5.8 The previous plan did not define audio retention and cleanup
+Recorded audio is sensitive user input. The build plan must specify:
+
+- delete-on-success by default
+- temporary retention only when debugging is explicitly enabled
+- bounded retention lifetime
+
+### 5.9 There is no offline or degraded-mode strategy
+If either dependency fails:
+
+- microphone backend unavailable
+- wake-word engine unavailable
+- Gemini unreachable
+- OpenClaw gateway unavailable
+
+then `pi5mic` still needs safe fallback behavior instead of hanging in a broken loop.
+
+## 6. External Fact Check Summary
+The upstream docs materially changed the plan.
+
+### 6.1 OpenClaw facts that matter
+Verified upstream behavior:
+
+- OpenClaw’s documented agent entry points are Gateway RPC `agent` and `agent.wait`
+- plugin lifecycle hooks include `message_received`, `agent_end`, `gateway_start`, and `gateway_stop`
+- plugin tools can be `optional` and require allowlist opt-in
+- Talk Mode is described as a continuous voice loop and explicitly sends transcript text into the main session before waiting for the reply
+- Voice Wake stores wake words at the gateway level and the docs note that custom wake words are not yet per-node
+- Audio and Voice Notes already support transcription providers and an `echoTranscript` option
+- Telegram routing is deterministic for Telegram-originated traffic, but that does not create a safe automatic target for a local microphone request
+- `openclaw gateway {status,health,send,agent,call}` can target a remote gateway URL explicitly
+
+Plan impact:
+
+- `pi5mic` should use a documented gateway transport, not a guessed private API
+- the default session should be explicit
+- external delivery must be explicit
+- a plugin-facing RPC control path is more useful than an agent-only tool for local presence updates
+
+### 6.2 Gemini facts that matter
+Verified upstream behavior:
+
+- Gemini can analyze audio and return transcription-like text output
+- Google’s current audio docs show audio-understanding examples using `gemini-3-flash-preview`
+- Google’s audio docs explicitly state that the Gemini API does not support real-time transcription use cases
+- Google recommends the Live API for real-time voice interactions and Google Cloud Speech-to-Text for dedicated real-time STT
+
+Plan impact:
+
+- do not hard-code `Gemini 2.5 Flash` as an unchangeable requirement
+- define a generic STT backend interface
+- use Gemini as a default batch-transcription backend, not as a real-time streaming assumption
+
+### 6.3 Picovoice facts that matter
+Verified upstream behavior:
+
+- Porcupine Python Quick Start explicitly lists Raspberry Pi 5 support
+- Porcupine requires a Picovoice `AccessKey`
+
+Plan impact:
+
+- if we choose Porcupine, the plan must account for one more secret that must not live in `mic.json`
+- wake-word backend choice should be configurable, not hidden in the code
+
+## 7. Feasibility Verdict
+The build is feasible, but the first version must be slightly stricter than the earlier draft.
+
+### 7.1 Can `pi5mic` be added as a sibling library?
 Yes.
 
-The cleanest way is:
+That still remains the right boundary:
 
-- build `pi5mic` as a new standalone-first `pi5*` library
-- add it to the root workspace
-- let it talk to OpenClaw as a client
-- reuse existing `ninjaclawbot` tools and robot actions
+- `pi5mic` handles local voice input
+- OpenClaw handles session, reasoning, and outbound messaging
+- `ninjaclawbot` handles robot actions and hardware state
 
-### 6.2 Should `pi5mic` be built inside `NinjaClawbotRuntime`?
-No for v1.
+### 7.2 Should `pi5mic` be merged into `NinjaClawbotRuntime`?
+No.
 
-The current runtime is an output-device runtime. Mixing always-on microphone listening into it would create unnecessary coupling and make failure handling harder.
+`NinjaClawbotRuntime` is still an output-device runtime. Long-running microphone capture does not belong inside it.
 
-The better boundary is:
+### 7.3 What must change from the earlier draft?
+The corrected first-version rules are:
 
-- `pi5mic` handles voice input
-- OpenClaw remains the agent brain
-- `ninjaclawbot` remains the robot control layer
+- use a dedicated session key by default
+- do not mirror to Telegram unless an explicit delivery target exists
+- do not store secrets in `mic.json`
+- use a transport abstraction for OpenClaw
+- use a backend abstraction for STT
+- treat wake-word and listening as a single-flight state machine
+- avoid spawning competing robot runtimes if the persistent bridge is already active
 
-### 6.3 Can OpenClaw properly use `pi5mic` in the current environment?
-Yes, with one important addition.
-
-OpenClaw can already use plain text very well. So once `pi5mic` transcribes speech into text, OpenClaw can process it like any other user message.
-
-The one important extra feature we should add is a public presence tool so `pi5mic` can safely trigger:
-
-- `listening`
-- `thinking`
-- `idle`
-
-outside the existing built-in lifecycle hooks.
-
-### 6.4 Is Telegram compatibility feasible?
-Yes.
-
-Telegram text input can remain unchanged.
-
-For mic-originated requests, we should explicitly implement:
-
-- local feedback in `mic-tool`
-- OpenClaw agent processing
-- final Telegram mirror by default
-
-That is feasible and fits the current architecture, but it belongs in the `pi5mic` integration layer, not in the robot runtime.
-
-## 7. Recommended pi5mic Library Structure
-The new package should follow the same overall shape as the other `pi5*` libraries.
+## 8. Recommended pi5mic Package Shape
+The new package should follow the existing standalone-first `pi5*` shape while adding the pieces a voice library actually needs.
 
 ```text
 pi5mic/
 ├── LICENSE
 ├── README.md
 ├── pyproject.toml
-├── uv.lock
-├── .python-version
 ├── mic.json
 ├── src/
 │   └── pi5mic/
@@ -251,25 +414,30 @@ pi5mic/
 │       ├── __main__.py
 │       ├── driver.py
 │       ├── models.py
+│       ├── errors.py
 │       ├── config/
 │       │   └── config_manager.py
 │       ├── core/
 │       │   ├── devices.py
-│       │   ├── audio.py
-│       │   ├── recording.py
-│       │   └── listener.py
+│       │   ├── recorder.py
+│       │   ├── listener.py
+│       │   └── session.py
 │       ├── wakeword/
 │       │   ├── base.py
 │       │   └── porcupine.py
 │       ├── vad/
+│       │   ├── base.py
 │       │   └── silence.py
 │       ├── stt/
 │       │   ├── base.py
 │       │   └── gemini.py
+│       ├── transport/
+│       │   ├── base.py
+│       │   ├── gateway_agent.py
+│       │   └── openclaw_cli.py
 │       ├── integration/
-│       │   ├── openclaw_client.py
-│       │   ├── router.py
-│       │   └── telegram_mirror.py
+│       │   ├── presence.py
+│       │   └── delivery.py
 │       └── cli/
 │           ├── __init__.py
 │           ├── _common.py
@@ -280,173 +448,206 @@ pi5mic/
 └── tests/
     ├── test_config.py
     ├── test_devices.py
-    ├── test_audio.py
+    ├── test_recorder.py
     ├── test_listener.py
     ├── test_wakeword.py
     ├── test_vad.py
     ├── test_stt_gemini.py
-    ├── test_openclaw_client.py
-    ├── test_router.py
-    ├── test_telegram_mirror.py
+    ├── test_gateway_agent.py
+    ├── test_delivery.py
     ├── test_cli.py
     └── test_mic_tool.py
 ```
 
-### Why this structure fits the current project
-This layout matches the style already used by:
+### Why this shape fits the current project
+It preserves the project’s current expectations:
 
-- `pi5servo`
-- `pi5disp`
-- `pi5buzzer`
-- `pi5vl53l0x`
+- standalone-first package
+- compatibility `driver.py`
+- config manager
+- interactive CLI tooling
+- clear hardware and integration boundaries
 
-That keeps the project consistent and makes the new library easier to maintain.
+### Required config-path decision
+Because the current `pi5*` libraries are inconsistent, `pi5mic` must choose clearly:
 
-## 8. Recommended System Logic
-This is the recommended end-to-end logic for the first stable version.
+- default `mic.json` location should be the current working directory or explicitly passed `--config-file`
+- all CLIs must support an explicit config path override
+- secrets must stay outside the JSON config file
 
-### 8.1 Standalone mode
-1. `pi5mic` listens to the USB microphone.
-2. The local wake-word engine listens for `Ninja`.
-3. When `Ninja` is detected, recording starts.
-4. Recording stops when:
-   - the user is silent for `5 seconds`
-   - or the clip reaches `30 seconds`
-5. The recorded audio is sent to Gemini 2.5 Flash for transcription.
-6. The transcript is shown in `mic-tool`.
-7. If OpenClaw mode is disabled, the process ends there.
+This is the safest choice for workspace use because users will most often run `uv run pi5mic ...` from the project root.
 
-### 8.2 OpenClaw integrated mode
-1. `pi5mic` listens for `Ninja`.
-2. The robot can be set to `listening`.
-3. The audio clip is recorded.
-4. The audio clip is transcribed by Gemini.
-5. The transcript is sent to OpenClaw.
-6. OpenClaw runs the agent.
-7. The robot can be set to `thinking` while the response is generated.
-8. The final reply is:
-   - shown locally in `mic-tool`
-   - sent to Telegram by default
-9. The robot returns to `idle`.
+## 9. Recommended System Logic
+This is the corrected end-to-end logic for the first stable version.
 
-### 8.3 Recommended function responsibilities
-These are the main jobs each part of the library should own.
+### 9.1 Config contract
+`mic.json` should store only non-secret runtime preferences such as:
 
-- `ConfigManager`
-  - load and save `mic.json`
-  - store device choice, wake word, silence timeout, max duration, gateway settings
+- input device id or name
+- wake-word backend name
+- wake-word keyword or model path
+- silence timeout
+- maximum clip duration
+- STT backend name
+- default STT model id
+- OpenClaw gateway URL
+- OpenClaw agent id
+- OpenClaw session key
+- whether presence integration is enabled
+- whether delivery mirroring is enabled
+- explicit delivery channel and target
+- temporary audio retention policy
 
-- `Audio device layer`
-  - list microphone devices
-  - choose active input device
-  - report audio backend health
+It must not store:
 
-- `Recording layer`
-  - capture WAV audio
-  - enforce 30-second limit
-  - expose temporary file path or in-memory bytes
+- Gemini API key
+- Picovoice access key
+- OpenClaw gateway token
+- Telegram credentials
 
-- `WakeWordEngine`
-  - detect the default wake word `Ninja`
-  - allow later replacement of keyword model files
-
-- `VAD silence detector`
-  - detect when the user stops speaking
-  - stop recording after the configured silence timeout
-
-- `Gemini STT backend`
-  - send recorded audio to Gemini 2.5 Flash
-  - return structured transcription data
-  - preserve original language
-
-- `OpenClawClient`
-  - connect to the OpenClaw gateway
-  - submit the transcript into the agent flow
-  - read back the final answer
-
-- `TelegramMirror`
-  - send the final answer to Telegram when mic-originated requests are enabled for mirroring
-
-- `mic-tool`
-  - guide setup
-  - test microphone input
-  - test wake word
-  - test Gemini transcription
-  - test OpenClaw integration
-
-## 9. OpenClaw And Telegram Integration Model
-This section explains the safest way to connect the new library to the existing system.
-
-### 9.1 What should stay unchanged
-The current Telegram text workflow should stay exactly as it is now.
-
-That means:
-
-- user can still type into Telegram
-- OpenClaw still replies in Telegram
-- existing NinjaClawBot robot reactions still work
-
-### 9.2 What `pi5mic` should add
-The microphone should become a second input path.
-
-That means:
-
-- user can speak locally through the USB microphone
-- the transcript is sent into OpenClaw
-- OpenClaw responds through the same agent brain
-- the final reply is mirrored to Telegram by default
-
-### 9.3 One important plugin improvement
-To make the microphone experience feel natural, the OpenClaw plugin should expose a public tool for presence updates.
-
-Recommended new public tool:
-
-- `ninjaclawbot_set_presence_mode`
-
-Supported values:
+### 9.2 Runtime state machine
+`pi5mic` should have an explicit local state machine:
 
 - `idle`
-- `thinking`
+- `armed`
 - `listening`
+- `transcribing`
+- `dispatching`
+- `waiting_for_reply`
+- `cooldown`
+- `error`
 
-Why this matters:
+Rules:
 
-- `pi5mic` can then put the robot into `listening` when the user starts speaking
-- `pi5mic` can switch to `thinking` while Gemini or OpenClaw is busy
-- `pi5mic` can safely return the robot to `idle` at the end
+- only one active request at a time
+- reject or queue new wake-word hits while busy
+- always return to `idle` or `armed`
+- never leave the robot stuck in `listening` or `thinking`
 
-Without this tool, `pi5mic` can still work, but the robot experience will feel less complete.
+### 9.3 Standalone mode
+Standalone mode should work without OpenClaw.
 
-## 10. Phased Implementation Plan
+Flow:
+
+1. Detect the selected microphone
+2. Wait for either:
+   - wake word
+   - or a manual trigger command in `mic-tool`
+3. Record until either:
+   - silence timeout
+   - max duration
+   - or manual stop
+4. Transcribe the clip
+5. Show transcript and metadata locally
+6. Delete the temp clip unless debug retention is enabled
+
+### 9.4 OpenClaw integrated mode
+Integrated mode should use a documented OpenClaw transport.
+
+Preferred flow:
+
+1. Local microphone wake event starts capture
+2. `pi5mic` optionally sets robot presence to `listening` through a gateway-facing control path owned by the OpenClaw plugin
+3. Clip is recorded locally
+4. STT backend returns transcript
+5. `pi5mic` submits transcript to OpenClaw through:
+   - Gateway RPC `agent` + `agent.wait` as the preferred backend
+   - a CLI fallback backend only if RPC transport is unavailable
+6. While OpenClaw is processing, robot presence can switch to `thinking`
+7. Final reply is shown locally
+8. Outbound mirroring happens only if a delivery target is explicitly configured
+9. Robot returns to `idle`
+
+### 9.5 Session policy
+Default session policy should be:
+
+- dedicated mic session key, for example `voice:local-mic`
+
+Why:
+
+- cleaner queueing
+- no surprise conversation mixing with Telegram
+- easier troubleshooting
+
+Only make `main` the default if the user explicitly decides that local mic and other OpenClaw surfaces should share one memory lane.
+
+### 9.6 Delivery policy
+There are three safe delivery modes:
+
+- `local_only`
+- `local_plus_explicit_channel_target`
+- `agent_managed_only` for cases where a future OpenClaw-native voice path owns delivery
+
+For v1, the default should be `local_only`.
+
+If the user later configures Telegram mirroring, the config must include explicit target information and a clear statement that this is an outbound send, not an automatic reply continuation.
+
+## 10. Required Safety And Robustness Rules
+These rules are mandatory for implementation.
+
+### 10.1 Do not create two competing robot-control processes
+If OpenClaw’s persistent bridge already owns the robot hardware path, `pi5mic` must reuse a plugin-owned control surface instead of spawning its own long-lived competing runtime.
+
+### 10.2 Secrets never go into committed JSON config
+Use environment variables or the existing gateway environment.
+
+### 10.3 Audio clips are sensitive
+Delete temp clips by default. Retention must be:
+
+- opt-in
+- bounded
+- documented
+
+### 10.4 Integrated mode must degrade safely
+If OpenClaw or the STT backend is unavailable:
+
+- show the error locally
+- return the robot to `idle`
+- do not loop forever
+
+### 10.5 Wake-word behavior must have cooldown and busy protection
+Without this, repeated triggers can flood OpenClaw and fight the robot lifecycle hooks.
+
+### 10.6 Presence integration must be best-effort, not a hard failure gate
+If presence update fails, microphone capture and transcription should still be able to continue when safe.
+
+## 11. Phased Implementation Plan
+This is the corrected phased plan.
 
 ### Phase 0: Architecture lock and dependency spike
-Objective: confirm the dependency set, config shape, and exact OpenClaw reply path before building the library.
+Objective: lock the boundaries before writing package code.
 
 Likely files:
 
-- root `pyproject.toml`
-- new `pi5mic/pyproject.toml`
-- new `pi5mic/README.md`
+- `MicDevelopment.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
+- new `pi5mic/pyproject.toml`
+- new `pi5mic/README.md`
 
-Key implementation points:
+Required decisions in this phase:
 
-- lock `Gemini 2.5 Flash` as the primary STT backend
-- lock `Ninja` as the default wake word
-- lock `30 seconds` as the default hard maximum recording duration
-- lock `5 seconds` as the silence timeout default
-- confirm Telegram mirror strategy
-- define the `mic.json` contract
+- choose default microphone config-path strategy
+- choose default wake-word backend and its secret handling
+- choose STT backend abstraction and default backend
+- choose OpenClaw transport backend:
+  - Gateway RPC preferred
+  - CLI fallback optional
+- choose default session key
+- choose default delivery mode
+- choose audio retention policy
+- define the external presence-control path
+
+Important corrected defaults:
+
+- do not hard-lock `Gemini 2.5 Flash`
+- do not default to unconditional Telegram mirroring
+- do not assume an agent tool is the right external presence API
 
 Linting and validation:
 
 ```bash
-cd pi5mic
-uv run --extra dev python -m compileall src tests
-uv run --extra dev ruff check src tests
-uv run --extra dev ruff format --check src tests
-uv run --extra dev pytest -q tests -c pyproject.toml
+git diff --check
 ```
 
 Hardware risk:
@@ -455,31 +656,35 @@ Hardware risk:
 
 Documentation updates:
 
-- `pi5mic/README.md`
+- `MicDevelopment.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
 
-### Phase 1: Standalone package scaffold and microphone device layer
-Objective: create the standalone package and make USB microphone detection reliable.
+### Phase 1: Standalone package scaffold, config, and recorder abstraction
+Objective: create `pi5mic` as a real standalone library with a clear config contract.
 
 Likely files:
 
+- `pi5mic/pyproject.toml`
 - `pi5mic/src/pi5mic/__init__.py`
 - `pi5mic/src/pi5mic/__main__.py`
 - `pi5mic/src/pi5mic/driver.py`
+- `pi5mic/src/pi5mic/models.py`
+- `pi5mic/src/pi5mic/errors.py`
 - `pi5mic/src/pi5mic/config/config_manager.py`
 - `pi5mic/src/pi5mic/core/devices.py`
-- `pi5mic/src/pi5mic/core/audio.py`
-- `pi5mic/src/pi5mic/cli/cmd.py`
-- `pi5mic/src/pi5mic/cli/config_cmd.py`
-- tests under `pi5mic/tests`
+- `pi5mic/src/pi5mic/core/recorder.py`
+- `pi5mic/tests/test_config.py`
+- `pi5mic/tests/test_devices.py`
+- `pi5mic/tests/test_recorder.py`
 
 Key implementation points:
 
-- list USB input devices
-- select the active microphone
-- record raw WAV files
-- report basic microphone health
+- explicit `mic.json` schema
+- device listing and selection
+- bounded WAV capture
+- temp-file cleanup behavior
+- no secrets in config file
 
 Linting and validation:
 
@@ -500,23 +705,27 @@ Documentation updates:
 - `pi5mic/README.md`
 - `InstallationGuide.md`
 
-### Phase 2: Wake-word listening and silence auto-stop
-Objective: detect `Ninja` locally and stop recording safely when the user stops speaking.
+### Phase 2: Listener state machine, wake-word backend, and silence stop
+Objective: build the local voice state machine safely.
 
 Likely files:
 
 - `pi5mic/src/pi5mic/core/listener.py`
+- `pi5mic/src/pi5mic/core/session.py`
 - `pi5mic/src/pi5mic/wakeword/base.py`
 - `pi5mic/src/pi5mic/wakeword/porcupine.py`
+- `pi5mic/src/pi5mic/vad/base.py`
 - `pi5mic/src/pi5mic/vad/silence.py`
 - matching tests
 
 Key implementation points:
 
-- local wake-word detection
-- 5-second silence timeout
-- 30-second hard recording limit
-- cooldown and false-trigger handling
+- wake-word support
+- silence auto-stop
+- maximum clip length
+- cooldown
+- single-flight protection
+- busy-state handling
 
 Linting and validation:
 
@@ -536,26 +745,30 @@ Documentation updates:
 
 - `pi5mic/README.md`
 - `InstallationGuide.md`
-- `DevelopmentGuide.md`
 
-### Phase 3: Gemini STT backend
-Objective: transcribe the recorded audio clip into structured text in English, Traditional Chinese, or Japanese.
+### Phase 3: STT backend abstraction and default Gemini batch transcription
+Objective: add transcription through a stable backend interface.
 
 Likely files:
 
 - `pi5mic/src/pi5mic/stt/base.py`
 - `pi5mic/src/pi5mic/stt/gemini.py`
 - `pi5mic/src/pi5mic/models.py`
-- `pi5mic/src/pi5mic/core/recording.py`
 - matching tests
 
 Key implementation points:
 
-- use `google-genai`
-- send short clips directly
-- preserve original language
-- return structured JSON-style results
-- store temporary clips for retry and troubleshooting
+- backend interface, not hard-coded provider logic
+- default Gemini batch transcription path
+- model id configurable
+- retries and timeout handling
+- transcript metadata and language preservation
+- delete or retain temp audio according to policy
+
+Important design note:
+
+- this phase is batch transcription after capture
+- do not present it as real-time streaming transcription
 
 Linting and validation:
 
@@ -576,26 +789,27 @@ Documentation updates:
 - `pi5mic/README.md`
 - `InstallationGuide.md`
 
-### Phase 4: `mic-tool` interactive tool
-Objective: provide a setup and testing tool that non-programmers can use.
+### Phase 4: Local CLI and operator diagnostics
+Objective: make the package usable by a non-programmer before OpenClaw integration.
 
 Likely files:
 
-- `pi5mic/src/pi5mic/cli/mic_tool.py`
+- `pi5mic/src/pi5mic/cli/cmd.py`
+- `pi5mic/src/pi5mic/cli/config_cmd.py`
 - `pi5mic/src/pi5mic/cli/status.py`
 - `pi5mic/src/pi5mic/cli/_common.py`
+- `pi5mic/src/pi5mic/cli/mic_tool.py`
 - matching tests
 
 Key implementation points:
 
-- choose microphone device
-- set wake word settings
-- set silence timeout
-- set max duration
+- list devices
+- select active mic
 - test recording
-- test wake-word detection
-- test Gemini transcription
-- save config
+- test wake-word path
+- test transcription path
+- show effective config
+- show degraded-state diagnostics
 
 Linting and validation:
 
@@ -616,23 +830,24 @@ Documentation updates:
 - `pi5mic/README.md`
 - `InstallationGuide.md`
 
-### Phase 5: OpenClaw client and Telegram mirror
-Objective: send mic-originated requests into OpenClaw and mirror the final reply to Telegram by default.
+### Phase 5: OpenClaw transport backend
+Objective: submit transcript text into OpenClaw using a documented transport.
 
 Likely files:
 
-- `pi5mic/src/pi5mic/integration/openclaw_client.py`
-- `pi5mic/src/pi5mic/integration/router.py`
-- `pi5mic/src/pi5mic/integration/telegram_mirror.py`
+- `pi5mic/src/pi5mic/transport/base.py`
+- `pi5mic/src/pi5mic/transport/gateway_agent.py`
+- `pi5mic/src/pi5mic/transport/openclaw_cli.py`
 - matching tests
 
 Key implementation points:
 
-- submit recognized text into OpenClaw
-- read back the final response
-- keep local feedback in `mic-tool`
-- mirror the final answer to Telegram
-- do not break existing Telegram text chat behavior
+- Gateway RPC `agent` + `agent.wait` as the preferred backend
+- explicit gateway URL and auth handling
+- explicit session key
+- explicit agent id
+- typed response parsing
+- local-only fallback when delivery is disabled
 
 Linting and validation:
 
@@ -652,7 +867,6 @@ uv run --extra dev python -m compileall .
 uv run --extra dev ruff check .
 uv run --extra dev ruff format --check .
 uv run pytest -q pi5mic/tests -c pi5mic/pyproject.toml
-uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
 git diff --check
 ```
 
@@ -662,30 +876,34 @@ Hardware risk:
 
 Documentation updates:
 
-- root `README.md`
 - `pi5mic/README.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
 
-### Phase 6: Small OpenClaw plugin extension for public presence updates
-Objective: expose a safe public tool so `pi5mic` can drive `listening`, `thinking`, and `idle` cleanly.
+### Phase 6: OpenClaw-side presence control and explicit delivery integration
+Objective: let `pi5mic` reuse the active OpenClaw robot path safely.
 
 Likely files:
 
 - `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
 - `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
 - plugin tests
+- `pi5mic/src/pi5mic/integration/presence.py`
+- `pi5mic/src/pi5mic/integration/delivery.py`
+- matching tests
 
 Key implementation points:
 
-- add a public tool like `ninjaclawbot_set_presence_mode`
-- allow modes:
-  - `idle`
-  - `thinking`
-  - `listening`
-- keep the current lifecycle hooks untouched
-- let `pi5mic` call the tool directly when voice capture starts or ends
+- add a gateway-facing plugin-owned presence control path that reuses the persistent bridge
+- support `idle`, `thinking`, and `listening`
+- keep lifecycle hooks intact
+- use explicit delivery targeting for any Telegram mirror behavior
+- default to no external mirroring until target config exists
+
+Important correction:
+
+- a plugin-side gateway-facing control path is the primary external interface here
+- an optional agent tool may still be added later, but it is not the main requirement for `pi5mic`
 
 Linting and validation:
 
@@ -715,9 +933,10 @@ Documentation updates:
 - root `README.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
+- plugin docs if needed
 
 ### Phase 7: Workspace integration and final release pass
-Objective: add `pi5mic` cleanly to the project workspace and document the finished user path.
+Objective: add `pi5mic` to the workspace and document the supported user path.
 
 Likely files:
 
@@ -731,8 +950,9 @@ Key implementation points:
 
 - add `pi5mic` to the workspace
 - keep standalone install support
-- write final Raspberry Pi validation steps
-- keep secrets and tokens out of committed files
+- document environment variables and secrets setup
+- document session policy and delivery policy
+- document Raspberry Pi validation and rollback steps
 
 Linting and validation:
 
@@ -758,7 +978,7 @@ Documentation updates:
 
 - all user-facing docs that mention setup, architecture, or voice input
 
-## 11. Quality Gate After Every Phase
+## 12. Quality Gate After Every Phase
 We should not move to the next phase until the current phase passes its checks.
 
 For `pi5mic` package work:
@@ -791,57 +1011,112 @@ npm run typecheck
 npm test
 ```
 
-## 12. Raspberry Pi Validation Plan
-Every hardware-facing phase should include real Pi checks.
+## 13. Raspberry Pi Validation Plan
+Every hardware-facing phase needs a real Raspberry Pi validation pass.
 
 ### Safe smoke tests
-These tests do not move the robot.
+These tests should not move the robot.
 
-- USB mic is detected
-- wake word is detected
-- a short recording succeeds
-- a 30-second maximum-length recording ends cleanly
-- Gemini transcription works in all 3 target languages
+- USB microphone is detected
+- selected input device can record a short WAV clip
+- wake word can be enabled and disabled
+- silence timeout stops capture correctly
+- 30-second maximum capture limit works
+- temp-audio cleanup policy behaves as configured
+- local-only transcription works end to end
 
 ### Device communication tests
-These check connections and service behavior.
+These confirm networked and service dependencies.
 
-- OpenClaw gateway reachable
-- Gemini API key valid
-- Telegram mirror configuration valid
-- microphone reconnect works
+- Gemini credentials are valid
+- Picovoice access key is valid if Porcupine is enabled
+- OpenClaw gateway is reachable
+- configured session key works
+- explicit delivery target validates before first outbound mirror
 
-### Actuator-moving tests
-These should be conservative.
+### Robot-presence tests
+These are conservative robot-state tests.
 
-- first ask for a text-only voice request
-- then ask for a safe expression-only voice request
-- only test movement if the rest is stable
+- `listening` can be entered and left safely
+- `thinking` can be entered and left safely
+- failure during presence update does not wedge the mic state machine
+- OpenClaw lifecycle hooks still work after adding the external presence path
 
-### Power-risk tests
-These are important because voice listening is a long-running feature.
+### End-to-end conversational tests
+Run these in order:
 
-- 20 to 30 minute idle listening test
-- repeated wake and speak cycles
-- network disconnect during transcription
-- OpenClaw restart while `pi5mic` is idle
+1. local-only voice request with no outbound mirroring
+2. local voice request with robot `thinking` state only
+3. local voice request with explicit outbound mirror target
+4. repeated wake-and-speak cycles
+5. OpenClaw restart while `pi5mic` is idle
+6. network disconnect during transcription
+7. gateway disconnect during reply wait
 
-## 13. Final Recommendation Before Coding
-The audit shows that the best first version is:
+### Power-risk and long-run tests
+These matter because listening is a long-running feature.
+
+- 20 to 30 minute idle listening run
+- repeated wake cycles across the full session
+- microphone unplug/replug recovery
+- memory use and temp-file cleanup after repeated requests
+
+### Rollback steps
+Rollback must be documented before shipping any Pi validation slice.
+
+Minimum rollback:
+
+- disable `pi5mic`
+- return to the current Telegram-only OpenClaw path
+- confirm startup greeting, reply expression, and sleepy shutdown still work
+
+## 14. Final Recommendation Before Coding
+The best first version is still:
 
 - a new sibling library named `pi5mic`
 - not a large refactor inside `ninjaclawbot`
-- Gemini 2.5 Flash for transcription
-- `Ninja` as the default wake word
-- `30 seconds` as the default hard recording limit
-- local feedback in `mic-tool`
-- Telegram mirror enabled by default for mic-originated replies
-- a small OpenClaw plugin extension so `pi5mic` can set `listening`, `thinking`, and `idle`
 
-This plan fits the current codebase well and keeps the system understandable:
+But the corrected first-version defaults should now be:
 
-- `pi5mic` handles voice input
-- OpenClaw handles agent reasoning
+- standalone-first package
+- explicit local voice state machine
+- configurable wake-word backend
+- batch STT backend abstraction with Gemini as the first default backend
+- OpenClaw Gateway RPC transport as the preferred integration path
+- dedicated mic session key by default
+- local-only delivery by default
+- outbound channel mirroring only after explicit target configuration
+- plugin-owned external presence control path that reuses the persistent bridge
+
+This is the safest version of the architecture:
+
+- `pi5mic` handles voice input and local state
+- OpenClaw handles agent orchestration, sessions, and delivery
 - `ninjaclawbot` handles robot output
 
-That separation is the safest way to add voice support without destabilizing the existing build.
+That separation fits the current codebase, matches upstream OpenClaw contracts more closely, and reduces the main build risks that were previously under-specified.
+
+## 15. References
+Repository sources:
+
+- `ninjaclawbot/src/ninjaclawbot/actions.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/service.py`
+- `ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
+
+Upstream references checked on `2026-03-19`:
+
+- OpenClaw Agent Loop: `https://docs.openclaw.ai/concepts/agent-loop`
+- OpenClaw Plugin Agent Tools: `https://docs.openclaw.ai/plugins/agent-tools`
+- OpenClaw Plugins: `https://docs.openclaw.ai/tools/plugin`
+- OpenClaw Talk Mode: `https://docs.openclaw.ai/nodes/talk`
+- OpenClaw Voice Wake: `https://docs.openclaw.ai/nodes/voicewake`
+- OpenClaw Audio and Voice Notes: `https://docs.openclaw.ai/nodes/audio`
+- OpenClaw Telegram: `https://docs.openclaw.ai/channels/telegram`
+- OpenClaw Remote Access: `https://docs.openclaw.ai/gateway/remote`
+- Google Gemini Audio Understanding: `https://ai.google.dev/gemini-api/docs/audio`
+- Google Gen AI Python SDK: `https://github.com/googleapis/python-genai`
+- Picovoice Porcupine Python Quick Start: `https://picovoice.ai/docs/quick-start/porcupine-python/`

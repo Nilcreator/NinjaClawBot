@@ -1,5 +1,62 @@
 # Development Log
 
+## 2026-03-19
+
+### pi5mic Planning Audit And Fact-Checked MicDevelopment Rewrite
+
+Summary:
+
+- re-audited `MicDevelopment.md` against the current `ninjaclawbot` runtime,
+  bridge, and OpenClaw plugin code
+- verified the current upstream OpenClaw contracts that matter for microphone
+  work:
+  - gateway agent entry points
+  - lifecycle hooks
+  - plugin tool opt-in rules
+  - Talk Mode
+  - Voice Wake
+  - Audio and Voice Notes
+  - Telegram delivery behavior
+- verified upstream vendor constraints for the proposed voice stack:
+  - Gemini audio understanding and transcription guidance
+  - Porcupine Raspberry Pi 5 support and AccessKey requirement
+- rewrote `MicDevelopment.md` so the implementation plan is stricter and more
+  robust around:
+  - session isolation
+  - explicit delivery targets
+  - secret handling
+  - audio retention
+  - batch STT vs real-time assumptions
+  - plugin-owned external presence control
+- corrected stale repository assumptions in the plan documentation:
+  - archived planning and log files live under `backup/`
+  - presence support already exists in Python and bridge layers today
+
+Files changed:
+
+- [MicDevelopment.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/MicDevelopment.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the earlier microphone plan was close in architecture, but it still left
+  several high-risk assumptions under-specified, especially around how a local
+  microphone process should talk to OpenClaw safely and how outbound Telegram
+  mirroring should be controlled
+- the revised plan now reflects the real current code boundaries and the real
+  upstream contracts we would be building against
+
+Validation:
+
+- manual repository audit with Serena and targeted source review
+- upstream documentation fact-check against primary sources
+- markdown rewrite review
+
+Raspberry Pi validation status:
+
+- not applicable yet
+- this change is planning and documentation only
+
 ## 2026-03-14
 
 ### Final Documentation Rewrite, Archive Move, And Repository Cleanup
