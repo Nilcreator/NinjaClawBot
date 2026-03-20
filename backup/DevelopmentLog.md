@@ -2,6 +2,57 @@
 
 ## 2026-03-20
 
+### MicDevelopment.md Audit Consolidation And Always-On Voice Planning Refresh
+
+Summary:
+
+- reviewed the current `MicDevelopment.md` planning document after the one-shot
+  `pi5mic` path became usable in standalone and integrated OpenClaw flows
+- found that the document still contained the older longer planning structure,
+  which made it harder to see:
+  - the current overall product goal
+  - which `pi5mic` milestones are already finished
+  - which items are still one-shot only
+  - what the next always-on build should do
+- rewrote `MicDevelopment.md` into a more practical planning document that now
+  clearly separates:
+  - overall development goal and user-facing spec
+  - current implemented features
+  - open gaps and needed improvements
+  - the audit summary across `pi5mic`, `ninjaclawbot`, and the OpenClaw plugin
+  - the recommended architecture for always-on voice input
+  - the recommended setup order for the full NinjaClawBot project
+  - the phased implementation plan for the always-on feature
+- locked the latest clarified design rules into the document:
+  - preserve the original spoken language when sending text to OpenClaw
+  - keep always-on voice input manual start and manual stop only
+  - keep `pi5mic` optional but strongly recommended during project setup
+  - keep OpenClaw voice enablement best-effort and skippable when `pi5mic`
+    config is missing
+
+Files changed:
+
+- [MicDevelopment.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/MicDevelopment.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the next build step is the always-on voice feature, so the planning document
+  needed to become easier to use as a real implementation guide
+- the older document was still useful as audit history, but it no longer gave a
+  concise status view of what is already built versus what remains
+- the user explicitly requested a clearer document that combines the current
+  build status with the next-phase always-on implementation plan
+
+Lint and test results:
+
+- `git diff --check`
+
+Raspberry Pi validation status:
+
+- not applicable for this document-only update
+- no code behavior changed in this pass
+
 ### pi5mic CLI Import Syntax Fix For `setup` And `mic-tool`
 
 Summary:
