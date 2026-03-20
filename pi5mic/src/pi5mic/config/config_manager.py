@@ -28,10 +28,13 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "wakeword": {
         "enabled": False,
-        "backend": "porcupine",
+        "backend": "openwakeword",
         "keyword": "ninja",
-        "keyword_path": None,
-        "access_key_env_var": "PICOVOICE_ACCESS_KEY",
+        "model_path": None,
+        "threshold": 0.5,
+        "vad_threshold": 0.0,
+        "enable_noise_suppression": False,
+        "inference_framework": "auto",
     },
     "voiceinput": {
         "enabled": False,
@@ -106,14 +109,30 @@ def _merge_config(
 def _apply_runtime_migrations(config: dict[str, Any]) -> dict[str, Any]:
     """Normalize legacy config values that are known to break current runtimes."""
     integration = config.get("integration")
-    if not isinstance(integration, dict):
-        return config
+    if isinstance(integration, dict):
+        openclaw = integration.get("openclaw")
+        if isinstance(openclaw, dict):
+            openclaw["session_key"] = normalize_openclaw_session_id(openclaw.get("session_key"))
 
-    openclaw = integration.get("openclaw")
-    if not isinstance(openclaw, dict):
-        return config
+    wakeword = config.get("wakeword")
+    if isinstance(wakeword, dict):
+        legacy_backend = str(wakeword.get("backend", "") or "").strip().lower()
+        if legacy_backend in {"", "porcupine"}:
+            wakeword["backend"] = "openwakeword"
+        if not wakeword.get("model_path"):
+            legacy_keyword_path = str(wakeword.get("keyword_path", "") or "").strip()
+            wakeword["model_path"] = (
+                legacy_keyword_path
+                if legacy_keyword_path.lower().endswith((".onnx", ".tflite"))
+                else None
+            )
+        wakeword.setdefault("threshold", 0.5)
+        wakeword.setdefault("vad_threshold", 0.0)
+        wakeword.setdefault("enable_noise_suppression", False)
+        wakeword.setdefault("inference_framework", "auto")
+        wakeword.pop("keyword_path", None)
+        wakeword.pop("access_key_env_var", None)
 
-    openclaw["session_key"] = normalize_openclaw_session_id(openclaw.get("session_key"))
     return config
 
 

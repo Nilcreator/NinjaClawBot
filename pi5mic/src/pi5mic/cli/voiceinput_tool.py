@@ -79,13 +79,19 @@ def _print_voiceinput_status(*, manager_path: Path, config: dict, paths) -> None
         try:
             normalized = normalize_voiceinput_config(config)
             click.echo(f"  Wake word:        {normalized['keyword']}")
-            if normalized["keyword_path"]:
-                click.echo(f"  Keyword file:     {normalized['keyword_path']}")
+            if normalized["model_path"]:
+                click.echo(f"  Wake model:       {normalized['model_path']}")
+            click.echo(f"  Wake threshold:   {normalized['threshold']:.2f}")
+            click.echo(f"  Wake VAD:         {normalized['wakeword_vad_threshold']:.2f}")
+            click.echo(
+                "  Noise filter:     "
+                + ("enabled" if normalized["enable_noise_suppression"] else "disabled")
+            )
+            click.echo(f"  Wake framework:   {normalized['inference_framework']}")
             click.echo(f"  Silence timeout:  {normalized['silence_timeout_seconds']:.1f}s")
             click.echo(f"  Max capture:      {normalized['max_capture_seconds']:.1f}s")
             click.echo(f"  Cooldown:         {normalized['cooldown_seconds']:.1f}s")
             click.echo(f"  Session strategy: {normalized['session_strategy']}")
-            click.echo(f"  Access key env:   {normalized['access_key_env_var']}")
         except ConfigError as exc:
             click.echo(f"  Voice config:     invalid ({exc})")
     click.echo(f"  Running:          {'yes' if state['running'] else 'no'}")

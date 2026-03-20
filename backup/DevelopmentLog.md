@@ -2768,3 +2768,88 @@ Validation:
 - `cd pi5mic && uv run --extra dev ruff check src tests`
 - `cd pi5mic && uv run --extra dev ruff format --check src tests`
 - `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+## 2026-03-20 - `MicDevelopment.md` openWakeWord replacement planning update
+
+Summary:
+
+- refined [MicDevelopment.md](../MicDevelopment.md) so it now distinguishes
+  the current Porcupine-based always-on preview from the approved next-step
+  `openWakeWord` migration
+
+Documentation updates:
+
+- updated the planning document with:
+  - a clearer audit summary of current Picovoice coupling points
+  - the official `openWakeWord` fit and constraints
+  - a dedicated phased replacement plan for packaging, config, backend,
+    runtime, tests, docs, and Raspberry Pi validation
+
+Validation:
+
+- `git diff --check -- MicDevelopment.md backup/DevelopmentLog.md`
+
+Notes:
+
+- this pass was planning and documentation only
+- no runtime code changed
+
+## 2026-03-20 - `pi5mic` openWakeWord migration
+
+Summary:
+
+- replaced the Picovoice/Porcupine always-on wake-word path with `openWakeWord`
+  across `pi5mic` runtime code, packaging, tests, and active setup documents
+
+Implementation changes:
+
+- migrated `pi5mic` wake-word defaults and config migration logic to
+  `openWakeWord`
+- added `pi5mic install openwakeword --model-path ...` to register a custom
+  `.onnx` or `.tflite` `Ninja` model and download shared runtime assets
+- replaced the old Porcupine detector with a native `OpenWakeWordDetector`
+  wrapper
+- updated always-on readiness checks, setup prompts, doctor output, status
+  output, and `voiceinput-tool` status text to use model-based wake-word setup
+- removed the legacy `porcupine.py` backend implementation
+- updated `pi5mic`, workspace, and `ninjaclawbot` optional `voiceinput` extras
+  to install `openwakeword` instead of `pvporcupine`
+- refreshed package tests for the new backend and legacy-config migration
+
+Documentation updates:
+
+- updated [README.md](../README.md) with the new standalone always-on flow:
+  custom model creation, `pi5mic install openwakeword`, `pi5mic setup`,
+  `doctor`, and `voiceinput-tool`
+- updated [pi5mic/README.md](../pi5mic/README.md) to explain the new
+  `openWakeWord` setup and testing flow in plain language
+- updated [InstallationGuide.md](../InstallationGuide.md) with the new
+  OpenClaw/NinjaClawBot always-on setup steps using a custom `Ninja`
+  `openWakeWord` model instead of an access key
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md) troubleshooting for the
+  new wake-word dependency and model-registration flow
+- updated [ninjaclawbot/README.md](../ninjaclawbot/README.md) to explain that
+  the optional wrapper now depends on a registered `openWakeWord` model
+- updated [MicDevelopment.md](../MicDevelopment.md) status notes to reflect that
+  the backend migration is complete and Raspberry Pi validation/tuning is the
+  main remaining work
+
+Validation:
+
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `80 passed`
+- `cd pi5mic && uv sync --extra dev --extra voiceinput`
+- `cd pi5mic && uv lock`
+- `uv lock`
+- `cd ninjaclawbot && uv lock`
+
+Notes:
+
+- `openWakeWord` adds a larger local runtime stack than the old backend,
+  including `numpy`, `onnxruntime`, `tflite-runtime`, `scikit-learn`, and
+  related packages
+- the current always-on build still needs Raspberry Pi field validation for
+  false-positive tuning, long idle listening, and repeated turn stability

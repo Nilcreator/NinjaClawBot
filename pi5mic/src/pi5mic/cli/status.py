@@ -59,9 +59,20 @@ def status(ctx: click.Context) -> None:
             f"{wakeword_config.get('keyword') or 'unset'} "
             f"({wakeword_config.get('backend') or 'unset'})"
         )
-        keyword_path = wakeword_config.get("keyword_path")
-        if keyword_path:
-            click.echo(f"  Keyword file:     {keyword_path}")
+        model_path = wakeword_config.get("model_path")
+        if model_path:
+            click.echo(f"  Wake model:       {model_path}")
+        click.echo(f"  Wake threshold:   {float(wakeword_config.get('threshold', 0.5)):.2f}")
+        click.echo(f"  Wake VAD:         {float(wakeword_config.get('vad_threshold', 0.0)):.2f}")
+        click.echo(
+            "  Noise filter:     "
+            + (
+                "enabled"
+                if bool(wakeword_config.get("enable_noise_suppression", False))
+                else "disabled"
+            )
+        )
+        click.echo(f"  Wake framework:   {wakeword_config.get('inference_framework', 'auto')}")
         click.echo(
             f"  Silence stop:     {float(voiceinput_config.get('silence_timeout_seconds', 3.0)):.1f}s"
         )

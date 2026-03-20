@@ -155,7 +155,7 @@ uv sync --extra dev --extra voiceinput
 What this does:
 
 - installs the normal workspace packages
-- installs the optional Porcupine wake-word package used by the always-on
+- installs the optional `openWakeWord` wake-word stack used by the always-on
   listener
 
 What you should expect:
@@ -189,55 +189,62 @@ What you should expect:
 - `whisper-cli` and `ggml-base.bin` are found successfully
 - the paths are saved into `mic.json`
 
-### Step 3. Understand the Picovoice access key
+### Step 3. Understand `openWakeWord`
 
-Picovoice is the wake-word engine used by the optional always-on listener.
-Its AccessKey is not an OpenClaw key and not a Gemini key. It is Picovoice’s
-own authentication token for running Porcupine.
+`openWakeWord` is the local wake-word engine now used by the optional always-on
+listener. It does not need an access key.
 
-According to Picovoice’s official docs, the AccessKey:
+What matters now:
 
-- is required for Picovoice usage
-- confirms your account is authorized
-- should be kept secret
-- can be obtained from the Picovoice Console home page after signing in
+- the `voiceinput` extra installs the `openWakeWord` runtime stack
+- `pi5mic` needs a custom `.onnx` or `.tflite` model file for the word `Ninja`
+- the listener stays fully local and offline on the Raspberry Pi
 
-### Step 4. Get the Picovoice access key and the `Ninja` wake-word file
+### Step 4. Create or download a custom `Ninja` wake-word model
 
-1. Go to [Picovoice Console](https://console.picovoice.ai).
-2. Create a free account or sign in.
-3. Copy your `AccessKey` from the home page.
-4. In the Console, open the `Porcupine` page.
-5. Create a custom wake word for `Ninja`.
-6. Choose the Raspberry Pi platform when training it.
-7. Download the generated `.ppn` file.
-8. Save that file somewhere stable, for example:
+The official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord)
+documents two supported paths for new models:
+
+- a simple Google Colab notebook for the fastest first model
+- a more detailed notebook when you want more control
+
+Recommended path:
+
+1. Open the official `openWakeWord` repository.
+2. Read the `Training New Models` section.
+3. Use the simple Google Colab notebook if this is your first custom model.
+4. Train or export a model for the word `Ninja`.
+5. Download the resulting `.onnx` or `.tflite` file.
+6. Save it somewhere stable, for example:
 
 ```bash
 mkdir -p ~/NinjaClawBot/voiceinput
-mv ~/Downloads/*.ppn ~/NinjaClawBot/voiceinput/
+mv ~/Downloads/ninja.* ~/NinjaClawBot/voiceinput/
 ```
 
 What this does:
 
-- gives `pi5mic` the permission token it needs for Porcupine
-- gives `pi5mic` the custom `Ninja` keyword model file it needs for better
-  wake-word detection on Raspberry Pi
+- gives `pi5mic` the custom local wake-word model it needs for `Ninja`
 
-### Step 5. Export the Picovoice access key in your shell
+### Step 5. Register the custom wake-word model
 
 ```bash
 cd ~/NinjaClawBot
-export PICOVOICE_ACCESS_KEY="your_key_here"
+uv run pi5mic install openwakeword \
+  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
 ```
 
 What this does:
 
-- makes the Picovoice key available to `pi5mic` in the current terminal
+- validates the model path
+- downloads the shared `openWakeWord` runtime assets
+- saves the wake-word settings into `mic.json`
 
 What you should expect:
 
-- no output is normal
+- `openWakeWord model: ...`
+- `openWakeWord framework: ...`
+- either `Downloaded runtime assets:` or `openWakeWord runtime assets are already present.`
 
 ### Step 6. Run `pi5mic setup` for standalone always-on use
 
@@ -252,7 +259,11 @@ Recommended choices:
 - `STT backend`: `whisper_cpp`
 - `Prepare always-on voice input now?`: `y`
 - `Wake word`: `ninja`
-- `Porcupine keyword file (.ppn) path`: the `.ppn` file you downloaded
+- `openWakeWord model path`: the `.onnx` or `.tflite` file you saved
+- `Wake-word detection threshold`: `0.5`
+- `Wake-word VAD threshold`: `0`
+- `Enable openWakeWord noise suppression?`: usually `n` for the first test
+- `openWakeWord inference framework`: `auto`
 - `Silence stop timeout`: `3`
 - `Maximum recorded command length`: `10`
 - `Cooldown`: `1.5`
@@ -273,14 +284,15 @@ What this does:
 
 - checks the microphone
 - checks Whisper
-- checks the wake-word dependency
-- checks the Picovoice environment variable
-- checks the `.ppn` file path
+- checks the `openWakeWord` dependency
+- checks the custom wake-word model path
+- checks the effective inference framework and listener settings
 
 What you should expect:
 
 - `INFO always-on voice input: enabled`
-- `OK   wake-word detector: ...`
+- `OK   wake-word detector: openwakeword ...`
+- `OK   wake model: ...`
 - either `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
 
 ### Step 8. Test safely in foreground mode first

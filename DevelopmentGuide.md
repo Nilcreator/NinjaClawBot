@@ -731,25 +731,21 @@ cd ~/NinjaClawBot
 uv sync --extra dev
 ```
 
-### `pi5mic` says `pvporcupine` is missing or `voiceinput-tool` is not ready
+### `pi5mic` says `openwakeword` is missing or `voiceinput-tool` is not ready
 
-- this means the optional always-on wake-word dependency was not installed yet
-- install the voice-input extra and then rerun doctor:
+- this means the optional always-on wake-word dependency or custom model setup is still incomplete
+- install the voice-input extra, register your custom model, and then rerun doctor:
 
 ```bash
 cd ~/NinjaClawBot
 uv sync --extra dev --extra voiceinput
+uv run pi5mic install openwakeword --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
 uv run pi5mic doctor
 ```
 
-- if `doctor` then says the Picovoice access key is missing, set it in the same shell:
-
-```bash
-export PICOVOICE_ACCESS_KEY="your_key_here"
-uv run pi5mic doctor
-```
-
-- if your wake word is `Ninja`, `doctor` may also require a custom `.ppn` keyword file
+- `openWakeWord` does not need an API key
+- for the `Ninja` wake word, you need a custom `.onnx` or `.tflite` model file
+- if `doctor` still fails, check the model path and whether the shared runtime assets were downloaded
 - once `doctor` is clean, start the listener manually:
 
 ```bash

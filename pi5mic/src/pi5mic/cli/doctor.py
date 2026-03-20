@@ -170,20 +170,20 @@ def doctor(ctx: click.Context) -> None:
                 f"(frame length {readiness['detector_frame_length']})"
             )
             click.echo(f"OK   wake word:         {readiness['keyword']}")
+            click.echo(f"OK   wake model:        {readiness['model_path']}")
+            click.echo(f"OK   wake framework:    {readiness['resolved_inference_framework']}")
+            click.echo(f"OK   wake threshold:    {readiness['threshold']:.2f}")
+            click.echo(f"OK   wake VAD:          {readiness['wakeword_vad_threshold']:.2f}")
+            click.echo(
+                "OK   noise suppression: "
+                + ("enabled" if readiness["enable_noise_suppression"] else "disabled")
+            )
             click.echo(
                 "OK   capture policy:    "
                 f"silence {readiness['silence_timeout_seconds']:.1f}s, "
                 f"max {readiness['max_capture_seconds']:.1f}s, "
                 f"cooldown {readiness['cooldown_seconds']:.1f}s"
             )
-            click.echo(f"OK   access key env:    {readiness['access_key_env_var']}")
-            if readiness["keyword_path"] is not None:
-                click.echo(f"OK   keyword file:      {readiness['keyword_path']}")
-            elif readiness["keyword"].casefold() == "ninja":
-                warnings.append(
-                    "The wake word is set to 'Ninja' without a custom `.ppn` keyword file. "
-                    "Most Porcupine setups require a custom keyword file for that word."
-                )
 
             runtime_paths = build_voiceinput_runtime_paths(manager.path)
             runtime_state = read_voiceinput_state(runtime_paths)

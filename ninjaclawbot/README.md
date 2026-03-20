@@ -112,6 +112,10 @@ machine-facing bridge used by the OpenClaw plugin.
 uses the project-root `mic.json`, but it still keeps the real implementation in `pi5mic` so the
 microphone remains a standalone-first feature.
 
+That optional listener now uses `openWakeWord` for wake-word detection. For the
+`Ninja` wake word, prepare a custom `.onnx` or `.tflite` model and register it
+through `pi5mic` before starting the listener.
+
 ## OpenClaw Plugin
 
 The official plugin wrapper is stored at:

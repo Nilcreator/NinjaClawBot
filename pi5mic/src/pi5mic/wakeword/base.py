@@ -14,6 +14,7 @@ class WakeWordResult:
     detected: bool
     keyword_index: int | None = None
     keyword: str | None = None
+    score: float | None = None
 
 
 class WakeWordDetector(ABC):

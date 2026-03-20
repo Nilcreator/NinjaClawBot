@@ -23,7 +23,7 @@ dev = [
     "ruff",
 ]
 voiceinput = [
-    "pi5mic[wakeword]",
+    "pi5mic[voiceinput]",
 ]
 
 [tool.uv.sources]

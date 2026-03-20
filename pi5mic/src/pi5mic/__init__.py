@@ -15,7 +15,7 @@ from pi5mic.stt.gemini import GeminiBackend
 from pi5mic.stt.whisper_cpp import WhisperCppBackend
 from pi5mic.transport.openclaw_cli import OpenClawAgentTransport
 from pi5mic.vad.silence import SilenceStopDetector
-from pi5mic.wakeword.porcupine import PorcupineWakeWordDetector
+from pi5mic.wakeword.openwakeword import OpenWakeWordDetector
 
 __version__ = "0.1.0"
 
@@ -30,7 +30,7 @@ __all__ = [
     "MicListener",
     "OpenClawAgentTransport",
     "OpenClawPresenceController",
-    "PorcupineWakeWordDetector",
+    "OpenWakeWordDetector",
     "RecordedClip",
     "RecorderSettings",
     "SilenceStopDetector",

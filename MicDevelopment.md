@@ -10,7 +10,8 @@ It now has two jobs:
 
 1. summarize what has already been built and validated for the current
    one-shot microphone workflow
-2. define the next implementation plan for the always-on voice input feature
+2. define the next implementation plan for replacing the current preview
+   always-on wake-word backend with `openWakeWord`
 
 This version replaces the earlier longer planning draft with a more practical
 project view:
@@ -19,7 +20,7 @@ project view:
 - key features already developed
 - what is finished and what still needs improvement
 - the recommended always-on design
-- the phased implementation plan for the next development cycle
+- the phased replacement plan for the next development cycle
 
 ## 2. Overall Development Goal
 
@@ -112,11 +113,9 @@ This path works in:
 
 The following feature is still planned work, not finished work:
 
-- always-on wake-word listening
-- continuous background voice loop
-- manual start/stop voice-input tool for the always-on path
-- optional best-effort voice readiness inside NinjaClawBot health and OpenClaw
-  diagnostics
+- final long-run Raspberry Pi validation for always-on wake-word listening
+- migration from the current preview Picovoice backend to `openWakeWord`
+- full removal of Picovoice-specific packaging, prompts, tests, and docs
 
 ## 5. Audit Summary
 
@@ -146,11 +145,27 @@ Important current strengths:
 The first implementation pass closed these earlier gaps:
 
 - a live streaming audio loop now exists
-- live resampling now adapts microphone frames for Porcupine
+- live resampling now adapts microphone frames for the active wake-word detector
 - wake-word config is now wired into runtime behavior
 - silence timeout is now used by the always-on capture loop
 - `voiceinput-tool` now provides manual start/stop/status/log control
 - the listener now refuses overlapping voice turns while one is still busy
+
+Important replacement findings:
+
+- the abstract `WakeWordDetector` interface is simple and reusable
+- the always-on loop can stay largely intact if the detector backend changes
+- the main Porcupine coupling is in:
+  - `wakeword/porcupine.py`
+  - `core/voiceinput.py`
+  - `config/config_manager.py`
+  - `cli/setup_cmd.py`
+  - `cli/doctor.py`
+- package extras, tests, and docs are also coupled to Picovoice concepts such
+  as:
+  - `pvporcupine`
+  - `PICOVOICE_ACCESS_KEY`
+  - `.ppn` keyword files
 
 ### 5.2 `ninjaclawbot` audit findings
 
@@ -197,8 +212,19 @@ Checked against upstream docs on 2026-03-20:
   local-microphone system
 - OpenClaw Talk Mode uses a continuous listen-think-reply loop and targets the
   main session, which is a useful reference for session strategy
-- Picovoice Porcupine supports Raspberry Pi 5 and custom wake words
-- Picovoice Cobra is a credible future low-resource VAD upgrade path
+- `openWakeWord` is the best free noncommercial replacement candidate for
+  `pi5mic`
+- `openWakeWord` provides:
+  - a Python API
+  - Raspberry Pi support
+  - frame-based streaming detection
+  - optional built-in VAD filtering
+  - optional noise suppression
+- `openWakeWord` does not require a cloud account or paid key
+- `openWakeWord` built-in pretrained models do not include `Ninja`, so the
+  planned replacement should target a custom `Ninja` model file
+- `openWakeWord` code is Apache-2.0, while bundled pretrained models are
+  licensed for noncommercial use
 - Gemini audio remains batch-oriented, not the main real-time engine
 
 ## 6. Key Design Decisions
@@ -256,6 +282,7 @@ For the always-on feature, the recommended policy is:
 The planned always-on feature should behave like this:
 
 - wake word: `Ninja`
+- long-term wake-word engine target: `openWakeWord`
 - once triggered, begin capturing the user utterance
 - stop capture after:
   - more than 3 seconds of silence
@@ -340,8 +367,8 @@ Expected skip cases:
 - `pi5mic` not installed
 - `mic.json` missing
 - wake-word dependency missing
-- missing Picovoice access key
-- missing custom keyword file
+- missing `openWakeWord` package or inference runtime
+- missing custom `Ninja` wake-word model file
 - STT backend not configured
 - OpenClaw not configured
 
@@ -365,6 +392,8 @@ The following work is complete:
 - always-on config block added to `mic.json`
 - always-on streaming loop implemented in `pi5mic/core/voiceinput.py`
 - wake-word plus silence-stop capture flow implemented
+- wake-word backend migrated to `openWakeWord`
+- Picovoice code, packaging, prompts, tests, and active setup docs removed
 - manual `voiceinput-tool` added with:
   - status
   - start
@@ -387,7 +416,7 @@ The following work is complete:
 The following work is still open:
 
 - long-run Raspberry Pi wake-word validation
-- false-positive tuning for the final `Ninja` keyword package
+- false-positive tuning for the final `Ninja` `openWakeWord` model
 - stronger time-based silence tuning in real room-noise conditions
 - optional higher-quality VAD backend
 - optional richer OpenClaw agent-side voice orchestration beyond readiness
@@ -397,190 +426,280 @@ The following work is still open:
 
 ## 11. Phased Implementation Plan
 
-### Phase 0: Planning lock and naming cleanup
+### 11.1 First-generation always-on preview
+
+Status: implemented
+
+Summary:
+
+- the first-generation always-on preview is already built
+- it proved the core `pi5mic` architecture is workable
+- it was then migrated to `openWakeWord` for the final free local wake-word path
+
+Completed preview phases:
+
+- planning lock and naming cleanup
+- always-on core audio loop
+- wake-word, silence-stop, and safeguard flow
+- `voiceinput-tool` and guided operator UX
+- OpenClaw session and delivery refinement
+- optional NinjaClawBot and plugin integration
+
+What this preview gave us:
+
+- proof that the long-running listener belongs in `pi5mic`
+- proof that the CLI and OpenClaw session model are viable
+- a reusable state machine and streaming loop
+- a clear list of Picovoice-specific coupling points to remove
+
+### 11.2 Approved `openWakeWord` replacement plan
+
+Implementation status:
+
+- phases `R0` through `R5` are now complete
+- phase `R6` Raspberry Pi field validation and tuning is still open
+
+### Phase R0: Replacement decision and migration lock
 
 Status: complete
 
 Objective:
 
-- lock the always-on architecture
-- keep the listener in `pi5mic`
-- decide final config names
-- avoid reusing the plugin’s current `enableAlwaysOn` meaning for microphone
-  listening
+- lock the wake-word replacement target as `openWakeWord`
+- keep the existing always-on listener architecture
+- remove Picovoice as an active dependency and operator requirement
 
 Likely files:
 
+- `MicDevelopment.md`
 - `pi5mic/src/pi5mic/config/config_manager.py`
-- `pi5mic/src/pi5mic/integration/openclaw_session.py`
-- `pi5mic/src/pi5mic/transport/openclaw_cli.py`
-- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
-- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `pi5mic/src/pi5mic/core/voiceinput.py`
+- `pi5mic/src/pi5mic/wakeword/base.py`
 
 Validation:
 
-- Python compile and test gates for `pi5mic`
-- TypeScript tests and typecheck for the plugin
+- planning review only
 
 Risk level:
 
 - low
 
-### Phase 1: Always-on core audio loop
+### Phase R1: Packaging and config migration
 
 Status: complete
 
 Objective:
 
-- add a long-running streaming input loop
-- validate supported input settings
-- resample or adapt frames for Porcupine
-- keep microphone resource usage stable on Raspberry Pi
+- replace Picovoice install extras with `openwakeword`
+- migrate old configs safely
+- remove `PICOVOICE_ACCESS_KEY` and `.ppn` assumptions
 
 Likely files:
 
-- `pi5mic/src/pi5mic/core/recorder.py`
-- new streaming/orchestration modules under `pi5mic/src/pi5mic/core/`
-- `pi5mic/src/pi5mic/models.py`
+- `pi5mic/pyproject.toml`
+- `pyproject.toml`
+- `ninjaclawbot/pyproject.toml`
+- `pi5mic/src/pi5mic/config/config_manager.py`
+
+Expected config direction:
+
+- `wakeword.backend`: `openwakeword`
+- remove:
+  - `wakeword.access_key_env_var`
+  - `wakeword.keyword_path`
+- add or standardize:
+  - `wakeword.model_path`
+  - `wakeword.threshold`
+  - `wakeword.vad_threshold`
+  - `wakeword.enable_noise_suppression`
+  - optional `wakeword.inference_framework`
 
 Validation:
 
-- new unit tests for streaming behavior
-- Raspberry Pi smoke tests with a real microphone
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `uv lock`
+- `cd ninjaclawbot && uv lock`
 
 Risk level:
 
-- medium
+- low
 
-### Phase 2: Wake word, silence stop, and safeguard flow
+### Phase R2: `openWakeWord` backend implementation
 
 Status: complete
 
 Objective:
 
-- wire `PorcupineWakeWordDetector` into the live loop
-- use silence-based stop behavior with a 3-second window
-- enforce the 10-second maximum
-- prevent overlapping requests while OpenClaw is still processing
+- add a native `openWakeWord` detector backend that matches the existing
+  `WakeWordDetector` contract
+- remove the current Porcupine backend implementation
 
 Likely files:
 
-- `pi5mic/src/pi5mic/wakeword/porcupine.py`
-- `pi5mic/src/pi5mic/vad/silence.py`
-- `pi5mic/src/pi5mic/core/listener.py`
-- `pi5mic/src/pi5mic/core/session.py`
+- new `pi5mic/src/pi5mic/wakeword/openwakeword.py`
+- `pi5mic/src/pi5mic/wakeword/base.py`
+- `pi5mic/src/pi5mic/wakeword/__init__.py`
+- `pi5mic/src/pi5mic/__init__.py`
+- delete `pi5mic/src/pi5mic/wakeword/porcupine.py`
+
+Implementation targets:
+
+- use `from openwakeword.model import Model`
+- feed 16-bit 16 kHz PCM frames as `numpy.int16`
+- target 1280-sample frame chunks for efficient streaming
+- use thresholded detection results
+- support custom `Ninja` model files
 
 Validation:
 
-- unit tests for busy-state behavior
-- manual Pi wake-word and silence-stop tests
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
 
 Risk level:
 
-- medium
+- low
 
-### Phase 3: `voiceinput-tool` and guided operator UX
+### Phase R3: Always-on loop and CLI migration
 
 Status: complete
 
 Objective:
 
-- add the manual start/stop always-on tool
-- extend setup, doctor, and status so users can configure wake-word dependencies
-  clearly
-- make the manual stop path obvious
+- wire `openWakeWord` into the existing always-on loop
+- keep the current busy protection, silence-stop logic, and OpenClaw dispatch
+- remove Picovoice-specific operator prompts and doctor checks
 
 Likely files:
 
-- `pi5mic/src/pi5mic/__main__.py`
+- `pi5mic/src/pi5mic/core/voiceinput.py`
 - `pi5mic/src/pi5mic/cli/setup_cmd.py`
 - `pi5mic/src/pi5mic/cli/doctor.py`
 - `pi5mic/src/pi5mic/cli/status.py`
-- `pi5mic/src/pi5mic/cli/mic_tool.py`
-- new CLI modules for the always-on tool
+- `pi5mic/src/pi5mic/cli/voiceinput_tool.py`
+
+Implementation notes:
+
+- keep the existing `MicListener` safeguard behavior
+- keep the current 3-second silence stop and 10-second max capture
+- replace:
+  - AccessKey prompts
+  - `.ppn` keyword-file prompts
+  - `pvporcupine` readiness checks
+- add:
+  - custom `openWakeWord` model-path checks
+  - inference runtime checks
+  - threshold and optional VAD/noise-suppression checks
 
 Validation:
 
-- CLI regression tests
-- Raspberry Pi manual tool-start and tool-stop validation
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
 
 Risk level:
 
-- low to medium
+- medium
 
-### Phase 4: OpenClaw session and delivery refinement
+### Phase R4: Test-suite replacement
 
 Status: complete
 
 Objective:
 
-- support a cleaner session strategy for always-on voice
-- preserve original-language transcript dispatch
-- keep dual local plus Telegram reply support when explicitly configured
+- replace Porcupine-specific tests with `openWakeWord` coverage
+- verify config migration and failure messaging
 
 Likely files:
 
-- `pi5mic/src/pi5mic/transport/openclaw_cli.py`
-- `pi5mic/src/pi5mic/integration/openclaw_setup.py`
-- `pi5mic/src/pi5mic/integration/delivery.py`
+- `pi5mic/tests/test_wakeword.py`
+- `pi5mic/tests/test_voiceinput.py`
+- `pi5mic/tests/test_doctor.py`
+- related CLI setup/status tests
 
 Validation:
 
-- transport tests
-- OpenClaw local round-trip tests
-- Telegram mirror tests when configured
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
 
 Risk level:
 
 - low
 
-### Phase 5: Optional NinjaClawBot and plugin integration
+### Phase R5: Documentation and repository cleanup
 
-Status: in progress
+Status: complete
 
 Objective:
 
-- integrate `pi5mic` into the recommended project setup flow
-- add optional voice readiness detection
-- make OpenClaw skip voice enablement automatically when `pi5mic` is not ready
+- remove Picovoice-specific documentation, prompts, and setup guidance
+- document `openWakeWord` as the only supported always-on wake-word path
 
 Likely files:
 
-- `ninjaclawbot/src/ninjaclawbot/config.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `README.md`
+- `pi5mic/README.md`
+- `InstallationGuide.md`
+- `DevelopmentGuide.md`
+- `MicDevelopment.md`
 - `ninjaclawbot/README.md`
-- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json`
+- `backup/DevelopmentLog.md`
+
+Cleanup scope:
+
+- remove references to:
+  - Picovoice
+  - Porcupine setup
+  - `PICOVOICE_ACCESS_KEY`
+  - `.ppn` files
+- replace them with:
+  - `openWakeWord` install guidance
+  - custom `Ninja` model guidance
+  - standalone and OpenClaw/NinjaClawBot validation steps
 
 Validation:
 
-- Python tests for optional mic readiness
-- plugin typecheck and tests
-- integration checks with and without `mic.json`
+- `git diff --check`
+- plus package-level lint/tests if code changes land in the same phase
 
 Risk level:
 
 - low
 
-### Phase 6: Final Raspberry Pi validation and tuning
+### Phase R6: Raspberry Pi validation and tuning
 
 Status: planned
 
 Objective:
 
-- validate idle listening
-- validate wake-word false positives
-- validate silence stop and busy protection
-- validate OpenClaw reply behavior
-- validate power and thermal stability
+- validate `openWakeWord` on Raspberry Pi 5 in real always-on operation
+- tune thresholds, false positives, and room-noise behavior
+- confirm OpenClaw and Telegram reply behavior still works
 
 Validation:
 
-- repeated real-device tests on Raspberry Pi 5
-- long-run idle listening
-- repeated wake-word cycles
+- safe smoke tests:
+  - install the new `voiceinput` extra
+  - run `pi5mic setup`
+  - run `pi5mic doctor`
+  - run `pi5mic voiceinput-tool foreground`
+- communication tests:
+  - wake-word detection
+  - silence stop
+  - 10-second max capture
+  - original-language OpenClaw handoff
+  - optional Telegram mirroring
+- power-risk tests:
+  - 20 to 30 minute idle armed run
+  - repeated wake-word cycles
+  - check CPU temperature, throttling, and memory use
 
 Risk level:
 
@@ -660,9 +779,11 @@ External primary sources checked on 2026-03-20:
   - https://docs.openclaw.ai/nodes/audio
 - OpenClaw agent-send docs:
   - https://github.com/openclaw/openclaw/blob/main/docs/tools/agent-send.md
-- Picovoice Porcupine Python Quick Start:
-  - https://picovoice.ai/docs/quick-start/porcupine-python/
-- Picovoice Porcupine overview:
-  - https://picovoice.ai/docs/porcupine/
-- Picovoice Cobra Python Quick Start:
-  - https://picovoice.ai/docs/quick-start/cobra-python/
+- openWakeWord GitHub:
+  - https://github.com/dscripka/openWakeWord
+- openWakeWord `model.py`:
+  - https://github.com/dscripka/openWakeWord/blob/main/openwakeword/model.py
+- openWakeWord microphone example:
+  - https://github.com/dscripka/openWakeWord/blob/main/examples/detect_from_microphone.py
+- Home Assistant wake-word article using openWakeWord:
+  - https://www.home-assistant.io/blog/2023/10/12/year-of-the-voice-chapter-4-wakewords

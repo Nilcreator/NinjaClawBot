@@ -32,7 +32,7 @@ def test_voiceinput_tool_foreground_uses_manual_runner(monkeypatch, tmp_path) ->
   },
   "wakeword": {
     "enabled": true,
-    "keyword": "picovoice"
+    "keyword": "ninja"
   }
 }
 """.strip(),
@@ -44,7 +44,7 @@ def test_voiceinput_tool_foreground_uses_manual_runner(monkeypatch, tmp_path) ->
         voiceinput_tool_module,
         "_ensure_voiceinput_enabled",
         lambda config: {
-            "keyword": "picovoice",
+            "keyword": "ninja",
             "silence_timeout_seconds": 3.0,
             "max_capture_seconds": 10.0,
         },
@@ -83,7 +83,7 @@ def test_voiceinput_tool_start_reports_success_when_state_turns_running(
   },
   "wakeword": {
     "enabled": true,
-    "keyword": "picovoice"
+    "keyword": "ninja"
   }
 }
 """.strip(),
@@ -107,8 +107,8 @@ def test_voiceinput_tool_start_reports_success_when_state_turns_running(
         voiceinput_tool_module,
         "_ensure_voiceinput_enabled",
         lambda config: {
-            "backend": "porcupine",
-            "keyword": "picovoice",
+            "backend": "openwakeword",
+            "keyword": "ninja",
             "session_strategy": "agent_main",
         },
     )

@@ -278,7 +278,7 @@ def _configure_voiceinput(config: dict) -> None:
 
     voiceinput_config["enabled"] = True
     wakeword_config["enabled"] = True
-    wakeword_config["backend"] = "porcupine"
+    wakeword_config["backend"] = "openwakeword"
     wakeword_config["keyword"] = (
         click.prompt(
             "Wake word",
@@ -286,29 +286,43 @@ def _configure_voiceinput(config: dict) -> None:
         ).strip()
         or "ninja"
     )
-    wakeword_config["access_key_env_var"] = (
-        click.prompt(
-            "Picovoice access-key environment variable",
-            default=str(wakeword_config.get("access_key_env_var", "PICOVOICE_ACCESS_KEY")),
-        ).strip()
-        or "PICOVOICE_ACCESS_KEY"
-    )
-
-    current_keyword_path = str(wakeword_config.get("keyword_path") or "").strip()
+    current_model_path = str(wakeword_config.get("model_path") or "").strip()
     if wakeword_config["keyword"].casefold() == "ninja":
         click.echo(
-            "Porcupine usually needs a custom `.ppn` keyword file for the wake word 'Ninja'."
+            "openWakeWord does not ship with a built-in 'Ninja' model, so you will usually "
+            "need your own custom `.tflite` or `.onnx` wake-word model."
         )
         click.echo(
-            "If you do not have that file yet, you can still save the config now, then add the "
-            "file path later before starting the listener."
+            "You can save the config now even if the model file is not ready yet. After you "
+            "create or download the model, register it with "
+            "`uv run pi5mic install openwakeword --model-path /path/to/ninja.tflite`."
         )
-    keyword_path = click.prompt(
-        "Porcupine keyword file (.ppn) path (leave blank only for built-in keywords)",
-        default=current_keyword_path,
-        show_default=bool(current_keyword_path),
+    model_path = click.prompt(
+        "openWakeWord model path (.tflite or .onnx)",
+        default=current_model_path,
+        show_default=bool(current_model_path),
     ).strip()
-    wakeword_config["keyword_path"] = keyword_path or None
+    wakeword_config["model_path"] = model_path or None
+    wakeword_config["threshold"] = click.prompt(
+        "Wake-word detection threshold (0-1)",
+        type=float,
+        default=float(wakeword_config.get("threshold", 0.5)),
+    )
+    wakeword_config["vad_threshold"] = click.prompt(
+        "Wake-word VAD threshold (0 disables this extra filter)",
+        type=float,
+        default=float(wakeword_config.get("vad_threshold", 0.0)),
+    )
+    wakeword_config["enable_noise_suppression"] = click.confirm(
+        "Enable openWakeWord noise suppression?",
+        default=bool(wakeword_config.get("enable_noise_suppression", False)),
+    )
+    wakeword_config["inference_framework"] = click.prompt(
+        "openWakeWord inference framework",
+        type=click.Choice(["auto", "tflite", "onnx"]),
+        default=str(wakeword_config.get("inference_framework", "auto")),
+        show_choices=True,
+    )
 
     voiceinput_config["silence_timeout_seconds"] = click.prompt(
         "Silence stop timeout after speaking (seconds)",
@@ -347,7 +361,7 @@ def _configure_voiceinput(config: dict) -> None:
 
     click.echo(
         "Always-on voice input setup is saved, but the listener will only be ready after "
-        f"Porcupine and your access key are installed. {describe_voiceinput_install_help()}"
+        f"openWakeWord and your custom wake-word model are ready. {describe_voiceinput_install_help()}"
     )
 
 

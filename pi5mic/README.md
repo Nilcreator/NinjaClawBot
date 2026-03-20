@@ -95,7 +95,8 @@ What this is doing:
 - installs all Python packages in the workspace
 - includes `pi5mic`
 - also includes the Gemini SDK that `pi5mic` uses for the optional cloud backend
-- if you use the `voiceinput` extra, it also installs the Porcupine wake-word dependency
+- if you use the `voiceinput` extra, it also installs `openWakeWord` and its
+  local inference runtime packages
 
 What you should expect:
 
@@ -210,8 +211,11 @@ Choose:
 - `Prepare always-on voice input now?`: choose `y` only if you want the manual wake-word listener
 - if you enable always-on voice input:
   - `Wake word`: keep `ninja` unless you trained a different keyword
-  - `Picovoice access-key environment variable`: usually `PICOVOICE_ACCESS_KEY`
-  - `Porcupine keyword file (.ppn) path`: provide your custom file for `Ninja` when available
+  - `openWakeWord model path`: point to your custom `Ninja` `.onnx` or `.tflite` model
+  - `Wake-word detection threshold`: keep `0.5` for the first test
+  - `Wake-word VAD threshold`: keep `0` unless you need stronger false-trigger filtering
+  - `Enable openWakeWord noise suppression?`: usually `n` for the first test
+  - `openWakeWord inference framework`: keep `auto`
   - `Silence stop timeout`: keep `3`
   - `Maximum recorded command length`: keep `10`
   - `Cooldown`: keep `1.5`
@@ -479,9 +483,10 @@ If the sample rate is not ideal for the selected microphone, `doctor` may still 
 
 If always-on voice input is enabled, `doctor` also checks:
 
-- whether the Porcupine package is installed
-- whether the Picovoice access key variable is present
-- whether the custom `.ppn` keyword file exists when needed
+- whether `openWakeWord` is installed
+- whether the custom `.onnx` or `.tflite` wake-word model exists
+- whether the shared `openWakeWord` runtime assets are available
+- which inference framework will be used
 - whether the background listener is running or stopped
 
 ### Step 13. Test recording only
@@ -591,28 +596,45 @@ uv sync --extra dev --extra voiceinput
 
 What this is doing:
 
-- installs Porcupine for wake-word detection
+- installs `openWakeWord` and its local runtime libraries for wake-word detection
 
 What you should expect:
 
 - the command completes without errors
 
-### Step 19. Set your Picovoice access key
+### Step 19. Create or download a custom `Ninja` wake-word model
+
+`openWakeWord` does not need an access key, but it does need a model file for
+the word `Ninja`.
+
+Recommended path:
+
+- open the official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord)
+- read the `Training New Models` section
+- use the simple Google Colab notebook if you want the easiest first pass
+- export or download a `Ninja` model as `.onnx` or `.tflite`
+- save it somewhere stable, for example `~/NinjaClawBot/voiceinput/ninja.tflite`
+
+### Step 20. Register the custom model
 
 ```bash
 cd ~/NinjaClawBot
-export PICOVOICE_ACCESS_KEY="your_key_here"
+uv run pi5mic install openwakeword \
+  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
 ```
 
 What this is doing:
 
-- gives the wake-word engine permission to start
+- validates the model path
+- downloads the shared `openWakeWord` runtime assets
+- saves the wake-word settings into `mic.json`
 
 What you should expect:
 
-- no output is normal
+- the command prints the detected model path and framework
+- it either downloads runtime assets or says they are already present
 
-### Step 20. Validate the always-on config
+### Step 21. Validate the always-on config
 
 ```bash
 cd ~/NinjaClawBot
@@ -626,10 +648,11 @@ What this is doing:
 What you should expect:
 
 - `INFO always-on voice input: enabled`
-- `OK   wake-word detector: ...`
-- if using `Ninja`, either a valid `.ppn` path or a clear warning/failure telling you what is still missing
+- `OK   wake-word detector: openwakeword ...`
+- `OK   wake model: ...`
+- `OK   wake framework: ...`
 
-### Step 21. Start the listener in the background
+### Step 22. Start the listener in the background
 
 ```bash
 cd ~/NinjaClawBot
@@ -647,7 +670,7 @@ What you should expect:
 - `Started the always-on voice input listener in the background.`
 - the microphone stays idle until it hears the wake word
 
-### Step 22. Check its status
+### Step 23. Check its status
 
 ```bash
 cd ~/NinjaClawBot
@@ -659,7 +682,7 @@ What this is doing:
 - shows whether the background listener is running
 - shows the wake word, session strategy, and the state/log file paths
 
-### Step 23. Stop it manually
+### Step 24. Stop it manually
 
 ```bash
 cd ~/NinjaClawBot
@@ -674,7 +697,7 @@ What you should expect:
 
 - `Stopped the always-on voice input listener.`
 
-### Step 24. Use the foreground mode when debugging
+### Step 25. Use the foreground mode when debugging
 
 ```bash
 cd ~/NinjaClawBot

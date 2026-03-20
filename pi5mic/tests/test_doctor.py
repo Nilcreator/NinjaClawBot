@@ -161,7 +161,7 @@ def test_doctor_reports_always_on_voiceinput_readiness(monkeypatch, tmp_path) ->
   },
   "wakeword": {
     "enabled": true,
-    "keyword": "picovoice"
+    "keyword": "ninja"
   },
   "stt": {
     "selected": "whisper_cpp",
@@ -195,15 +195,18 @@ def test_doctor_reports_always_on_voiceinput_readiness(monkeypatch, tmp_path) ->
         doctor_module,
         "validate_voiceinput_readiness",
         lambda config: {
-            "backend": "porcupine",
-            "keyword": "picovoice",
-            "keyword_path": None,
+            "backend": "openwakeword",
+            "keyword": "ninja",
+            "model_path": Path("/models/ninja.tflite"),
+            "resolved_inference_framework": "tflite",
+            "threshold": 0.5,
+            "wakeword_vad_threshold": 0.0,
+            "enable_noise_suppression": False,
             "silence_timeout_seconds": 3.0,
             "max_capture_seconds": 10.0,
             "cooldown_seconds": 1.5,
-            "access_key_env_var": "PICOVOICE_ACCESS_KEY",
             "detector_sample_rate": 16_000,
-            "detector_frame_length": 512,
+            "detector_frame_length": 1280,
         },
     )
     monkeypatch.setattr(
@@ -225,7 +228,8 @@ def test_doctor_reports_always_on_voiceinput_readiness(monkeypatch, tmp_path) ->
 
     assert result.exit_code == 0, result.output
     assert "INFO always-on voice input: enabled" in result.output
-    assert "OK   wake-word detector: porcupine @ 16000 Hz" in result.output
+    assert "OK   wake-word detector: openwakeword @ 16000 Hz" in result.output
+    assert "OK   wake model:        /models/ninja.tflite" in result.output
     assert "INFO voice input service: stopped" in result.output
 
 

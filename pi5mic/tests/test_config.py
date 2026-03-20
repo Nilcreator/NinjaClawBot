@@ -27,7 +27,7 @@ def test_load_returns_defaults_when_file_is_missing(tmp_path) -> None:
     assert config["profile"] == DEFAULT_CONFIG["profile"]
     assert config["audio"]["sample_rate"] == DEFAULT_CONFIG["audio"]["sample_rate"]
     assert config["stt"]["selected"] == "whisper_cpp"
-    assert config["wakeword"]["backend"] == "porcupine"
+    assert config["wakeword"]["backend"] == "openwakeword"
     assert config["voiceinput"]["enabled"] is False
     assert config["voiceinput"]["session_strategy"] == "agent_main"
     assert config["integration"]["openclaw"]["gateway_url"] == "ws://127.0.0.1:18789"
@@ -71,6 +71,31 @@ def test_load_migrates_legacy_openclaw_session_id(tmp_path) -> None:
     loaded = MicConfigManager(config_path).load()
 
     assert loaded["integration"]["openclaw"]["session_key"] == "voice-local-mic"
+
+
+def test_load_migrates_legacy_porcupine_wakeword_config(tmp_path) -> None:
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "wakeword": {
+    "enabled": true,
+    "backend": "porcupine",
+    "keyword": "ninja",
+    "keyword_path": "/tmp/ninja.tflite",
+    "access_key_env_var": "PICOVOICE_ACCESS_KEY"
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+
+    loaded = MicConfigManager(config_path).load()
+
+    assert loaded["wakeword"]["backend"] == "openwakeword"
+    assert loaded["wakeword"]["model_path"] == "/tmp/ninja.tflite"
+    assert "keyword_path" not in loaded["wakeword"]
+    assert "access_key_env_var" not in loaded["wakeword"]
 
 
 def test_load_rejects_invalid_json(tmp_path) -> None:

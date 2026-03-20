@@ -15,10 +15,10 @@ readme = "README.md"
 
 [project.optional-dependencies]
 wakeword = [
-    "pvporcupine>=3.0",
+    "openwakeword>=0.6,<1",
 ]
 voiceinput = [
-    "pvporcupine>=3.0",
+    "openwakeword>=0.6,<1",
 ]
 dev = [
     "pytest>=7.0",

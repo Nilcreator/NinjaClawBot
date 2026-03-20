@@ -476,7 +476,8 @@ Purpose:
 - install the full NinjaClawBot workspace in one environment
 - install `pi5mic`
 - install the Gemini Python SDK automatically through the current `pi5mic` dependency set
-- if you use the `voiceinput` extra, also install Porcupine for wake-word detection
+- if you use the `voiceinput` extra, also install `openWakeWord` and its local
+  inference runtime packages
 
 Expected result:
 - the sync finishes without errors
@@ -541,42 +542,33 @@ Expected result:
 - no output is normal
 - if both keys are set, the Google SDK uses `GOOGLE_API_KEY`
 
-### 9.5.4A What the Picovoice access key is and how to get it
+### 9.5.4A What `openWakeWord` needs and how to get a `Ninja` model
 
 You only need this if you want the optional always-on wake-word listener.
 
-What it is:
-- Picovoice is the company behind `Porcupine`, the wake-word engine used by
-  the always-on `pi5mic` listener
-- the `PICOVOICE_ACCESS_KEY` is Picovoice's own authentication token
-- it is separate from your OpenClaw settings and separate from any Gemini API
-  key
-- `pi5mic` needs it so Porcupine can detect the wake word before a voice
-  command starts recording
+What changed:
+- `pi5mic` now uses `openWakeWord` for always-on wake-word detection
+- there is no extra account and no access key anymore
+- for the word `Ninja`, `pi5mic` needs a custom `.onnx` or `.tflite` model file
 
-How to get it:
-1. Open [Picovoice Console](https://console.picovoice.ai).
-2. Create a free account or sign in.
-3. Copy the `AccessKey` shown on the Console home page.
-4. Open the `Porcupine` page in the Console.
-5. Create a custom wake word for `Ninja`.
-6. Choose the Raspberry Pi target platform when generating it.
-7. Download the generated `.ppn` keyword file.
-8. Save the `.ppn` file somewhere stable, for example:
+Recommended way to get the model:
+1. Open the official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord).
+2. Read the `Training New Models` section.
+3. Use the simple Google Colab notebook if you want the easiest first pass.
+4. Train or export a model for the word `Ninja`.
+5. Download the finished `.onnx` or `.tflite` model.
+6. Save it somewhere stable, for example:
 
 ```bash
 mkdir -p ~/NinjaClawBot/voiceinput
-mv ~/Downloads/*.ppn ~/NinjaClawBot/voiceinput/
+mv ~/Downloads/ninja.* ~/NinjaClawBot/voiceinput/
 ```
 
 Purpose:
-- gives `pi5mic` permission to run the wake-word engine
-- gives `pi5mic` the custom `Ninja` keyword file used for better wake-word
-  detection on Raspberry Pi
+- gives `pi5mic` the custom local wake-word model it needs for `Ninja`
 
 Expected result:
-- you have an `AccessKey`
-- you have a `.ppn` file saved somewhere you can point to during setup
+- you have a `.onnx` or `.tflite` model saved somewhere you can point to during setup
 
 ### 9.5.5 Run the guided setup
 
@@ -602,8 +594,11 @@ Recommended choices for NinjaClawBot integration:
 - `Prepare always-on voice input now?`: choose `y` only if you want the optional manual wake-word listener
 - if you enable always-on voice input:
   - keep `Wake word` as `ninja` unless you trained a different wake word
-  - keep `Picovoice access-key environment variable` as `PICOVOICE_ACCESS_KEY`
-  - add the `.ppn` keyword file path when you have it
+  - set `openWakeWord model path` to your custom `.onnx` or `.tflite` file
+  - keep `Wake-word detection threshold` at `0.5` for the first test
+  - keep `Wake-word VAD threshold` at `0` unless you need extra false-trigger filtering
+  - keep `Enable openWakeWord noise suppression?` at `n` for the first test
+  - keep `openWakeWord inference framework` at `auto`
   - keep `Silence stop timeout` at `3`
   - keep `Maximum recorded command length` at `10`
   - keep `Cooldown` at `1.5`
@@ -651,9 +646,10 @@ Expected result:
 - for Whisper: command path, model path, and runtime summary are shown
 - for Gemini: `doctor` shows which API key variable it found
 - if always-on voice input is enabled, `doctor` also checks:
-  - whether Porcupine is installed
-  - whether `PICOVOICE_ACCESS_KEY` or the configured variable is present
-  - whether the `.ppn` keyword file exists when needed
+  - whether `openWakeWord` is installed
+  - whether the custom `.onnx` or `.tflite` wake-word model exists
+  - whether the shared `openWakeWord` runtime assets are available
+  - which inference framework will be used
   - whether the voice-input service is currently running or stopped
 - if the profile is `openclaw`, `doctor` also checks:
   - the OpenClaw command
@@ -690,18 +686,22 @@ Expected result:
 
 Use this only after `doctor` is clean.
 
-1. Set your Picovoice access key in the current terminal:
+1. Register the custom `openWakeWord` model:
 
 ```bash
 cd ~/NinjaClawBot
-export PICOVOICE_ACCESS_KEY="your_key_here"
+uv run pi5mic install openwakeword \
+  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
 ```
 
 Purpose:
-- gives the current shell access to the Porcupine wake-word engine
+- validates the model path
+- downloads the shared `openWakeWord` runtime assets
+- saves the wake-word settings into `mic.json`
 
 Expected result:
-- no output is normal
+- the command prints the detected model path and framework
+- it either downloads runtime assets or says they are already present
 
 2. Do the safest first test in the foreground:
 

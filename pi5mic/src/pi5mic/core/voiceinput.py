@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import audioop
-import importlib.util
 import json
 import math
 import os
@@ -28,8 +27,13 @@ from pi5mic.errors import (
     TransportError,
     WakeWordError,
 )
+from pi5mic.install.openwakeword import (
+    resolve_openwakeword_inference_framework,
+    resolve_openwakeword_model_path,
+    validate_openwakeword_runtime_assets,
+)
 from pi5mic.vad.silence import SilenceStopDetector
-from pi5mic.wakeword.porcupine import PorcupineWakeWordDetector
+from pi5mic.wakeword.openwakeword import OpenWakeWordDetector
 
 _TARGET_SAMPLE_WIDTH_BYTES = 2
 _TIMESTAMP_KEYS = {
@@ -157,8 +161,9 @@ def update_voiceinput_state(paths: VoiceInputRuntimePaths, **updates: Any) -> di
 def describe_voiceinput_install_help() -> str:
     """Return the recommended install command for always-on wake-word support."""
     return (
-        "Install wake-word support with `uv sync --extra dev --extra voiceinput` from the "
-        "NinjaClawBot root, or run `cd pi5mic && uv sync --extra dev --extra wakeword`."
+        "Install wake-word support with `uv sync --extra dev --extra voiceinput`, then "
+        "register your custom model with `uv run pi5mic install openwakeword --model-path "
+        "/path/to/ninja.tflite`."
     )
 
 
@@ -181,8 +186,8 @@ def normalize_voiceinput_config(config: dict[str, Any]) -> dict[str, Any]:
             "Wake-word detection is disabled. Rerun `uv run pi5mic setup` and enable always-on voice input."
         )
 
-    backend = str(wakeword.get("backend", "porcupine")).strip().lower()
-    if backend != "porcupine":
+    backend = str(wakeword.get("backend", "openwakeword")).strip().lower()
+    if backend != "openwakeword":
         raise ConfigError(f"Unsupported wake-word backend: {backend}")
 
     silence_timeout = float(voiceinput.get("silence_timeout_seconds", 3.0))
@@ -203,16 +208,29 @@ def normalize_voiceinput_config(config: dict[str, Any]) -> dict[str, Any]:
         raise ConfigError("voiceinput.session_strategy must be 'agent_main' or 'dedicated_mic'.")
 
     keyword = str(wakeword.get("keyword", "ninja")).strip() or "ninja"
-    keyword_path = str(wakeword.get("keyword_path", "") or "").strip() or None
-    access_key_env_var = str(wakeword.get("access_key_env_var", "PICOVOICE_ACCESS_KEY")).strip()
-    if not access_key_env_var:
-        raise ConfigError("wakeword.access_key_env_var must not be empty.")
+    model_path = str(wakeword.get("model_path", "") or "").strip() or None
+    threshold = float(wakeword.get("threshold", 0.5))
+    wakeword_vad_threshold = float(wakeword.get("vad_threshold", 0.0))
+    enable_noise_suppression = bool(wakeword.get("enable_noise_suppression", False))
+    inference_framework = str(wakeword.get("inference_framework", "auto")).strip().lower() or "auto"
+
+    if threshold <= 0 or threshold > 1:
+        raise ConfigError("wakeword.threshold must be greater than 0 and less than or equal to 1.")
+    if wakeword_vad_threshold < 0 or wakeword_vad_threshold > 1:
+        raise ConfigError(
+            "wakeword.vad_threshold must be greater than or equal to 0 and less than or equal to 1."
+        )
+    if inference_framework not in {"auto", "tflite", "onnx"}:
+        raise ConfigError("wakeword.inference_framework must be one of: auto, tflite, onnx.")
 
     return {
         "backend": backend,
         "keyword": keyword,
-        "keyword_path": keyword_path,
-        "access_key_env_var": access_key_env_var,
+        "model_path": model_path,
+        "threshold": threshold,
+        "wakeword_vad_threshold": wakeword_vad_threshold,
+        "enable_noise_suppression": enable_noise_suppression,
+        "inference_framework": inference_framework,
         "silence_timeout_seconds": silence_timeout,
         "max_capture_seconds": max_capture,
         "cooldown_seconds": cooldown,
@@ -221,31 +239,35 @@ def normalize_voiceinput_config(config: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def build_wakeword_detector(config: dict[str, Any]) -> PorcupineWakeWordDetector:
+def build_wakeword_detector(config: dict[str, Any]) -> OpenWakeWordDetector:
     """Build the configured wake-word detector for always-on voice input."""
     normalized = normalize_voiceinput_config(config)
-    keyword_path = normalized["keyword_path"]
-    keyword = normalized["keyword"]
-    env_var = normalized["access_key_env_var"]
-
-    if keyword_path is None and keyword.lower() == "ninja":
+    resolved_model = resolve_openwakeword_model_path(normalized["model_path"])
+    resolved_framework = resolve_openwakeword_inference_framework(
+        model_path=resolved_model,
+        configured_framework=normalized["inference_framework"],
+    )
+    missing_assets = validate_openwakeword_runtime_assets(
+        inference_framework=resolved_framework,
+        include_vad=normalized["wakeword_vad_threshold"] > 0,
+    )
+    if missing_assets:
+        missing_names = ", ".join(path.name for path in missing_assets)
         raise WakeWordError(
-            "The wake word 'ninja' usually requires a custom Porcupine keyword file (.ppn). "
-            "Set `wakeword.keyword_path` or rerun `uv run pi5mic setup`."
+            "openWakeWord shared runtime assets are missing: "
+            + missing_names
+            + ". Run `uv run pi5mic install openwakeword --model-path "
+            + str(resolved_model)
+            + "` to download the required runtime files."
         )
 
-    if keyword_path is not None:
-        resolved_path = Path(keyword_path).expanduser().resolve()
-        if not resolved_path.is_file():
-            raise WakeWordError(f"Wake-word keyword file not found: {resolved_path}")
-        return PorcupineWakeWordDetector.from_environment(
-            env_var=env_var,
-            keyword_paths=[resolved_path],
-        )
-
-    return PorcupineWakeWordDetector.from_environment(
-        env_var=env_var,
-        keywords=[keyword],
+    return OpenWakeWordDetector(
+        keyword=normalized["keyword"],
+        model_path=resolved_model,
+        threshold=normalized["threshold"],
+        vad_threshold=normalized["wakeword_vad_threshold"],
+        enable_noise_suppression=normalized["enable_noise_suppression"],
+        inference_framework=resolved_framework,
     )
 
 
@@ -253,19 +275,20 @@ def validate_voiceinput_readiness(config: dict[str, Any]) -> dict[str, Any]:
     """Validate the always-on voice-input runtime and return detector details."""
     normalized = normalize_voiceinput_config(config)
     try:
-        porcupine_spec = importlib.util.find_spec("pvporcupine")
-    except ModuleNotFoundError:
-        porcupine_spec = None
-
-    if porcupine_spec is None:
-        raise WakeWordError(
-            "The 'pvporcupine' package is not installed. " + describe_voiceinput_install_help()
+        resolved_model = resolve_openwakeword_model_path(normalized["model_path"])
+        resolved_framework = resolve_openwakeword_inference_framework(
+            model_path=resolved_model,
+            configured_framework=normalized["inference_framework"],
         )
+    except WakeWordError as exc:
+        raise WakeWordError(str(exc)) from exc
 
     detector = build_wakeword_detector(config)
     try:
         return {
             **normalized,
+            "model_path": resolved_model,
+            "resolved_inference_framework": resolved_framework,
             "detector_frame_length": detector.frame_length,
             "detector_sample_rate": detector.sample_rate,
         }
@@ -274,7 +297,7 @@ def validate_voiceinput_readiness(config: dict[str, Any]) -> dict[str, Any]:
 
 
 class _AudioResampler:
-    """Incrementally resample live PCM into Porcupine-compatible mono frames."""
+    """Incrementally resample live PCM into wake-word-compatible mono frames."""
 
     def __init__(
         self,
