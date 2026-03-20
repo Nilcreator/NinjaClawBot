@@ -603,6 +603,36 @@ Recommended choices for NinjaClawBot integration:
   - keep `Maximum recorded command length` at `10`
   - keep `Cooldown` at `1.5`
 
+What the always-on setup options mean:
+- `Wake word`: the word you say to wake the listener. In this project, that is
+  usually `Ninja`.
+- `openWakeWord model path`: the exact file path to the wake-word model file
+  that teaches `pi5mic` how `Ninja` sounds. Example:
+  `~/NinjaClawBot/voiceinput/ninja.tflite`.
+- `.onnx` and `.tflite`: both are local AI model file formats. `.onnx` usually
+  runs with ONNX Runtime. `.tflite` usually runs with LiteRT / TensorFlow Lite.
+  `pi5mic` can use either format.
+- `How to get the model file`: create or download a custom `Ninja` model from
+  the official `openWakeWord` training/export guide, save it in a stable
+  folder, then point both `pi5mic install openwakeword --model-path` and the
+  setup wizard to that same file.
+- `Wake-word detection threshold`: how sure the detector must be before it
+  decides it heard `Ninja`. Higher means fewer false triggers but stricter
+  matching. Lower means easier triggering but more risk of mistakes.
+- `Wake-word VAD threshold`: an extra speech check that helps ignore
+  non-speech noise. `0` turns this extra check off.
+- `Enable openWakeWord noise suppression?`: reduces steady background noise
+  before wake-word detection. Start with `n`, then turn it on later only if
+  your room is noisy.
+- `openWakeWord inference framework`: tells `pi5mic` which runtime should load
+  the model file. Keep `auto` unless you are troubleshooting a runtime issue.
+- `Silence stop timeout`: how long `pi5mic` waits for silence before it stops
+  recording the command.
+- `Maximum recorded command length`: the hard limit for one spoken command,
+  even if the user keeps talking.
+- `Cooldown`: a short pause after one command so the listener does not trigger
+  again too quickly.
+
 Purpose:
 - write the actual microphone profile into `~/NinjaClawBot/mic.json`
 - connect `pi5mic` to the OpenClaw/NinjaClawBot runtime path
@@ -702,6 +732,14 @@ Purpose:
 Expected result:
 - the command prints the detected model path and framework
 - it either downloads runtime assets or says they are already present
+
+What these file types mean:
+- `.onnx`: a common local AI model format that usually runs with ONNX Runtime
+- `.tflite`: a common local AI model format that usually runs with LiteRT /
+  TensorFlow Lite
+- if you are unsure which one to use, use whichever file your training/export
+  step gave you and keep the setup option `openWakeWord inference framework` at
+  `auto`
 
 2. Do the safest first test in the foreground:
 

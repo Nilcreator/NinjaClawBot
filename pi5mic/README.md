@@ -32,13 +32,21 @@ You need:
 - a Raspberry Pi with internet access
 - a working microphone, usually USB
 - `uv` installed
-- this repository downloaded
+- your standalone `pi5mic` folder ready
 
 You also need PortAudio system libraries. These are required for microphone access on Raspberry Pi.
 
 ## 1. Standalone Installation
 
 These steps install `pi5mic` as a standalone microphone tool.
+
+Important path note:
+
+- this standalone guide assumes your working folder is `~/pi5mic`
+- if your standalone copy lives somewhere else, replace `~/pi5mic` with your
+  real folder path
+- if you cloned the full NinjaClawBot workspace, you can still follow this
+  section by using `~/NinjaClawBot/pi5mic` instead
 
 ### Step 1. Install required Raspberry Pi system packages
 
@@ -59,22 +67,21 @@ What you should expect:
 - the install finishes without errors
 - after this step, the common error `PortAudio library not found` should be avoided
 
-### Step 2. Clone the repository
+### Step 2. Open your standalone `pi5mic` folder
 
 ```bash
-cd ~
-git clone https://github.com/Nilcreator/NinjaClawBot.git
-cd ~/NinjaClawBot
+cd ~/pi5mic
 ```
 
 What this is doing:
 
-- downloads the whole NinjaClawBot workspace
-- moves you into the project folder
+- moves you into the standalone `pi5mic` folder
+- makes sure later commands write `mic.json` and `.venv` in the standalone
+  location instead of the larger NinjaClawBot workspace
 
 What you should expect:
 
-- the `~/NinjaClawBot` folder exists
+- your terminal is now inside `~/pi5mic`
 
 ### Step 3. Install the Python workspace
 
@@ -158,7 +165,7 @@ If your build puts `whisper-cli` somewhere slightly different, that is okay. You
 ### Step 6. Register `whisper.cpp` with `pi5mic`
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic install whispercpp \
   --command ~/whisper.cpp/build/bin/whisper-cli \
   --model-path ~/whisper.cpp/models/ggml-base.bin
@@ -183,7 +190,7 @@ This is the command-line wizard.
 ### Step 7. Start the setup wizard
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic setup
 ```
 
@@ -235,6 +242,37 @@ Important note about Raspberry Pi safety defaults:
   Raspberry Pi instead of letting `whisper.cpp` spike to the platform default
 - the default max clip length is now shorter because the current preview path
   still records the full clip before transcription
+
+### What the always-on setup options mean
+
+- `Wake word`: the word you say to wake the listener. In this project, that is
+  usually `Ninja`.
+- `openWakeWord model path`: the exact file path to the wake-word model file
+  that teaches `pi5mic` how `Ninja` sounds. Example:
+  `~/pi5mic/voiceinput/ninja.tflite`.
+- `.onnx` and `.tflite`: both are local AI model file formats. `.onnx` usually
+  runs through ONNX Runtime. `.tflite` usually runs through LiteRT / TensorFlow
+  Lite. `pi5mic` can use either format.
+- `How to get the model file`: create or download a custom `Ninja` model by
+  following the official `openWakeWord` training/export guide, save the file in
+  a stable folder, then point both `pi5mic install openwakeword --model-path`
+  and the setup wizard to that same file.
+- `Wake-word detection threshold`: how sure the detector must be before it
+  decides it heard `Ninja`. Higher means fewer false triggers but stricter
+  matching. Lower means easier triggering but more risk of mistakes.
+- `Wake-word VAD threshold`: an extra speech check that helps ignore
+  non-speech noise. `0` turns this extra check off.
+- `Enable openWakeWord noise suppression?`: reduces steady background noise
+  before wake-word detection. Start with `n`, then turn it on later only if
+  your room is noisy.
+- `openWakeWord inference framework`: tells `pi5mic` which runtime should load
+  the model file. Keep `auto` unless you are troubleshooting a runtime issue.
+- `Silence stop timeout`: how long `pi5mic` waits for silence before it stops
+  recording the command.
+- `Maximum recorded command length`: the hard limit for one spoken command,
+  even if the user keeps talking.
+- `Cooldown`: a short pause after one command so the listener does not trigger
+  again too quickly.
 
 What you should expect:
 
@@ -590,7 +628,7 @@ Important safety and privacy rule:
 ### Step 18. Confirm the wake-word dependency is installed
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv sync --extra dev --extra voiceinput
 ```
 
@@ -613,14 +651,23 @@ Recommended path:
 - read the `Training New Models` section
 - use the simple Google Colab notebook if you want the easiest first pass
 - export or download a `Ninja` model as `.onnx` or `.tflite`
-- save it somewhere stable, for example `~/NinjaClawBot/voiceinput/ninja.tflite`
+- save it somewhere stable, for example `~/pi5mic/voiceinput/ninja.tflite`
+
+What these file types mean:
+
+- `.onnx`: a common local AI model format that usually runs with ONNX Runtime
+- `.tflite`: a common local AI model format that usually runs with LiteRT /
+  TensorFlow Lite
+- if you are unsure which one to use, use whichever file your training/export
+  step gave you and keep the setup option `openWakeWord inference framework` at
+  `auto`
 
 ### Step 20. Register the custom model
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic install openwakeword \
-  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
+  --model-path ~/pi5mic/voiceinput/ninja.tflite
 ```
 
 What this is doing:
@@ -637,7 +684,7 @@ What you should expect:
 ### Step 21. Validate the always-on config
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic doctor
 ```
 
@@ -655,7 +702,7 @@ What you should expect:
 ### Step 22. Start the listener in the background
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic voiceinput-tool start
 ```
 
@@ -673,7 +720,7 @@ What you should expect:
 ### Step 23. Check its status
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic voiceinput-tool status
 ```
 
@@ -685,7 +732,7 @@ What this is doing:
 ### Step 24. Stop it manually
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic voiceinput-tool stop
 ```
 
@@ -700,7 +747,7 @@ What you should expect:
 ### Step 25. Use the foreground mode when debugging
 
 ```bash
-cd ~/NinjaClawBot
+cd ~/pi5mic
 uv run pi5mic voiceinput-tool foreground
 ```
 

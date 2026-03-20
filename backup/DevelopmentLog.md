@@ -2853,3 +2853,37 @@ Notes:
   related packages
 - the current always-on build still needs Raspberry Pi field validation for
   false-positive tuning, long idle listening, and repeated turn stability
+
+## 2026-03-20 - `pi5mic` wake-word docs clarification
+
+Summary:
+
+- refined the standalone and integrated always-on voice-input setup docs so the
+  `openWakeWord` options are easier to understand for non-developers
+
+Implementation changes:
+
+- corrected the standalone `pi5mic` README examples so the working directory is
+  `~/pi5mic` instead of `~/NinjaClawBot`
+- added plain-language explanations for the always-on setup options in
+  [pi5mic/README.md](../pi5mic/README.md)
+- added a short explanation of what `.onnx` and `.tflite` wake-word model files
+  are, how they differ at a practical level, and how users should choose one
+- added matching option explanations to [InstallationGuide.md](../InstallationGuide.md)
+  for the OpenClaw/NinjaClawBot setup flow
+
+Documentation updates:
+
+- updated [pi5mic/README.md](../pi5mic/README.md)
+- updated [InstallationGuide.md](../InstallationGuide.md)
+
+Validation:
+
+- `git diff --check -- pi5mic/README.md InstallationGuide.md backup/DevelopmentLog.md`
+
+Notes:
+
+- the docs now consistently describe the standalone wake-word model path as a
+  file inside `~/pi5mic/voiceinput/`
+- integrated examples inside NinjaClawBot continue to use
+  `~/NinjaClawBot/voiceinput/`
