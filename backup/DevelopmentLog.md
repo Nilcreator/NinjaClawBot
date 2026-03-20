@@ -2887,3 +2887,40 @@ Notes:
   file inside `~/pi5mic/voiceinput/`
 - integrated examples inside NinjaClawBot continue to use
   `~/NinjaClawBot/voiceinput/`
+
+## 2026-03-20 - `pi5mic` openWakeWord placeholder-path guard
+
+Summary:
+
+- tightened the always-on wake-word setup flow so `pi5mic` warns when the saved
+  model path is only `.tflite` or `.onnx` without a real filename
+
+Implementation changes:
+
+- added `is_placeholder_openwakeword_model_path(...)` to the `openWakeWord`
+  install helpers
+- setup now detects placeholder-only values such as `.tflite`, warns the user,
+  and leaves the model path empty instead of saving a misleading path
+- wake-word readiness now raises a clearer error if the saved model path is only
+  a bare extension without a real file name
+- added regression tests for both the detector path validation and the setup
+  wizard behavior
+
+Documentation updates:
+
+- updated [pi5mic/README.md](../pi5mic/README.md)
+- updated [InstallationGuide.md](../InstallationGuide.md)
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md)
+
+Validation:
+
+- `cd pi5mic && python3 -m compileall src tests`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Notes:
+
+- a real `openWakeWord` model path should look like
+  `/home/pi/pi5mic/voiceinput/hey_ninja.tflite` or
+  `/home/pi/pi5mic/voiceinput/hey_ninja.onnx`, not just `.tflite`

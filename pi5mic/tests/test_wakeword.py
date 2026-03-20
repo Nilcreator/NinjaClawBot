@@ -49,6 +49,11 @@ def test_openwakeword_requires_model_file() -> None:
         OpenWakeWordDetector(keyword="ninja", model_path="/missing/ninja.tflite")
 
 
+def test_openwakeword_rejects_placeholder_extension_only_path() -> None:
+    with pytest.raises(WakeWordError, match="incomplete"):
+        OpenWakeWordDetector(keyword="ninja", model_path=".tflite")
+
+
 def test_openwakeword_process_and_close(monkeypatch, tmp_path) -> None:
     model_path = tmp_path / "ninja.tflite"
     model_path.write_bytes(b"fake-model")

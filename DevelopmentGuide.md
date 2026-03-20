@@ -745,6 +745,9 @@ uv run pi5mic doctor
 
 - `openWakeWord` does not need an API key
 - for the `Ninja` wake word, you need a custom `.onnx` or `.tflite` model file
+- a saved path like `/home/pi/pi5mic/.tflite` is only a placeholder and not a
+  real model file; use the full file path such as
+  `~/NinjaClawBot/voiceinput/hey_ninja.tflite`
 - if `doctor` still fails, check the model path and whether the shared runtime assets were downloaded
 - once `doctor` is clean, start the listener manually:
 

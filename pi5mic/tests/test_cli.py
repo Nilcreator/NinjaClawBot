@@ -198,6 +198,68 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
     assert '"threads": 2' in saved
 
 
+def test_setup_command_clears_placeholder_openwakeword_model_path(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "list_input_devices",
+        lambda: [
+            AudioDeviceInfo(
+                index=1, name="USB Mic", max_input_channels=1, default_samplerate=16_000
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "find_whisper_cpp_command",
+        lambda command=None: Path("/usr/local/bin/whisper-cli"),
+    )
+    monkeypatch.setattr(setup_cmd_module, "build_stt_backend", lambda config: object())
+    monkeypatch.setattr(
+        setup_cmd_module,
+        "get_recommended_sample_rate",
+        lambda selector, fallback_rate: 16_000,
+    )
+    monkeypatch.setattr(setup_cmd_module, "recommend_whisper_threads", lambda threads=None: 2)
+    monkeypatch.setattr(setup_cmd_module, "is_raspberry_pi", lambda: False)
+
+    inputs = "\n".join(
+        [
+            "standalone",
+            "default",
+            "16000",
+            "whisper_cpp",
+            "/usr/local/bin/whisper-cli",
+            str(tmp_path / "ggml-base.bin"),
+            "2",
+            "120",
+            "12",
+            "y",
+            "ninja",
+            ".tflite",
+            "0.5",
+            "0",
+            "n",
+            "auto",
+            "3",
+            "10",
+            "1.5",
+            "200",
+        ]
+    )
+
+    result = runner.invoke(
+        cli,
+        ["--config-file", str(tmp_path / "mic.json"), "setup"],
+        input=inputs,
+    )
+
+    assert result.exit_code == 0, result.output
+    saved = (tmp_path / "mic.json").read_text(encoding="utf-8")
+    assert '"model_path": null' in saved
+    assert "only points to `.tflite` or `.onnx`" in result.output
+
+
 def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     discovered = OpenClawAutoConfig(

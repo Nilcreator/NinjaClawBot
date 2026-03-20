@@ -11,6 +11,16 @@ SUPPORTED_MODEL_SUFFIXES = {".onnx", ".tflite"}
 SUPPORTED_INFERENCE_FRAMEWORKS = {"auto", "onnx", "tflite"}
 
 
+def is_placeholder_openwakeword_model_path(model_path: str | Path | None) -> bool:
+    """Return True when the provided path only contains a bare model extension."""
+    if model_path is None:
+        return False
+    raw_value = str(model_path).strip()
+    if raw_value == "":
+        return False
+    return Path(raw_value).name.lower() in SUPPORTED_MODEL_SUFFIXES
+
+
 def _import_openwakeword() -> Any:
     try:
         import openwakeword
@@ -29,6 +39,13 @@ def resolve_openwakeword_model_path(model_path: str | Path | None) -> Path:
         raise WakeWordError(
             "No openWakeWord model path is configured. "
             "Register one with `uv run pi5mic install openwakeword --model-path /path/to/ninja.tflite`."
+        )
+    if is_placeholder_openwakeword_model_path(model_path):
+        raise WakeWordError(
+            "The saved openWakeWord model path is incomplete. It points to only `.tflite` or "
+            "`.onnx` without a real file name. Create or export a custom wake-word model such "
+            "as `/path/to/hey_ninja.tflite`, then register it with "
+            "`uv run pi5mic install openwakeword --model-path /path/to/hey_ninja.tflite`."
         )
 
     resolved = Path(model_path).expanduser().resolve()

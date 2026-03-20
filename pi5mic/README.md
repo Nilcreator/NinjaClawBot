@@ -661,6 +661,8 @@ What these file types mean:
 - if you are unsure which one to use, use whichever file your training/export
   step gave you and keep the setup option `openWakeWord inference framework` at
   `auto`
+- do not enter only `.onnx` or `.tflite` in setup; `pi5mic` needs the full
+  real file path, such as `~/pi5mic/voiceinput/hey_ninja.tflite`
 
 ### Step 20. Register the custom model
 

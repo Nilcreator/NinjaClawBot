@@ -10,6 +10,7 @@ from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
 from pi5mic.core.system_info import is_raspberry_pi
 from pi5mic.core.voiceinput import describe_voiceinput_install_help
 from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
+from pi5mic.install.openwakeword import is_placeholder_openwakeword_model_path
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
 from pi5mic.integration.openclaw_setup import (
     approve_latest_openclaw_pairing,
@@ -302,7 +303,19 @@ def _configure_voiceinput(config: dict) -> None:
         default=current_model_path,
         show_default=bool(current_model_path),
     ).strip()
-    wakeword_config["model_path"] = model_path or None
+    if is_placeholder_openwakeword_model_path(model_path):
+        click.echo(
+            "WARNING: That value only points to `.tflite` or `.onnx` without a real file name. "
+            "Example of a valid path: `/home/pi/pi5mic/voiceinput/hey_ninja.tflite`."
+        )
+        click.echo(
+            "pi5mic will keep the model path empty for now. After you create or download the "
+            "real model file, register it with "
+            "`uv run pi5mic install openwakeword --model-path /path/to/hey_ninja.tflite`."
+        )
+        wakeword_config["model_path"] = None
+    else:
+        wakeword_config["model_path"] = model_path or None
     wakeword_config["threshold"] = click.prompt(
         "Wake-word detection threshold (0-1)",
         type=float,
