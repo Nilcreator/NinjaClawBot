@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from pi5mic.errors import STTError
+from pi5mic.errors import NoSpeechDetectedError, STTError
 from pi5mic.install import whisper_cpp as install_module
 from pi5mic.stt.whisper_cpp import (
     WhisperCppBackend,
@@ -102,6 +102,30 @@ def test_whisper_cpp_backend_raises_when_json_missing(monkeypatch, tmp_path) -> 
 
     backend = WhisperCppBackend(command=command_path, model_path=model_path)
     with pytest.raises(STTError, match="without producing a JSON transcript"):
+        backend.transcribe(audio_path)
+
+
+def test_whisper_cpp_backend_reports_no_speech_for_empty_transcription(
+    monkeypatch, tmp_path
+) -> None:
+    command_path = tmp_path / "whisper-cli"
+    model_path = tmp_path / "ggml-base.bin"
+    audio_path = tmp_path / "clip.wav"
+    command_path.write_text("", encoding="utf-8")
+    model_path.write_text("", encoding="utf-8")
+    audio_path.write_bytes(b"RIFF")
+
+    def fake_run(command, **kwargs):
+        del kwargs
+        output_prefix = command[command.index("-of") + 1]
+        with open(f"{output_prefix}.json", "w", encoding="utf-8") as handle:
+            json.dump({"result": {"language": "en"}, "transcription": []}, handle)
+        return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr("pi5mic.stt.whisper_cpp.subprocess.run", fake_run)
+
+    backend = WhisperCppBackend(command=command_path, model_path=model_path)
+    with pytest.raises(NoSpeechDetectedError, match="did not detect spoken text"):
         backend.transcribe(audio_path)
 
 

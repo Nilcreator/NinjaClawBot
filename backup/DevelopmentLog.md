@@ -2924,3 +2924,45 @@ Notes:
 - a real `openWakeWord` model path should look like
   `/home/pi/pi5mic/voiceinput/hey_ninja.tflite` or
   `/home/pi/pi5mic/voiceinput/hey_ninja.onnx`, not just `.tflite`
+
+## 2026-03-21 - `pi5mic` always-on overflow and no-speech hardening
+
+Summary:
+
+- fixed the first real Raspberry Pi issues reported from the `openWakeWord`
+  always-on listener: audio overflow after a wake-word cycle, hard failure on
+  empty Whisper output, and missing foreground transcript visibility
+
+Implementation changes:
+
+- paused the live input stream while a captured command is being transcribed,
+  then restarted it cleanly afterward
+- reset the `openWakeWord` detector and live resampler state between wake-word
+  cycles to reduce stale retriggers after transcription
+- added `NoSpeechDetectedError` so empty `whisper.cpp` JSON output is treated as
+  a recoverable no-speech result instead of a generic hard STT failure
+- updated the always-on processing loop so no-speech cycles re-arm cleanly
+  instead of crashing the listener
+- added foreground-only detail output so `voiceinput-tool foreground` now shows
+  the recognized transcript text directly in the terminal
+
+Documentation updates:
+
+- updated [README.md](../README.md)
+- updated [pi5mic/README.md](../pi5mic/README.md)
+- updated [InstallationGuide.md](../InstallationGuide.md)
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md)
+
+Validation:
+
+- `python3 -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Notes:
+
+- the known Python 3.13 `audioop` deprecation warning is still present and is
+  unrelated to these always-on fixes
+- Raspberry Pi field validation is still required to tune the wake-word
+  threshold for the uploaded `hey_Ninja.onnx` model in the user’s real room

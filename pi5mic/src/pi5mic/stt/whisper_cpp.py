@@ -11,7 +11,7 @@ import wave
 from pathlib import Path
 
 from pi5mic.core.system_info import is_raspberry_pi
-from pi5mic.errors import STTError
+from pi5mic.errors import NoSpeechDetectedError, STTError
 from pi5mic.install.whisper_cpp import resolve_model_path, resolve_whisper_cpp_command
 from pi5mic.models import TranscriptionResult
 
@@ -184,12 +184,17 @@ class WhisperCppBackend(SpeechToTextBackend):
 
 def _extract_transcript_text(payload: dict[str, object]) -> str:
     direct_text = payload.get("text")
-    if isinstance(direct_text, str) and direct_text.strip():
-        return direct_text.strip()
+    if isinstance(direct_text, str):
+        stripped_text = direct_text.strip()
+        if stripped_text:
+            return stripped_text
+        raise NoSpeechDetectedError("whisper.cpp did not detect spoken text in the audio clip.")
 
+    saw_segment_collection = False
     for key in ("transcription", "segments"):
         value = payload.get(key)
         if isinstance(value, list):
+            saw_segment_collection = True
             parts = []
             for item in value:
                 if isinstance(item, dict) and isinstance(item.get("text"), str):
@@ -197,5 +202,8 @@ def _extract_transcript_text(payload: dict[str, object]) -> str:
             text = " ".join(part for part in parts if part).strip()
             if text:
                 return text
+
+    if saw_segment_collection or "result" in payload:
+        raise NoSpeechDetectedError("whisper.cpp did not detect spoken text in the audio clip.")
 
     raise STTError("whisper.cpp JSON output did not contain transcript text.")

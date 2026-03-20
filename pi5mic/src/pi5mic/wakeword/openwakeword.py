@@ -107,8 +107,12 @@ class OpenWakeWordDetector(WakeWordDetector):
             score=score,
         )
 
-    def close(self) -> None:
-        """Release backend state."""
+    def reset(self) -> None:
+        """Reset the rolling openWakeWord state between wake-word cycles."""
         reset = getattr(self._model, "reset", None)
         if callable(reset):
             reset()
+
+    def close(self) -> None:
+        """Release backend state."""
+        self.reset()

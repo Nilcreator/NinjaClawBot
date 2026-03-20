@@ -5,6 +5,8 @@ from __future__ import annotations
 import copy
 import importlib
 from pathlib import Path
+from threading import Event
+from types import SimpleNamespace
 
 import pytest
 
@@ -16,7 +18,8 @@ from pi5mic.core.voiceinput import (
     update_voiceinput_state,
     validate_voiceinput_readiness,
 )
-from pi5mic.errors import WakeWordError
+from pi5mic.errors import NoSpeechDetectedError, WakeWordError
+from pi5mic.models import TranscriptionResult
 
 voiceinput_module = importlib.import_module("pi5mic.core.voiceinput")
 
@@ -96,3 +99,191 @@ def test_validate_voiceinput_readiness_returns_detector_details(monkeypatch) -> 
     assert readiness["detector_sample_rate"] == 16_000
     assert readiness["keyword"] == "ninja"
     assert readiness["resolved_inference_framework"] == "tflite"
+
+
+def test_voiceinput_loop_pauses_stream_while_processing(monkeypatch, tmp_path) -> None:
+    config = _enabled_voiceinput_config()
+    config["audio"]["sample_rate"] = 16_000
+    config["audio"]["channels"] = 1
+    config["audio"]["block_size"] = 2
+    config["voiceinput"]["max_capture_seconds"] = 0.1
+    config["voiceinput"]["silence_timeout_seconds"] = 0.1
+    config_path = tmp_path / "mic.json"
+    paths = build_voiceinput_runtime_paths(config_path)
+    stop_event = Event()
+    events: list[str] = []
+
+    class _FakeDetector:
+        frame_length = 2
+        sample_rate = 16_000
+
+        def __init__(self) -> None:
+            self._calls = 0
+
+        def process(self, pcm_frame) -> object:
+            del pcm_frame
+            self._calls += 1
+            return SimpleNamespace(detected=self._calls == 1)
+
+        def reset(self) -> None:
+            events.append("detector.reset")
+
+        def close(self) -> None:
+            events.append("detector.close")
+
+    class _FakeVad:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def process(self, frame) -> object:
+            del frame
+            return SimpleNamespace(should_stop=True)
+
+        def reset(self) -> None:
+            events.append("vad.reset")
+
+    class _FakeStream:
+        def __init__(self, **kwargs) -> None:
+            del kwargs
+
+        def __enter__(self):
+            events.append("stream.enter")
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            del exc_type, exc, tb
+            events.append("stream.exit")
+
+        def read(self, frames):
+            del frames
+            return (b"\x00\x00\x00\x00", False)
+
+        def abort(self) -> None:
+            events.append("stream.abort")
+
+        def start(self) -> None:
+            events.append("stream.start")
+            stop_event.set()
+
+    class _FakeSoundDevice:
+        RawInputStream = _FakeStream
+
+    def _fake_process_capture(self, **kwargs) -> None:
+        del self, kwargs
+        events.append("process_capture")
+
+    monkeypatch.setattr(
+        voiceinput_module, "build_wakeword_detector", lambda config: _FakeDetector()
+    )
+    monkeypatch.setattr(voiceinput_module, "SilenceStopDetector", _FakeVad)
+    monkeypatch.setattr(voiceinput_module, "_get_sounddevice", lambda: _FakeSoundDevice())
+    monkeypatch.setattr(
+        voiceinput_module,
+        "resolve_supported_input_settings",
+        lambda selector, sample_rate, channels: (
+            None,
+            sample_rate,
+            SimpleNamespace(name="Fake Mic", index=0),
+            None,
+        ),
+    )
+    monkeypatch.setattr(voiceinput_module.VoiceInputLoop, "_process_capture", _fake_process_capture)
+    monkeypatch.setattr("pi5mic.cli._common.build_stt_backend", lambda config: object())
+
+    loop = voiceinput_module.VoiceInputLoop(
+        config=config,
+        config_path=config_path,
+        state_paths=paths,
+        event_logger=lambda message: None,
+    )
+    loop.run(stop_event)
+
+    assert "stream.abort" in events
+    assert "stream.start" in events
+    assert "process_capture" in events
+    assert (
+        events.index("stream.abort")
+        < events.index("process_capture")
+        < events.index("stream.start")
+    )
+
+
+def test_process_capture_treats_no_speech_as_recoverable(tmp_path) -> None:
+    config = _enabled_voiceinput_config()
+    config_path = tmp_path / "mic.json"
+    paths = build_voiceinput_runtime_paths(config_path)
+    messages: list[str] = []
+    listener = voiceinput_module.MicListener(cooldown_seconds=1.0)
+    request_id = listener.arm().active_request_id
+    del request_id
+    request_id = listener.start_listening().active_request_id
+    assert request_id is not None
+
+    class _FakeBackend:
+        def transcribe(self, audio_path):
+            del audio_path
+            raise NoSpeechDetectedError("whisper.cpp did not detect spoken text in the audio clip.")
+
+    loop = voiceinput_module.VoiceInputLoop(
+        config=config,
+        config_path=config_path,
+        state_paths=paths,
+        event_logger=messages.append,
+    )
+
+    loop._process_capture(
+        listener=listener,
+        request_id=request_id,
+        capture_pcm=b"\x00\x00" * 32,
+        sample_rate=16_000,
+        stt_backend=_FakeBackend(),
+        transport=None,
+        presence_controller=None,
+    )
+
+    assert listener.snapshot().state.value == "cooldown"
+    assert any(
+        "No spoken command was detected after the wake word" in message for message in messages
+    )
+
+
+def test_process_capture_reports_transcript_to_detail_logger(tmp_path) -> None:
+    config = _enabled_voiceinput_config()
+    config_path = tmp_path / "mic.json"
+    paths = build_voiceinput_runtime_paths(config_path)
+    listener = voiceinput_module.MicListener(cooldown_seconds=1.0)
+    detail_messages: list[str] = []
+    request_id = listener.arm().active_request_id
+    del request_id
+    request_id = listener.start_listening().active_request_id
+    assert request_id is not None
+
+    class _FakeBackend:
+        def transcribe(self, audio_path):
+            del audio_path
+            return TranscriptionResult(
+                text="turn on the light",
+                backend="whisper_cpp",
+                model="ggml-base.bin",
+                language="en",
+            )
+
+    loop = voiceinput_module.VoiceInputLoop(
+        config=config,
+        config_path=config_path,
+        state_paths=paths,
+        event_logger=lambda message: None,
+        detail_logger=detail_messages.append,
+    )
+
+    loop._process_capture(
+        listener=listener,
+        request_id=request_id,
+        capture_pcm=b"\x00\x00" * 32,
+        sample_rate=16_000,
+        stt_backend=_FakeBackend(),
+        transport=None,
+        presence_controller=None,
+    )
+
+    assert "Transcript: turn on the light" in detail_messages

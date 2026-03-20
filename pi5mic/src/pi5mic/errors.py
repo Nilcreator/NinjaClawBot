@@ -29,6 +29,10 @@ class STTError(Pi5MicError):
     """Speech-to-text backend setup or transcription error."""
 
 
+class NoSpeechDetectedError(STTError):
+    """Speech-to-text ran successfully, but no spoken transcript was detected."""
+
+
 class TransportError(Pi5MicError):
     """OpenClaw transport setup or dispatch error."""
 

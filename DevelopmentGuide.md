@@ -755,6 +755,33 @@ uv run pi5mic doctor
 uv run pi5mic voiceinput-tool start
 ```
 
+### `voiceinput-tool foreground` says `No spoken command was detected` or shows audio overflow warnings
+
+- this means the wake word likely fired, but the follow-up command was empty,
+  too delayed, or too weak to turn into a usable Whisper transcript
+- `pi5mic` now pauses the live input stream while Whisper is running, which
+  reduces stale-audio overflow after each wake-word cycle
+- `pi5mic` also now treats empty Whisper output as a recoverable no-speech
+  cycle instead of a hard always-on listener failure
+
+Recommended check:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+uv run pi5mic voiceinput-tool foreground
+```
+
+Then:
+
+- say the wake phrase clearly
+- start the real command immediately after it
+- keep the first tests short and simple
+- if false triggers continue, raise the wake-word threshold slightly in
+  `uv run pi5mic setup`
+- if the wake word works but the command is often missed, lower the threshold
+  slightly or move the microphone closer
+
 ### `pi5mic` says `pairing required` in OpenClaw mode
 
 - this is usually not a microphone or STT problem

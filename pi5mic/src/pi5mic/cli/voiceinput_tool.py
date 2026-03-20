@@ -156,6 +156,7 @@ def _run_voiceinput_loop(
             config_path=manager_path,
             state_paths=paths,
             event_logger=_log,
+            detail_logger=click.echo if echo_logs else None,
         )
         loop.run(stop_event)
         _log("Voice input loop stopped cleanly.")

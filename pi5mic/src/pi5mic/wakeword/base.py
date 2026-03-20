@@ -24,5 +24,8 @@ class WakeWordDetector(ABC):
     def process(self, pcm_frame: Sequence[int]) -> WakeWordResult:
         """Process one audio frame and report whether the wake word fired."""
 
+    def reset(self) -> None:
+        """Reset any rolling backend state after a completed wake-word cycle."""
+
     def close(self) -> None:
         """Release any native wake-word backend resources."""

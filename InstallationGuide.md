@@ -760,9 +760,13 @@ Expected result:
 - say `Ninja`, then a short sentence
 - it records after the wake word
 - it stops recording after 3 seconds of silence or 10 seconds max
+- it prints the recognized transcript in the terminal
 - it sends the original-language transcript to OpenClaw
 - OpenClaw prints the reply locally, and if dual delivery is enabled, the same
   reply also appears in Telegram
+- if the wake word fired but you did not say a real command, `pi5mic` should
+  report that no spoken command was detected and then re-arm cleanly instead of
+  stopping with a hard Whisper error
 
 3. Start the background listener after the foreground test passes:
 

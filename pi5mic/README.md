@@ -756,13 +756,20 @@ uv run pi5mic voiceinput-tool foreground
 What this is doing:
 
 - runs the same listener in the current terminal
-- prints live status messages so you can debug setup problems
+- prints live status messages and the recognized transcript so you can debug
+  setup problems
+- pauses the microphone stream while Whisper is transcribing, then re-arms it
+  cleanly for the next wake word
 
 What you should expect:
 
 - `Starting voice input in the foreground.`
 - `Press Ctrl+C to stop it.`
-- useful when debugging STT without speaking again
+- after a successful wake-word cycle, the terminal should print
+  `Transcript: ...`
+- if the wake word fired but you did not say a real command, the listener
+  should say that no spoken command was detected and then re-arm instead of
+  crashing
 
 ## Optional OpenClaw Mode Inside NinjaClawBot
 
@@ -1242,7 +1249,50 @@ If `doctor` does not show hardware warnings but the Pi still shuts down:
 - if file transcription is stable but live recording is not, focus on the mic,
   USB power, or other connected peripherals
 
-## 12. Validation Commands For Developers
+## 14. Common Problem: `voiceinput-tool foreground` shows audio overflow or says no spoken command was detected
+
+If you see messages like these:
+
+```text
+WARNING audio overflow detected while monitoring the microphone.
+No spoken command was detected after the wake word.
+```
+
+this usually means:
+
+- the wake word worked
+- but the spoken command was too short, too quiet, or too delayed after the
+  wake word
+- or the room noise made the wake-word cycle harder to separate from the real
+  command
+
+What `pi5mic` now does automatically:
+
+- pauses the live microphone stream while Whisper is transcribing so stale audio
+  is less likely to pile up
+- treats an empty Whisper result as a recoverable no-speech cycle instead of a
+  hard failure
+- re-arms the listener after the cooldown instead of crashing
+
+What to try next:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic doctor
+uv run pi5mic voiceinput-tool foreground
+```
+
+Then:
+
+- say the wake phrase clearly
+- start the real command immediately after the wake phrase
+- keep the command short for the first tests
+- if false triggers continue, raise `Wake-word detection threshold` slightly in
+  `uv run pi5mic setup`
+- if the wake word is fine but the command is often missed, lower the threshold
+  slightly or move the microphone closer
+
+## 15. Validation Commands For Developers
 
 ```bash
 cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code\ library/NinjaClawbot/pi5mic

@@ -313,7 +313,9 @@ What you should expect:
 - the terminal says it is waiting for the wake word
 - say `Ninja`, then a short sentence
 - recording should stop after 3 seconds of silence or 10 seconds max
-- the transcript should be processed locally
+- the recognized transcript should print in the terminal
+- if you did not say a real command after the wake word, `pi5mic` should report
+  that no spoken command was detected and then re-arm cleanly
 
 ### Step 9. Start the background listener
 

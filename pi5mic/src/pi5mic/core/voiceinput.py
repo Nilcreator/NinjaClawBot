@@ -22,6 +22,7 @@ from pi5mic.errors import (
     DeviceError,
     IntegrationError,
     ListenerBusyError,
+    NoSpeechDetectedError,
     RecordingError,
     STTError,
     TransportError,
@@ -334,6 +335,10 @@ class _AudioResampler:
         )
         return converted
 
+    def reset(self) -> None:
+        """Clear any incremental resampling state after a paused capture cycle."""
+        self._state = None
+
 
 def _write_pcm_wav(path: Path, *, sample_rate: int, channels: int, pcm_bytes: bytes) -> None:
     with wave.open(str(path), "wb") as handle:
@@ -363,12 +368,14 @@ class VoiceInputLoop:
         state_paths: VoiceInputRuntimePaths,
         status_callback: Callable[[dict[str, Any]], None] | None = None,
         event_logger: Callable[[str], None] | None = None,
+        detail_logger: Callable[[str], None] | None = None,
     ) -> None:
         self._config = config
         self._config_path = config_path
         self._state_paths = state_paths
         self._status_callback = status_callback
         self._log = event_logger or (lambda _message: None)
+        self._detail = detail_logger or (lambda _message: None)
         self._last_listener_state: str | None = None
 
     def _publish(self, **updates: Any) -> None:
@@ -421,6 +428,7 @@ class VoiceInputLoop:
             self._log(
                 f"Transcribed voice request ({len(transcription.text)} chars, backend={transcription.backend})."
             )
+            self._detail(f"Transcript: {transcription.text}")
 
             if transport is not None:
                 if presence_controller is not None:
@@ -437,6 +445,8 @@ class VoiceInputLoop:
                 dispatch_result = transport.dispatch(transcription.text)
                 reply_length = len(dispatch_result.reply_text or "")
                 self._log(f"OpenClaw reply received ({reply_length} chars).")
+                if dispatch_result.reply_text:
+                    self._detail(f"OpenClaw reply: {dispatch_result.reply_text}")
 
             listener.complete(request_id)
             self._publish_listener(
@@ -444,6 +454,16 @@ class VoiceInputLoop:
                 cycles_completed=read_voiceinput_state(self._state_paths)["cycles_completed"] + 1,
                 last_completed_at=_utcnow_iso(),
                 last_error=None,
+            )
+        except NoSpeechDetectedError:
+            listener.complete(request_id)
+            self._publish_listener(
+                listener,
+                last_completed_at=_utcnow_iso(),
+                last_error=None,
+            )
+            self._log(
+                "No spoken command was detected after the wake word. The listener is re-arming."
             )
         except (
             ConfigError,
@@ -580,19 +600,42 @@ class VoiceInputLoop:
                             vad_result = vad.process(frame)
                             if len(capture_pcm) >= max_capture_bytes or vad_result.should_stop:
                                 self._log("Wake-word capture complete; starting transcription.")
-                                self._process_capture(
-                                    listener=listener,
-                                    request_id=active_request_id,
-                                    capture_pcm=bytes(capture_pcm),
-                                    sample_rate=detector.sample_rate,
-                                    stt_backend=stt_backend,
-                                    transport=transport,
-                                    presence_controller=presence_controller,
-                                )
-                                active_request_id = None
-                                capture_pcm.clear()
-                                vad.reset()
-                                capturing = False
+                                try:
+                                    stream.abort()
+                                except Exception as exc:
+                                    raise RecordingError(
+                                        f"Could not pause the live microphone stream before transcription: {exc}"
+                                    ) from exc
+
+                                frame_buffer.clear()
+                                resampler.reset()
+                                detector.reset()
+                                try:
+                                    self._process_capture(
+                                        listener=listener,
+                                        request_id=active_request_id,
+                                        capture_pcm=bytes(capture_pcm),
+                                        sample_rate=detector.sample_rate,
+                                        stt_backend=stt_backend,
+                                        transport=transport,
+                                        presence_controller=presence_controller,
+                                    )
+                                finally:
+                                    active_request_id = None
+                                    capture_pcm.clear()
+                                    vad.reset()
+                                    capturing = False
+                                    frame_buffer.clear()
+                                    resampler.reset()
+                                    detector.reset()
+                                    if not stop_event.is_set():
+                                        try:
+                                            stream.start()
+                                        except Exception as exc:
+                                            raise RecordingError(
+                                                "Could not restart the live microphone stream after "
+                                                f"transcription: {exc}"
+                                            ) from exc
                         else:
                             if not listener.can_accept_trigger():
                                 continue
