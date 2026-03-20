@@ -8,6 +8,7 @@ import click
 
 from pi5mic.core.devices import get_recommended_sample_rate, list_input_devices
 from pi5mic.core.system_info import is_raspberry_pi
+from pi5mic.core.voiceinput import describe_voiceinput_install_help
 from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
 from pi5mic.install.whisper_cpp import DEFAULT_MODEL_FILE, find_whisper_cpp_command
 from pi5mic.integration.openclaw_setup import (
@@ -251,6 +252,105 @@ def _run_openclaw_readiness_check(config: dict) -> None:
     )
 
 
+def _configure_voiceinput(config: dict) -> None:
+    """Prompt for always-on voice input settings without auto-starting the mic."""
+    voiceinput_config = config["voiceinput"]
+    wakeword_config = config["wakeword"]
+
+    click.echo("\nAlways-on voice input setup")
+    click.echo(
+        "This prepares the optional wake-word listener, but it does not start the microphone "
+        "automatically. You will still start and stop it manually with "
+        "`uv run pi5mic voiceinput-tool`."
+    )
+    enable_voiceinput = click.confirm(
+        "Prepare always-on voice input now?",
+        default=bool(voiceinput_config.get("enabled", False)),
+    )
+    if not enable_voiceinput:
+        voiceinput_config["enabled"] = False
+        wakeword_config["enabled"] = False
+        click.echo(
+            "Always-on voice input will stay disabled for now. You can enable it later by rerunning "
+            "`uv run pi5mic setup`."
+        )
+        return
+
+    voiceinput_config["enabled"] = True
+    wakeword_config["enabled"] = True
+    wakeword_config["backend"] = "porcupine"
+    wakeword_config["keyword"] = (
+        click.prompt(
+            "Wake word",
+            default=str(wakeword_config.get("keyword", "ninja")),
+        ).strip()
+        or "ninja"
+    )
+    wakeword_config["access_key_env_var"] = (
+        click.prompt(
+            "Picovoice access-key environment variable",
+            default=str(wakeword_config.get("access_key_env_var", "PICOVOICE_ACCESS_KEY")),
+        ).strip()
+        or "PICOVOICE_ACCESS_KEY"
+    )
+
+    current_keyword_path = str(wakeword_config.get("keyword_path") or "").strip()
+    if wakeword_config["keyword"].casefold() == "ninja":
+        click.echo(
+            "Porcupine usually needs a custom `.ppn` keyword file for the wake word 'Ninja'."
+        )
+        click.echo(
+            "If you do not have that file yet, you can still save the config now, then add the "
+            "file path later before starting the listener."
+        )
+    keyword_path = click.prompt(
+        "Porcupine keyword file (.ppn) path (leave blank only for built-in keywords)",
+        default=current_keyword_path,
+        show_default=bool(current_keyword_path),
+    ).strip()
+    wakeword_config["keyword_path"] = keyword_path or None
+
+    voiceinput_config["silence_timeout_seconds"] = click.prompt(
+        "Silence stop timeout after speaking (seconds)",
+        type=float,
+        default=float(voiceinput_config.get("silence_timeout_seconds", 3.0)),
+    )
+    voiceinput_config["max_capture_seconds"] = click.prompt(
+        "Maximum recorded command length (seconds)",
+        type=float,
+        default=float(voiceinput_config.get("max_capture_seconds", 10.0)),
+    )
+    voiceinput_config["cooldown_seconds"] = click.prompt(
+        "Cooldown after each processed command (seconds)",
+        type=float,
+        default=float(voiceinput_config.get("cooldown_seconds", 1.5)),
+    )
+    voiceinput_config["vad_rms_threshold"] = click.prompt(
+        "Silence sensitivity RMS threshold",
+        type=float,
+        default=float(voiceinput_config.get("vad_rms_threshold", 200.0)),
+    )
+
+    if config["profile"] == "openclaw":
+        click.echo(
+            "Session strategy controls whether wake-word voice turns join OpenClaw's main "
+            "conversation or stay in a separate dedicated mic session."
+        )
+        voiceinput_config["session_strategy"] = click.prompt(
+            "Voice-input OpenClaw session strategy",
+            type=click.Choice(["agent_main", "dedicated_mic"]),
+            default=str(voiceinput_config.get("session_strategy", "agent_main")),
+            show_choices=True,
+        )
+    else:
+        voiceinput_config["session_strategy"] = "agent_main"
+
+    click.echo(
+        "Always-on voice input setup is saved, but the listener will only be ready after "
+        f"Porcupine and your access key are installed. {describe_voiceinput_install_help()}"
+    )
+
+
 @click.command("setup")
 @click.pass_context
 def setup_cmd(ctx: click.Context) -> None:
@@ -385,6 +485,8 @@ def setup_cmd(ctx: click.Context) -> None:
     )
     config["audio"]["max_clip_seconds"] = max_clip_seconds
 
+    _configure_voiceinput(config)
+
     if profile == "openclaw":
         _configure_openclaw_profile(config)
 
@@ -400,6 +502,12 @@ def setup_cmd(ctx: click.Context) -> None:
         click.echo("Configured STT backend looks ready.")
     except (ConfigError, STTError) as exc:
         click.echo(f"WARNING: STT backend still needs attention: {exc}")
+
+    if bool(config.get("voiceinput", {}).get("enabled", False)):
+        click.echo(
+            "Always-on voice input is configured for manual use. Run `uv run pi5mic doctor` "
+            "to verify the wake-word setup, then start it with `uv run pi5mic voiceinput-tool`."
+        )
 
     if profile == "openclaw":
         _run_openclaw_readiness_check(config)

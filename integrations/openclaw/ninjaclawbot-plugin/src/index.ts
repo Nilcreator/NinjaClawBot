@@ -234,6 +234,19 @@ export default function registerNinjaClawbotPlugin(api: any) {
     noArgsSchema,
     "health_check",
   );
+  api.registerTool(
+    {
+      name: "ninjaclawbot_voiceinput_status",
+      description:
+        "Inspect whether the optional pi5mic voice input is installed and configured. This never auto-starts the microphone; it only reports readiness and the manual start command when available.",
+      parameters: noArgsSchema,
+      async execute() {
+        const result = await runDiagnostics(api);
+        return jsonContent(result.voiceInput);
+      },
+    },
+    { optional: true },
+  );
   registerOptionalTool(
     api,
     "ninjaclawbot_capabilities",

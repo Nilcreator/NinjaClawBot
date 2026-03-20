@@ -2602,3 +2602,124 @@ Follow-up:
 
 - use `InstallationGuide.md` as the first document for new Raspberry Pi setups
 - keep future install, calibration, or OpenClaw changes synchronized across `InstallationGuide.md`, `README.md`, and `DevelopmentGuide.md`
+
+### 2026-03-20 pi5mic Always-On Voice Input First Build And Optional Project Integration
+
+Summary:
+
+- implemented the first working always-on `pi5mic` voice-input build with a manual
+  privacy-first control surface
+- added a dedicated `voiceinput-tool` to `pi5mic` for:
+  - status
+  - background start
+  - background stop
+  - foreground debugging
+  - recent log inspection
+- extended `pi5mic setup`, `doctor`, `status`, and `mic-tool` so users can
+  configure and validate the optional wake-word listener without editing JSON
+  by hand
+- added a `voiceinput` install extra so the optional Porcupine dependency can be
+  installed in one step from the NinjaClawBot root
+- integrated optional voice-input awareness into `ninjaclawbot` and the OpenClaw
+  plugin without auto-starting the microphone
+
+Files changed:
+
+- `pyproject.toml`
+- `uv.lock`
+- `MicDevelopment.md`
+- `README.md`
+- `InstallationGuide.md`
+- `DevelopmentGuide.md`
+- `backup/DevelopmentLog.md`
+- `pi5mic/README.md`
+- `pi5mic/src/pi5mic/__main__.py`
+- `pi5mic/src/pi5mic/cli/__init__.py`
+- `pi5mic/src/pi5mic/cli/mic_tool.py`
+- `pi5mic/src/pi5mic/cli/setup_cmd.py`
+- `pi5mic/src/pi5mic/cli/status.py`
+- `pi5mic/src/pi5mic/cli/doctor.py`
+- `pi5mic/src/pi5mic/cli/voiceinput_tool.py`
+- `pi5mic/src/pi5mic/config/config_manager.py`
+- `pi5mic/src/pi5mic/core/voiceinput.py`
+- `pi5mic/src/pi5mic/transport/openclaw_cli.py`
+- `pi5mic/tests/test_cli.py`
+- `pi5mic/tests/test_config.py`
+- `pi5mic/tests/test_doctor.py`
+- `pi5mic/tests/test_mic_tool.py`
+- `pi5mic/tests/test_mic_tool_setup.py`
+- `pi5mic/tests/test_transport_openclaw.py`
+- `pi5mic/tests/test_voiceinput.py`
+- `pi5mic/tests/test_voiceinput_tool.py`
+- `ninjaclawbot/README.md`
+- `ninjaclawbot/pyproject.toml`
+- `ninjaclawbot/uv.lock`
+- `ninjaclawbot/src/ninjaclawbot/__main__.py`
+- `ninjaclawbot/src/ninjaclawbot/config.py`
+- `ninjaclawbot/src/ninjaclawbot/runtime.py`
+- `ninjaclawbot/tests/test_cli_tools.py`
+- `ninjaclawbot/tests/test_runtime.py`
+- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/src/runner.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts`
+- `integrations/openclaw/ninjaclawbot-plugin/tests/runner.test.ts`
+
+Why:
+
+- the one-shot microphone path was working, but the approved next step was the
+  always-on voice input feature
+- the wake-word listener needed to stay manual-start/manual-stop for privacy and
+  safety instead of becoming an auto-start plugin service
+- users needed a clearer install path for the optional Porcupine dependency
+- `ninjaclawbot` and the OpenClaw plugin needed to detect and report optional
+  voice-input readiness without failing when `pi5mic` is missing or not
+  configured
+
+Lint and test results:
+
+- Python gate:
+  - `python3 -m compileall pi5mic/src pi5mic/tests ninjaclawbot/src ninjaclawbot/tests src`
+  - `uv run --extra dev ruff check pi5mic/src pi5mic/tests ninjaclawbot/src ninjaclawbot/tests src`
+  - `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests ninjaclawbot/src ninjaclawbot/tests src`
+- package test gate:
+  - `cd pi5mic && uv run --extra dev --project pi5mic pytest -q tests -c pyproject.toml`
+  - result: `79 passed`
+  - `cd ninjaclawbot && uv run --extra dev --project ninjaclawbot pytest -q tests -c pyproject.toml`
+  - result: `67 passed`
+- optional install-path checks:
+  - `uv lock`
+  - `cd ninjaclawbot && uv lock`
+  - `uv run --extra dev --extra voiceinput python -c "import pvporcupine; import pi5mic; print('voiceinput-extra-ok')"`
+  - `cd ninjaclawbot && uv run --extra dev --extra voiceinput python -c "import pi5mic; import pvporcupine; print('ninjaclawbot-voiceinput-extra-ok')"`
+- OpenClaw plugin gate:
+  - `cd integrations/openclaw/ninjaclawbot-plugin`
+  - `npm run typecheck`
+  - `npm test`
+  - result: `16 passed`
+
+Notes:
+
+- the root `uv run --extra dev pytest -q` collection still fails in this
+  workspace because the multi-package import paths are not resolving correctly
+  there, so validation continues to use the package-level suites that are
+  already passing
+- Python still emits the existing `audioop` deprecation warning for the Whisper
+  and live-resampling path on Python 3.11; this is future upgrade work for
+  Python 3.13, not a current runtime failure
+
+Raspberry Pi validation status:
+
+- one-shot standalone and OpenClaw microphone capture were already user-validated
+- always-on wake-word mode still needs Raspberry Pi manual validation and
+  long-run tuning before it should be treated as production-ready
+
+Follow-up:
+
+- on the Raspberry Pi, install the optional wake-word dependency with
+  `uv sync --extra dev --extra voiceinput`
+- run `uv run pi5mic setup`, enable always-on voice input, then run
+  `uv run pi5mic doctor`
+- test `uv run pi5mic voiceinput-tool foreground` first
+- then test `uv run pi5mic voiceinput-tool start`, `status`, and `stop`
+- if using the integrated robot layer, also test `uv run ninjaclawbot health-check`
+  and `uv run ninjaclawbot voiceinput-tool status`

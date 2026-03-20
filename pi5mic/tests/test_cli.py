@@ -181,6 +181,7 @@ def test_setup_command_saves_interactive_choices(monkeypatch, tmp_path) -> None:
             "2",
             "120",
             "15",
+            "n",
         ]
     )
 
@@ -271,6 +272,7 @@ def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, 
             "60",
             "2",
             "12",
+            "n",
             "y",
             "y",
         ]

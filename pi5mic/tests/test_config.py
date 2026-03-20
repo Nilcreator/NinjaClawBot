@@ -27,6 +27,9 @@ def test_load_returns_defaults_when_file_is_missing(tmp_path) -> None:
     assert config["profile"] == DEFAULT_CONFIG["profile"]
     assert config["audio"]["sample_rate"] == DEFAULT_CONFIG["audio"]["sample_rate"]
     assert config["stt"]["selected"] == "whisper_cpp"
+    assert config["wakeword"]["backend"] == "porcupine"
+    assert config["voiceinput"]["enabled"] is False
+    assert config["voiceinput"]["session_strategy"] == "agent_main"
     assert config["integration"]["openclaw"]["gateway_url"] == "ws://127.0.0.1:18789"
     assert config["integration"]["openclaw"]["session_key"] == "voice-local-mic"
 

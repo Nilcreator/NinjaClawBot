@@ -83,7 +83,11 @@ def validate_openclaw_profile(config: dict) -> dict:
     return openclaw_config
 
 
-def build_openclaw_transport(config: dict) -> OpenClawAgentTransport:
+def build_openclaw_transport(
+    config: dict,
+    *,
+    session_strategy_override: str | None = None,
+) -> OpenClawAgentTransport:
     """Build the configured OpenClaw transport."""
     integration_config = config.get("integration")
     if not isinstance(integration_config, dict):
@@ -95,6 +99,10 @@ def build_openclaw_transport(config: dict) -> OpenClawAgentTransport:
         gateway_url=openclaw_config.get("gateway_url"),
         agent_id=str(openclaw_config["agent_id"]),
         session_key=str(openclaw_config["session_key"]),
+        session_strategy=(
+            session_strategy_override
+            or str(openclaw_config.get("session_strategy", "dedicated_mic"))
+        ),
         delivery_mode=str(integration_config.get("delivery_mode", "local_only")),
         reply_channel=openclaw_config.get("reply_channel"),
         reply_to=openclaw_config.get("reply_to"),

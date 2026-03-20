@@ -120,8 +120,9 @@ The following feature is still planned work, not finished work:
 
 ## 5. Audit Summary
 
-The latest repository audit and external fact check show that the always-on
-feature is feasible, but it should be built carefully.
+The latest repository audit, implementation pass, and external fact check show
+that the always-on feature is feasible and now has a first working build, but it
+still needs Raspberry Pi tuning and long-run validation.
 
 ### 5.1 `pi5mic` audit findings
 
@@ -142,15 +143,14 @@ Important current strengths:
   - explicit delivery mode
   - explicit reply target
 
-Important current gaps:
+The first implementation pass closed these earlier gaps:
 
-- no live streaming audio loop exists yet
-- no live resampling step exists for wake-word detection
-- wake-word config exists, but it is not wired into runtime behavior
-- silence timeout exists in config, but it is not used by a real capture loop
-- there is no always-on CLI command yet
-- there is no single-instance lock or service control for a long-running
-  listener
+- a live streaming audio loop now exists
+- live resampling now adapts microphone frames for Porcupine
+- wake-word config is now wired into runtime behavior
+- silence timeout is now used by the always-on capture loop
+- `voiceinput-tool` now provides manual start/stop/status/log control
+- the listener now refuses overlapping voice turns while one is still busy
 
 ### 5.2 `ninjaclawbot` audit findings
 
@@ -160,11 +160,11 @@ Important current strengths:
 - robot actions and presence control are stable
 - the persistent bridge and OpenClaw service model are already tested
 
-Important current gaps:
+The first implementation pass closed these earlier gaps:
 
-- `ninjaclawbot` has no microphone awareness today
-- `ninjaclawbot health-check` does not report microphone readiness
-- there is no `voiceinput-tool` wrapper or mic-oriented setup guidance yet
+- `ninjaclawbot health-check` now reports optional voice-input readiness
+- `ninjaclawbot` now exposes a thin `voiceinput-tool` wrapper
+- root and package install docs now include mic-oriented setup guidance
 
 ### 5.3 OpenClaw plugin audit findings
 
@@ -177,13 +177,14 @@ Important current strengths:
   - diagnostics tooling
 - the plugin is already the correct place for optional integration diagnostics
 
-Important current gaps:
+Important current constraints:
 
-- the current plugin config name `enableAlwaysOn` already means robot lifecycle
+- the current plugin config name `enableAlwaysOn` still means robot lifecycle
   persistence, not microphone listening
-- plugin services auto-start with the gateway, which conflicts with the new
-  manual privacy-first voice requirement
-- there is no `pi5mic` readiness reporting or optional voice-input status yet
+- plugin services still auto-start with the gateway, which is why the
+  microphone listener continues to live in `pi5mic`
+- the plugin now exposes optional voice-input readiness reporting, but it does
+  not and should not auto-start the microphone
 
 ### 5.4 External fact-check findings
 
@@ -360,32 +361,45 @@ The following work is complete:
 - Gemini kept as optional alternative backend
 - guided setup and `mic-tool` created
 - doctor, status, run, record, and transcribe commands created
+- optional `voiceinput` install path added for the wake-word dependency
+- always-on config block added to `mic.json`
+- always-on streaming loop implemented in `pi5mic/core/voiceinput.py`
+- wake-word plus silence-stop capture flow implemented
+- manual `voiceinput-tool` added with:
+  - status
+  - start
+  - stop
+  - foreground
+  - logs
 - Raspberry Pi sample-rate, PortAudio, and local Whisper hardening added
 - OpenClaw auto-discovery and pairing guidance added
 - explicit Telegram reply routing added
 - OpenClaw session-id migration fixed
 - CLI import and delivery-banner regression fixed
+- OpenClaw always-on session-strategy override added
+- optional `ninjaclawbot voiceinput-tool` wrapper added
+- optional `ninjaclawbot` health-check voice-input readiness reporting added
+- OpenClaw plugin voice-input readiness reporting added through diagnostics and
+  the `ninjaclawbot_voiceinput_status` tool
 
 ## 10. What Still Needs Improvement
 
 The following work is still open:
 
-- true always-on loop
-- live stream capture
-- live resampling for Porcupine input
-- stronger time-based silence handling
+- long-run Raspberry Pi wake-word validation
+- false-positive tuning for the final `Ninja` keyword package
+- stronger time-based silence tuning in real room-noise conditions
 - optional higher-quality VAD backend
-- session strategy control for always-on conversation continuity
-- optional voice readiness reporting in `ninjaclawbot`
-- optional voice readiness reporting in the OpenClaw plugin
-- clear manual start/stop tooling
+- optional richer OpenClaw agent-side voice orchestration beyond readiness
+  reporting
+- replacement for Python `audioop` before any future Python 3.13 upgrade
 - long-run Raspberry Pi validation for idle listening and repeated turns
 
 ## 11. Phased Implementation Plan
 
 ### Phase 0: Planning lock and naming cleanup
 
-Status: planned
+Status: complete
 
 Objective:
 
@@ -414,7 +428,7 @@ Risk level:
 
 ### Phase 1: Always-on core audio loop
 
-Status: planned
+Status: complete
 
 Objective:
 
@@ -440,7 +454,7 @@ Risk level:
 
 ### Phase 2: Wake word, silence stop, and safeguard flow
 
-Status: planned
+Status: complete
 
 Objective:
 
@@ -467,7 +481,7 @@ Risk level:
 
 ### Phase 3: `voiceinput-tool` and guided operator UX
 
-Status: planned
+Status: complete
 
 Objective:
 
@@ -496,7 +510,7 @@ Risk level:
 
 ### Phase 4: OpenClaw session and delivery refinement
 
-Status: planned
+Status: complete
 
 Objective:
 
@@ -522,7 +536,7 @@ Risk level:
 
 ### Phase 5: Optional NinjaClawBot and plugin integration
 
-Status: planned
+Status: in progress
 
 Objective:
 

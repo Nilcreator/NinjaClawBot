@@ -7,6 +7,7 @@ It sits above the standalone Pi 5 driver packages:
 - `pi5buzzer`
 - `pi5servo`
 - `pi5disp`
+- `pi5mic` (optional, recommended if you may want future voice input)
 - `pi5vl53l0x`
 
 Its job is to provide:
@@ -29,6 +30,13 @@ Use the **project root** as the main install location:
 ```bash
 cd /path/to/NinjaClawbot
 uv sync --extra dev
+```
+
+If you want the optional always-on wake-word voice input path, install the extra too:
+
+```bash
+cd /path/to/NinjaClawbot
+uv sync --extra dev --extra voiceinput
 ```
 
 Then run:
@@ -76,6 +84,7 @@ uv run ninjaclawbot perform-movement <name>
 uv run ninjaclawbot perform-expression <name>
 uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
 uv run ninjaclawbot set-idle
+uv run ninjaclawbot voiceinput-tool
 uv run ninjaclawbot run-action '{"action":"read_distance"}'
 ```
 
@@ -98,6 +107,10 @@ to the correct built-in face and sound behavior.
 
 `set-idle` starts the persistent idle face, and the hidden `openclaw-action` command is the
 machine-facing bridge used by the OpenClaw plugin.
+
+`voiceinput-tool` is a convenience wrapper for the optional `pi5mic` always-on listener. It
+uses the project-root `mic.json`, but it still keeps the real implementation in `pi5mic` so the
+microphone remains a standalone-first feature.
 
 ## OpenClaw Plugin
 

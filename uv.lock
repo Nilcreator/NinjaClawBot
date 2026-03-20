@@ -473,12 +473,13 @@ requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "pi5buzzer", extras = ["pi"], editable = "pi5buzzer" },
     { name = "pi5disp", extras = ["pi"], editable = "pi5disp" },
+    { name = "pi5mic", extras = ["wakeword"], marker = "extra == 'voiceinput'", editable = "pi5mic" },
     { name = "pi5servo", extras = ["pi"], editable = "pi5servo" },
     { name = "pi5vl53l0x", extras = ["pi"], editable = "pi5vl53l0x" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "voiceinput"]
 
 [[package]]
 name = "ninjaclawbot-workspace"
@@ -499,6 +500,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+voiceinput = [
+    { name = "pi5mic", extra = ["wakeword"] },
+]
 
 [package.metadata]
 requires-dist = [
@@ -507,12 +511,13 @@ requires-dist = [
     { name = "pi5buzzer", extras = ["pi"], editable = "pi5buzzer" },
     { name = "pi5disp", extras = ["pi"], editable = "pi5disp" },
     { name = "pi5mic", editable = "pi5mic" },
+    { name = "pi5mic", extras = ["wakeword"], marker = "extra == 'voiceinput'", editable = "pi5mic" },
     { name = "pi5servo", extras = ["pi"], editable = "pi5servo" },
     { name = "pi5vl53l0x", extras = ["pi"], editable = "pi5vl53l0x" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "ruff", marker = "extra == 'dev'" },
 ]
-provides-extras = ["dev"]
+provides-extras = ["dev", "voiceinput"]
 
 [[package]]
 name = "numpy"
@@ -622,6 +627,11 @@ dependencies = [
     { name = "sounddevice" },
 ]
 
+[package.optional-dependencies]
+wakeword = [
+    { name = "pvporcupine" },
+]
+
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
@@ -729,6 +739,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
+name = "pvporcupine"
+version = "4.0.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ec/41/e3f9f931b4dcf2288ce132015e62372a0395e7ae70789d5b7335bc893f21/pvporcupine-4.0.2.tar.gz", hash = "sha256:922e64bba176f7a8536c660ee5933a8de80ad9116c4d886d5db85d054a8ac3d2", size = 3642087, upload-time = "2026-02-13T06:41:59.526Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ea/88/72d5f210e6b2da2cc82bb7691883b03d9015cb556bca9f02138a127a97f5/pvporcupine-4.0.2-py3-none-any.whl", hash = "sha256:6bf5863469a45789e8150dd94779ba6051e8d3d860b486d72497cc6ecc7bafab", size = 3658714, upload-time = "2026-02-13T06:41:56.746Z" },
 ]
 
 [[package]]

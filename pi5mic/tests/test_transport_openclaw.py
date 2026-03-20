@@ -76,3 +76,41 @@ def test_presence_controller_calls_gateway_method(monkeypatch, tmp_path) -> None
         "--params",
         '{"mode": "listening", "reason": "pi5mic.listening"}',
     ]
+
+
+def test_openclaw_transport_omits_session_id_for_agent_main_strategy(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    command_path = tmp_path / "openclaw"
+    command_path.write_text("", encoding="utf-8")
+    captured: dict[str, object] = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return _CompletedProcess(stdout='{"final":{"text":"Main session reply"}}')
+
+    monkeypatch.setattr("pi5mic.transport.openclaw_cli.subprocess.run", fake_run)
+
+    transport = OpenClawAgentTransport(
+        command=command_path,
+        gateway_url="ws://127.0.0.1:18789",
+        agent_id="main",
+        session_key="voice-local-mic",
+        session_strategy="agent_main",
+        delivery_mode="local_only",
+    )
+
+    result = transport.dispatch("hello again")
+
+    assert result.reply_text == "Main session reply"
+    assert captured["command"] == [
+        str(command_path.resolve()),
+        "agent",
+        "--agent",
+        "main",
+        "--message",
+        "hello again",
+        "--json",
+    ]

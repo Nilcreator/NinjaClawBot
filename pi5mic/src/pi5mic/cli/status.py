@@ -5,6 +5,7 @@ from __future__ import annotations
 import click
 
 from pi5mic.core.devices import get_default_input_device, list_input_devices
+from pi5mic.core.voiceinput import build_voiceinput_runtime_paths, read_voiceinput_state
 from pi5mic.errors import ConfigError, DeviceError, STTError
 from pi5mic.integration.delivery import describe_delivery_mode, format_reply_target
 from pi5mic.stt.gemini import resolve_gemini_api_key
@@ -47,6 +48,41 @@ def status(ctx: click.Context) -> None:
             click.echo(f"  Gemini auth:      {credential_name}")
         except STTError:
             click.echo("  Gemini auth:      missing")
+
+    voiceinput_config = config.get("voiceinput", {})
+    wakeword_config = config.get("wakeword", {})
+    voiceinput_enabled = bool(voiceinput_config.get("enabled", False))
+    click.echo(f"  Voice input:      {'enabled' if voiceinput_enabled else 'disabled'}")
+    if voiceinput_enabled:
+        click.echo(
+            "  Wake word:        "
+            f"{wakeword_config.get('keyword') or 'unset'} "
+            f"({wakeword_config.get('backend') or 'unset'})"
+        )
+        keyword_path = wakeword_config.get("keyword_path")
+        if keyword_path:
+            click.echo(f"  Keyword file:     {keyword_path}")
+        click.echo(
+            f"  Silence stop:     {float(voiceinput_config.get('silence_timeout_seconds', 3.0)):.1f}s"
+        )
+        click.echo(
+            f"  Max capture:      {float(voiceinput_config.get('max_capture_seconds', 10.0)):.1f}s"
+        )
+        click.echo(f"  Session strategy: {voiceinput_config.get('session_strategy', 'agent_main')}")
+        runtime_paths = build_voiceinput_runtime_paths(manager.path)
+        runtime_state = read_voiceinput_state(runtime_paths)
+        click.echo(
+            "  Voice service:    "
+            + (
+                f"running (PID {runtime_state['pid']})"
+                if runtime_state["running"]
+                else str(runtime_state.get("mode") or "stopped")
+            )
+        )
+        if runtime_state.get("last_error"):
+            click.echo(f"  Voice error:      {runtime_state['last_error']}")
+        click.echo(f"  Voice state file: {runtime_paths.state_file}")
+        click.echo(f"  Voice log file:   {runtime_paths.log_file}")
     if config.get("profile") == "openclaw":
         openclaw_config = config["integration"]["openclaw"]
         click.echo(f"  OpenClaw command: {openclaw_config.get('command') or 'openclaw (PATH)'}")

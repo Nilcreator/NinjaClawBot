@@ -15,12 +15,15 @@ Current implemented features:
 - guide you through setup with `pi5mic setup`
 - provide a simple menu with `pi5mic mic-tool`
 - run one full record-and-transcribe test with `pi5mic run --once`
+- prepare manual always-on wake-word config during `pi5mic setup`
+- start, stop, and inspect the optional background listener with `pi5mic voiceinput-tool`
+- optionally reuse the OpenClaw main session for always-on voice turns
 - show Raspberry Pi health warnings in `pi5mic doctor` when power or thermal history is available
 
 Current limit:
 
-- the package is ready for guided/manual testing
-- it is not yet a fully validated always-on wake-word background service on Raspberry Pi
+- the package is ready for guided/manual testing, including the first always-on listener build
+- the always-on wake-word path still needs long-run Raspberry Pi validation before it should be treated as fully production-ready
 
 ## Before You Start
 
@@ -75,8 +78,16 @@ What you should expect:
 
 ### Step 3. Install the Python workspace
 
+Normal install:
+
 ```bash
 uv sync --extra dev
+```
+
+If you want the optional always-on wake-word feature too, use:
+
+```bash
+uv sync --extra dev --extra voiceinput
 ```
 
 What this is doing:
@@ -84,6 +95,7 @@ What this is doing:
 - installs all Python packages in the workspace
 - includes `pi5mic`
 - also includes the Gemini SDK that `pi5mic` uses for the optional cloud backend
+- if you use the `voiceinput` extra, it also installs the Porcupine wake-word dependency
 
 What you should expect:
 
@@ -107,11 +119,12 @@ What you should expect:
   - `doctor`
   - `install`
   - `mic-tool`
-  - `record`
-  - `run`
-  - `setup`
-  - `status`
-  - `transcribe`
+- `record`
+- `run`
+- `setup`
+- `status`
+- `transcribe`
+- `voiceinput-tool`
 
 ## 2. Install the Default STT Backend: `whisper.cpp`
 
@@ -178,6 +191,7 @@ What this is doing:
 - creates or updates `mic.json`
 - asks you which profile, microphone, and STT backend you want
 - asks for a sample rate that matches your selected microphone
+- can also prepare the optional always-on wake-word listener
 - if you choose `Profile: openclaw`, `pi5mic` now tries to detect your local
   OpenClaw settings automatically and then runs a safe readiness check
 
@@ -193,6 +207,14 @@ Choose:
 - `whisper.cpp model path`: your `ggml-base.bin` path
 - `whisper.cpp threads`: accept the suggested value on Raspberry Pi, usually `2`
 - `Maximum clip length`: start with `8`, `10`, or `12`
+- `Prepare always-on voice input now?`: choose `y` only if you want the manual wake-word listener
+- if you enable always-on voice input:
+  - `Wake word`: keep `ninja` unless you trained a different keyword
+  - `Picovoice access-key environment variable`: usually `PICOVOICE_ACCESS_KEY`
+  - `Porcupine keyword file (.ppn) path`: provide your custom file for `Ninja` when available
+  - `Silence stop timeout`: keep `3`
+  - `Maximum recorded command length`: keep `10`
+  - `Cooldown`: keep `1.5`
 
 Important note about sample rate:
 
@@ -215,6 +237,8 @@ What you should expect:
 - a file named `mic.json` is created in the current folder
 - if the backend is ready, you should see:
   - `Configured STT backend looks ready.`
+- if you enabled always-on voice input, setup also reminds you to run `uv run pi5mic doctor`
+  before starting `voiceinput-tool`
 
 If you still see a warning:
 
@@ -244,7 +268,8 @@ What you should expect:
   - `3. Run doctor`
   - `4. Show status`
   - `5. Run one capture cycle`
-  - `6. Exit`
+  - `6. Open voiceinput-tool`
+  - `7. Exit`
 
 ### What each menu item does
 
@@ -344,7 +369,23 @@ What `pi5mic` now does automatically for local Whisper on Raspberry Pi:
 
 This is the simplest way to test whether the whole standalone microphone flow works.
 
-#### 6. Exit
+#### 6. Open voiceinput-tool
+
+What it does:
+
+- opens the dedicated always-on listener control menu
+- lets you start, stop, inspect, and debug the manual wake-word service
+
+What to expect:
+
+- a second menu with:
+  - `Show voice input status`
+  - `Start background listener`
+  - `Stop background listener`
+  - `Run listener in foreground`
+  - `Show recent voice input logs`
+
+#### 7. Exit
 
 What it does:
 
@@ -410,6 +451,11 @@ What you should expect:
 - sample rate
 - STT backend
 - audio device count
+- if always-on voice input is enabled:
+  - wake word
+  - session strategy
+  - service state
+  - state-file and log-file paths
 
 ### Step 12. Run the health check
 
@@ -430,6 +476,13 @@ What you should expect:
 - model file
 
 If the sample rate is not ideal for the selected microphone, `doctor` may still succeed but show a warning with a better rate to use.
+
+If always-on voice input is enabled, `doctor` also checks:
+
+- whether the Porcupine package is installed
+- whether the Picovoice access key variable is present
+- whether the custom `.ppn` keyword file exists when needed
+- whether the background listener is running or stopped
 
 ### Step 13. Test recording only
 
@@ -518,6 +571,125 @@ What this is doing:
 What you should expect:
 
 - transcript output only
+
+## 6. Manual Always-On Voice Input
+
+This section is for the optional wake-word listener.
+
+Important safety and privacy rule:
+
+- `pi5mic` never starts the microphone automatically
+- you must start it yourself
+- you can stop it yourself at any time
+
+### Step 18. Confirm the wake-word dependency is installed
+
+```bash
+cd ~/NinjaClawBot
+uv sync --extra dev --extra voiceinput
+```
+
+What this is doing:
+
+- installs Porcupine for wake-word detection
+
+What you should expect:
+
+- the command completes without errors
+
+### Step 19. Set your Picovoice access key
+
+```bash
+cd ~/NinjaClawBot
+export PICOVOICE_ACCESS_KEY="your_key_here"
+```
+
+What this is doing:
+
+- gives the wake-word engine permission to start
+
+What you should expect:
+
+- no output is normal
+
+### Step 20. Validate the always-on config
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+```
+
+What this is doing:
+
+- checks STT, microphone access, and wake-word readiness together
+
+What you should expect:
+
+- `INFO always-on voice input: enabled`
+- `OK   wake-word detector: ...`
+- if using `Ninja`, either a valid `.ppn` path or a clear warning/failure telling you what is still missing
+
+### Step 21. Start the listener in the background
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool start
+```
+
+What this is doing:
+
+- starts the manual wake-word listener in the background
+- waits for the wake word
+- after wake-word detection, records until 3 seconds of silence or 10 seconds max
+
+What you should expect:
+
+- `Started the always-on voice input listener in the background.`
+- the microphone stays idle until it hears the wake word
+
+### Step 22. Check its status
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool status
+```
+
+What this is doing:
+
+- shows whether the background listener is running
+- shows the wake word, session strategy, and the state/log file paths
+
+### Step 23. Stop it manually
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool stop
+```
+
+What this is doing:
+
+- stops the background wake-word listener
+
+What you should expect:
+
+- `Stopped the always-on voice input listener.`
+
+### Step 24. Use the foreground mode when debugging
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool foreground
+```
+
+What this is doing:
+
+- runs the same listener in the current terminal
+- prints live status messages so you can debug setup problems
+
+What you should expect:
+
+- `Starting voice input in the foreground.`
+- `Press Ctrl+C to stop it.`
 - useful when debugging STT without speaking again
 
 ## Optional OpenClaw Mode Inside NinjaClawBot

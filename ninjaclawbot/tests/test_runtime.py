@@ -220,3 +220,29 @@ def test_runtime_shutdown_sequence_powers_down_display() -> None:
     assert runtime._distance.closed is True
     assert runtime._servo.calls[-2:] == [("stop",), ("close",)]
     assert runtime._expressions.calls[0] == ("perform", {"builtin": "sleepy", "idle_reset": False})
+
+
+def test_runtime_health_check_includes_optional_voice_input_status(monkeypatch) -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
+    monkeypatch.setattr(
+        "ninjaclawbot.runtime._inspect_voice_input",
+        lambda config: {
+            "available": True,
+            "configured": True,
+            "enabled": True,
+            "wakeword_enabled": True,
+            "running": False,
+            "manual_start_required": True,
+            "status": "manual_start_required",
+            "config_path": str(config.mic_config_path),
+        },
+    )
+
+    health = runtime.health_check()
+
+    assert health["voice_input"]["status"] == "manual_start_required"
+    assert health["voice_input"]["manual_start_required"] is True

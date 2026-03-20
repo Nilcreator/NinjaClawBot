@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 from typing import Any
 
 import click
@@ -11,6 +14,7 @@ from ninjaclawbot.actions import ActionRequest
 from ninjaclawbot.cli.common import create_executor, extract_movement_data, parse_movement_command
 from ninjaclawbot.cli.expression_tool import expression_tool
 from ninjaclawbot.cli.movement_tool import movement_tool
+from ninjaclawbot.config import NinjaClawbotConfig
 from ninjaclawbot.expressions.policy import list_reply_states
 from ninjaclawbot.openclaw.bridge import serve_stdio
 
@@ -95,6 +99,43 @@ def openclaw_serve(ctx: click.Context) -> None:
     """Persistent stdio bridge for the OpenClaw plugin service."""
 
     serve_stdio(ctx.obj["root_dir"])
+
+
+@cli.command(
+    "voiceinput-tool",
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+)
+@click.pass_context
+def voiceinput_tool_proxy(ctx: click.Context) -> None:
+    """Open the optional pi5mic voiceinput-tool using this project root."""
+    root_dir = Path(str(ctx.obj["root_dir"])).expanduser().resolve()
+    config = NinjaClawbotConfig(root_dir=root_dir)
+    mic_config_path = config.mic_config_path
+
+    try:
+        import pi5mic  # noqa: F401
+    except ImportError as exc:
+        raise click.ClickException(
+            "pi5mic is not installed in this NinjaClawBot environment yet. "
+            "Install it with `uv sync --extra dev --extra voiceinput` from the project root "
+            "before using the voiceinput tool."
+        ) from exc
+
+    command = [
+        sys.executable,
+        "-m",
+        "pi5mic",
+        "--config-file",
+        str(mic_config_path),
+        "voiceinput-tool",
+        *list(ctx.args),
+    ]
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        raise click.ClickException(
+            "pi5mic voiceinput-tool exited with a non-zero status. "
+            "Review the output above for the exact reason."
+        )
 
 
 @cli.command("move-servos")

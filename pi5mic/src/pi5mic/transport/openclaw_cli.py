@@ -159,6 +159,7 @@ class OpenClawAgentTransport(TextTransport):
         gateway_url: str | None,
         agent_id: str,
         session_key: str,
+        session_strategy: str = "dedicated_mic",
         delivery_mode: str,
         reply_channel: str | None = None,
         reply_to: str | None = None,
@@ -169,6 +170,7 @@ class OpenClawAgentTransport(TextTransport):
         self.gateway_args = build_gateway_cli_args(gateway_url)
         self.agent_id = agent_id.strip()
         self.session_key = normalize_openclaw_session_id(session_key)
+        self.session_strategy = session_strategy.strip().lower()
         self.delivery_mode = delivery_mode.strip()
         self.reply_channel = reply_channel.strip() if reply_channel else None
         self.reply_to = reply_to.strip() if reply_to else None
@@ -179,6 +181,10 @@ class OpenClawAgentTransport(TextTransport):
             raise TransportError("OpenClaw agent_id must not be empty.")
         if not self.session_key:
             raise TransportError("OpenClaw session_key must not be empty.")
+        if self.session_strategy not in {"dedicated_mic", "agent_main"}:
+            raise TransportError(
+                "OpenClaw session_strategy must be 'dedicated_mic' or 'agent_main'."
+            )
 
     def dispatch(self, text: str) -> DispatchResult:
         """Submit transcript text into OpenClaw and parse the reply."""
@@ -191,12 +197,12 @@ class OpenClawAgentTransport(TextTransport):
             "agent",
             "--agent",
             self.agent_id,
-            "--session-id",
-            self.session_key,
             "--message",
             transcript,
             "--json",
         ]
+        if self.session_strategy == "dedicated_mic":
+            command[4:4] = ["--session-id", self.session_key]
         command.extend(self.gateway_args)
         command.extend(self._delivery_args())
 

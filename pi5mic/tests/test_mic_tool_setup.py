@@ -53,7 +53,8 @@ def test_mic_tool_setup_warns_instead_of_crashing_when_audio_backend_is_unavaila
             "2",
             "120",
             "15",
-            "6",
+            "n",
+            "7",
         ]
     )
 
@@ -78,7 +79,7 @@ def test_mic_tool_returns_to_menu_after_click_exception(monkeypatch) -> None:
 
     monkeypatch.setattr(mic_tool_module, "doctor", _failing_doctor)
 
-    result = runner.invoke(cli, ["mic-tool"], input="3\n6\n")
+    result = runner.invoke(cli, ["mic-tool"], input="3\n7\n")
 
     assert result.exit_code == 0, result.output
     assert "ERROR: doctor failed on purpose" in result.output

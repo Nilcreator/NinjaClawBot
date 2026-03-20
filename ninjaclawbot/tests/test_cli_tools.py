@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 from click.testing import CliRunner
@@ -209,3 +211,41 @@ def test_openclaw_serve_delegates_to_stdio_bridge(tmp_path: Path, monkeypatch) -
 
     assert result.exit_code == 0
     assert calls == [tmp_path]
+
+
+def test_voiceinput_tool_proxy_invokes_pi5mic_with_project_mic_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setitem(sys.modules, "pi5mic", object())
+
+    def fake_run(command, check=False):
+        captured["command"] = command
+        captured["check"] = check
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("ninjaclawbot.__main__.subprocess.run", fake_run)
+
+    result = runner.invoke(
+        cli,
+        [
+            "--root-dir",
+            str(tmp_path),
+            "voiceinput-tool",
+            "status",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["command"] == [
+        sys.executable,
+        "-m",
+        "pi5mic",
+        "--config-file",
+        str(tmp_path / "mic.json"),
+        "voiceinput-tool",
+        "status",
+    ]

@@ -14,7 +14,19 @@ from pi5mic.core.system_info import (
     read_raspberry_pi_temperature_celsius,
     read_raspberry_pi_throttled_state,
 )
-from pi5mic.errors import ConfigError, DeviceError, IntegrationError, STTError, TransportError
+from pi5mic.core.voiceinput import (
+    build_voiceinput_runtime_paths,
+    read_voiceinput_state,
+    validate_voiceinput_readiness,
+)
+from pi5mic.errors import (
+    ConfigError,
+    DeviceError,
+    IntegrationError,
+    STTError,
+    TransportError,
+    WakeWordError,
+)
 from pi5mic.install.whisper_cpp import resolve_model_path, resolve_whisper_cpp_command
 from pi5mic.integration.delivery import describe_delivery_mode, format_reply_target
 from pi5mic.integration.openclaw_setup import (
@@ -146,6 +158,57 @@ def doctor(ctx: click.Context) -> None:
             failures.append(f"{exc} {describe_gemini_env_help()}")
     else:
         failures.append(f"Unsupported STT backend configured: {selected_backend}")
+
+    voiceinput_enabled = bool(config.get("voiceinput", {}).get("enabled", False))
+    click.echo(f"INFO always-on voice input: {'enabled' if voiceinput_enabled else 'disabled'}")
+    if voiceinput_enabled:
+        try:
+            readiness = validate_voiceinput_readiness(config)
+            click.echo(
+                "OK   wake-word detector: "
+                f"{readiness['backend']} @ {readiness['detector_sample_rate']} Hz "
+                f"(frame length {readiness['detector_frame_length']})"
+            )
+            click.echo(f"OK   wake word:         {readiness['keyword']}")
+            click.echo(
+                "OK   capture policy:    "
+                f"silence {readiness['silence_timeout_seconds']:.1f}s, "
+                f"max {readiness['max_capture_seconds']:.1f}s, "
+                f"cooldown {readiness['cooldown_seconds']:.1f}s"
+            )
+            click.echo(f"OK   access key env:    {readiness['access_key_env_var']}")
+            if readiness["keyword_path"] is not None:
+                click.echo(f"OK   keyword file:      {readiness['keyword_path']}")
+            elif readiness["keyword"].casefold() == "ninja":
+                warnings.append(
+                    "The wake word is set to 'Ninja' without a custom `.ppn` keyword file. "
+                    "Most Porcupine setups require a custom keyword file for that word."
+                )
+
+            runtime_paths = build_voiceinput_runtime_paths(manager.path)
+            runtime_state = read_voiceinput_state(runtime_paths)
+            click.echo(
+                "INFO voice input service: "
+                + (
+                    f"running (PID {runtime_state['pid']})"
+                    if runtime_state["running"]
+                    else str(runtime_state.get("mode") or "stopped")
+                )
+            )
+            click.echo(f"INFO voice input state: {runtime_paths.state_file}")
+            click.echo(f"INFO voice input log:   {runtime_paths.log_file}")
+            if runtime_state.get("last_error"):
+                warnings.append(
+                    "The voice input service recorded a recent error: "
+                    + str(runtime_state["last_error"])
+                )
+        except (ConfigError, WakeWordError) as exc:
+            failures.append(str(exc))
+    elif bool(config.get("wakeword", {}).get("enabled", False)):
+        warnings.append(
+            "Wake-word detection is enabled in the config, but always-on voice input is disabled. "
+            "Rerun `uv run pi5mic setup` if you want to finish the always-on setup."
+        )
 
     if config["profile"] == "openclaw":
         openclaw_config = config["integration"]["openclaw"]

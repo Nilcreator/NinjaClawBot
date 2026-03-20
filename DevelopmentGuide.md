@@ -306,7 +306,7 @@ What each README is best for:
 - `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
 - `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
 - `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
-- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, OpenClaw auto-setup, and optional local-plus-Telegram voice reply mirroring
+- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, manual `voiceinput-tool`, OpenClaw auto-setup, and optional local-plus-Telegram voice reply mirroring
 - `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
 
 ## Validated Runtime Model
@@ -316,9 +316,10 @@ The final validated build is hybrid. That matters for future development.
 ### What owns what
 
 - Standalone driver libraries own direct hardware behavior
-- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, Telegram reply-target discovery for voice turns, and the preview OpenClaw voice handoff
+- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, Telegram reply-target discovery for voice turns, the optional always-on wake-word listener, and the preview OpenClaw voice handoff
 - `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
-- the OpenClaw plugin owns the persistent bridge and the operator-facing tool surface
+- `ninjaclawbot` may expose convenience wrappers such as `voiceinput-tool`, but it does not own the microphone runtime
+- the OpenClaw plugin owns the persistent bridge and diagnostics/operator-facing status surface
 - startup greeting is validated through:
   - OpenClaw internal `boot-md`
   - workspace `BOOT.md`
@@ -331,7 +332,8 @@ The final validated build is hybrid. That matters for future development.
 ### What this means in practice
 
 - do not assume the Python service `startup_sequence()` is the only startup path
-- do not assume `pi5mic` is already an always-on validated voice daemon; the current build is a guided preview path
+- do not assume `pi5mic` is already a fully validated always-on voice daemon; the current build is a manual-start preview path with package tests passing
+- do not auto-start voice input from the plugin or from `ninjaclawbot`; manual start and manual stop are the current safety model
 - do not assume plugin config alone makes replies work
 - when debugging reply behavior, always check:
   - allowlist
@@ -377,7 +379,7 @@ Important modules:
 
 - [__main__.py](ninjaclawbot/src/ninjaclawbot/__main__.py)
   - main CLI entrypoint
-  - commands such as `health-check`, `perform-reply`, `run-action`, `openclaw-serve`
+  - commands such as `health-check`, `perform-reply`, `run-action`, `openclaw-serve`, and the optional `voiceinput-tool` wrapper
 - [cli/common.py](ninjaclawbot/src/ninjaclawbot/cli/common.py)
   - shared CLI helpers
 - [cli/expression_tool.py](ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
@@ -727,6 +729,31 @@ uv run pi5mic doctor
 ```bash
 cd ~/NinjaClawBot
 uv sync --extra dev
+```
+
+### `pi5mic` says `pvporcupine` is missing or `voiceinput-tool` is not ready
+
+- this means the optional always-on wake-word dependency was not installed yet
+- install the voice-input extra and then rerun doctor:
+
+```bash
+cd ~/NinjaClawBot
+uv sync --extra dev --extra voiceinput
+uv run pi5mic doctor
+```
+
+- if `doctor` then says the Picovoice access key is missing, set it in the same shell:
+
+```bash
+export PICOVOICE_ACCESS_KEY="your_key_here"
+uv run pi5mic doctor
+```
+
+- if your wake word is `Ninja`, `doctor` may also require a custom `.ppn` keyword file
+- once `doctor` is clean, start the listener manually:
+
+```bash
+uv run pi5mic voiceinput-tool start
 ```
 
 ### `pi5mic` says `pairing required` in OpenClaw mode

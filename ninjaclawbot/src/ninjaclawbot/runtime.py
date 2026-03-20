@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import logging
 from typing import Any
 
@@ -18,6 +19,74 @@ from ninjaclawbot.locks import ExecutionLock
 from ninjaclawbot.presence import normalize_presence_mode
 
 log = logging.getLogger(__name__)
+
+
+def _inspect_voice_input(config: NinjaClawbotConfig) -> dict[str, Any]:
+    """Return optional pi5mic readiness without making it a hard dependency."""
+    mic_config_path = config.mic_config_path
+    summary: dict[str, Any] = {
+        "available": False,
+        "config_path": str(mic_config_path),
+        "configured": mic_config_path.exists(),
+        "enabled": False,
+        "wakeword_enabled": False,
+        "running": False,
+        "manual_start_required": False,
+    }
+    if not mic_config_path.exists():
+        summary["status"] = "skipped"
+        summary["reason"] = "mic.json not found"
+        return summary
+
+    if importlib.util.find_spec("pi5mic.config.config_manager") is None:
+        summary["status"] = "skipped"
+        summary["reason"] = "pi5mic is not installed in this environment"
+        return summary
+
+    try:
+        from pi5mic.config.config_manager import MicConfigManager
+        from pi5mic.core.voiceinput import build_voiceinput_runtime_paths, read_voiceinput_state
+    except ImportError as exc:
+        summary["status"] = "skipped"
+        summary["reason"] = str(exc)
+        return summary
+
+    try:
+        mic_config = MicConfigManager(mic_config_path).load()
+    except Exception as exc:
+        summary["status"] = "invalid"
+        summary["reason"] = str(exc)
+        return summary
+
+    voiceinput_config = mic_config.get("voiceinput", {})
+    wakeword_config = mic_config.get("wakeword", {})
+    voiceinput_enabled = bool(voiceinput_config.get("enabled", False))
+    wakeword_enabled = bool(wakeword_config.get("enabled", False))
+    runtime_state = read_voiceinput_state(build_voiceinput_runtime_paths(mic_config_path))
+
+    summary.update(
+        {
+            "available": voiceinput_enabled and wakeword_enabled,
+            "enabled": voiceinput_enabled,
+            "wakeword_enabled": wakeword_enabled,
+            "running": bool(runtime_state.get("running", False)),
+            "manual_start_required": voiceinput_enabled
+            and wakeword_enabled
+            and not bool(runtime_state.get("running", False)),
+            "status": (
+                "running"
+                if runtime_state.get("running", False)
+                else (
+                    "manual_start_required"
+                    if voiceinput_enabled and wakeword_enabled
+                    else "configured"
+                )
+            ),
+        }
+    )
+    if runtime_state.get("last_error"):
+        summary["last_error"] = runtime_state["last_error"]
+    return summary
 
 
 class NinjaClawbotRuntime:
@@ -152,6 +221,7 @@ class NinjaClawbotRuntime:
                     health[name] = {"available": False, "error": "Invalid health result"}
             except Exception as exc:
                 health[name] = {"available": False, "error": str(exc)}
+        health["voice_input"] = _inspect_voice_input(self.config)
         return health
 
     def _safe_cleanup(self, label: str, callback: Any) -> None:

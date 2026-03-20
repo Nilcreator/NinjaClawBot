@@ -150,6 +150,85 @@ def test_doctor_reports_actionable_gemini_credential_failure(monkeypatch, tmp_pa
     assert "export GEMINI_API_KEY" in result.output
 
 
+def test_doctor_reports_always_on_voiceinput_readiness(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "voiceinput": {
+    "enabled": true
+  },
+  "wakeword": {
+    "enabled": true,
+    "keyword": "picovoice"
+  },
+  "stt": {
+    "selected": "whisper_cpp",
+    "whisper_cpp": {
+      "command": "/usr/local/bin/whisper-cli",
+      "model_path": "/models/ggml-base.bin"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor_module, "list_input_devices", lambda: [object()])
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (0, 16_000, None, None),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_whisper_cpp_command",
+        lambda command: Path("/usr/local/bin/whisper-cli"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_model_path",
+        lambda model_path: Path("/models/ggml-base.bin"),
+    )
+    monkeypatch.setattr(doctor_module, "is_raspberry_pi", lambda: False)
+    monkeypatch.setattr(
+        doctor_module,
+        "validate_voiceinput_readiness",
+        lambda config: {
+            "backend": "porcupine",
+            "keyword": "picovoice",
+            "keyword_path": None,
+            "silence_timeout_seconds": 3.0,
+            "max_capture_seconds": 10.0,
+            "cooldown_seconds": 1.5,
+            "access_key_env_var": "PICOVOICE_ACCESS_KEY",
+            "detector_sample_rate": 16_000,
+            "detector_frame_length": 512,
+        },
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "build_voiceinput_runtime_paths",
+        lambda config_path: type(
+            "Paths",
+            (),
+            {"state_file": tmp_path / "voice-state.json", "log_file": tmp_path / "voice.log"},
+        )(),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "read_voiceinput_state",
+        lambda paths: {"running": False, "mode": "stopped", "last_error": None},
+    )
+
+    result = runner.invoke(cli, ["--config-file", str(config_path), "doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert "INFO always-on voice input: enabled" in result.output
+    assert "OK   wake-word detector: porcupine @ 16000 Hz" in result.output
+    assert "INFO voice input service: stopped" in result.output
+
+
 def test_doctor_handles_missing_google_parent_package_gracefully(monkeypatch, tmp_path) -> None:
     runner = CliRunner()
     config_path = tmp_path / "mic.json"

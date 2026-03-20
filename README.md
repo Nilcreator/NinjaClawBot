@@ -95,7 +95,7 @@ The current validated build supports this flow:
 - `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
 - `pi5disp`: display initialization, rendering, and interactive `display-tool`
 - `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, OpenClaw auto-setup with pairing guidance, automatic legacy session-id migration, and optional local-plus-Telegram voice reply mirroring
+- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, manual `voiceinput-tool` start/stop controls, OpenClaw auto-setup with pairing guidance, optional always-on wake-word mode, automatic legacy session-id migration, and optional local-plus-Telegram voice reply mirroring
 - `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
 
 ### Integrated robot layer
@@ -124,6 +124,9 @@ cd NinjaClawBot
 # Install the workspace
 uv sync --extra dev
 
+# Optional but recommended if you may want always-on wake-word voice input later
+uv sync --extra dev --extra voiceinput
+
 # Check the integrated robot layer
 uv run ninjaclawbot health-check
 
@@ -132,6 +135,8 @@ uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
 uv run pi5mic mic-tool
+uv run pi5mic voiceinput-tool
+uv run ninjaclawbot voiceinput-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
@@ -166,7 +171,12 @@ Validated outcomes:
 - `pi5mic` CLI import path repaired, so `uv run pi5mic setup` and
   `uv run pi5mic mic-tool` no longer fail on the OpenClaw delivery-status
   banner parser bug
-- Raspberry Pi microphone validation for the new voice path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, Raspberry Pi health warnings, and OpenClaw handoff readiness guidance
+- `pi5mic` now includes a manual always-on voice-input path with:
+  - guided setup for wake-word config
+  - background and foreground `voiceinput-tool` control
+  - optional `ninjaclawbot voiceinput-tool` wrapper
+  - optional voice-input readiness reporting in `ninjaclawbot` and the OpenClaw plugin diagnostics path
+- Raspberry Pi long-run validation for the always-on wake-word path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, Raspberry Pi health warnings, wake-word readiness, and OpenClaw handoff guidance
 
 ## License
 

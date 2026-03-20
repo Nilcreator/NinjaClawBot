@@ -14,6 +14,7 @@ import {
   parseBridgeOutput,
   readBridgeTelemetry,
   readDisplayConfigSummary,
+  readVoiceInputStatusSummary,
   runNinjaClawbotAction,
   runDiagnostics,
 } from "../src/runner.js";
@@ -212,6 +213,34 @@ test("readDisplayConfigSummary prefers the root display config when present", ()
   assert.equal(summary.configExists, true);
 });
 
+test("readVoiceInputStatusSummary reports manual start required when pi5mic is configured", () => {
+  const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-voiceinput-"));
+  const rootDir = path.join(baseDir, "robot");
+  const projectRoot = path.join(baseDir, "project");
+  fs.mkdirSync(rootDir, { recursive: true });
+  fs.mkdirSync(path.join(projectRoot, "pi5mic"), { recursive: true });
+  fs.writeFileSync(
+    path.join(rootDir, "mic.json"),
+    JSON.stringify({
+      voiceinput: { enabled: true },
+      wakeword: { enabled: true, keyword: "ninja" },
+    }),
+    "utf-8",
+  );
+
+  const summary = readVoiceInputStatusSummary({
+    projectRoot,
+    rootDir,
+    enablePersistentBridge: true,
+  });
+
+  assert.equal(summary.status, "manual_start_required");
+  assert.equal(summary.configExists, true);
+  assert.equal(summary.enabled, true);
+  assert.equal(summary.wakewordEnabled, true);
+  assert.equal(summary.manualStartRequired, true);
+});
+
 test("inspectDeploymentHealth reports validated deployment readiness", () => {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "ninjaclawbot-workspace-"));
   fs.writeFileSync(path.join(workspace, "BOOT.md"), "# startup\n", "utf-8");
@@ -367,6 +396,7 @@ test("runDiagnostics reports one-shot fallback when persistent bridge is disable
   assert.equal(diagnostics.bridge.status, "disabled");
   assert.equal(diagnostics.summary.state, "one_shot_fallback");
   assert.equal(diagnostics.deployment.status, "warning");
+  assert.equal(diagnostics.voiceInput.status, "not_configured");
   assert.ok(
     diagnostics.recoveryHints.some((hint) => hint.includes("persistent bridge")),
   );

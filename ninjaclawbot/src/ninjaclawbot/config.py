@@ -15,6 +15,7 @@ class NinjaClawbotConfig:
     buzzer_config_file: str = "buzzer.json"
     display_config_file: str = "display.json"
     distance_config_file: str = "vl53l0x.json"
+    mic_config_file: str = "mic.json"
     asset_dir_name: str = "ninjaclawbot_data"
     distance_bus: int = 1
 
@@ -33,6 +34,10 @@ class NinjaClawbotConfig:
     @property
     def distance_config_path(self) -> Path:
         return self.root_dir / self.distance_config_file
+
+    @property
+    def mic_config_path(self) -> Path:
+        return self.root_dir / self.mic_config_file
 
     @property
     def asset_root(self) -> Path:

@@ -450,8 +450,8 @@ Purpose:
 
 Important note:
 - this is a preview path
-- package-level tests pass, but real Raspberry Pi microphone validation is still required
-- the current user-friendly path is guided/manual, not an always-on wake-word daemon yet
+- package-level tests pass, but real Raspberry Pi long-run validation is still required
+- the current build now includes a manual always-on wake-word listener, but it still should be treated as a preview feature until the Raspberry Pi validation checklist is complete
 
 Backend notes:
 - default STT backend: local `whisper.cpp` with the multilingual `base` model
@@ -465,10 +465,18 @@ cd ~/NinjaClawBot
 uv sync --extra dev
 ```
 
+If you want the optional always-on wake-word path too:
+
+```bash
+cd ~/NinjaClawBot
+uv sync --extra dev --extra voiceinput
+```
+
 Purpose:
 - install the full NinjaClawBot workspace in one environment
 - install `pi5mic`
 - install the Gemini Python SDK automatically through the current `pi5mic` dependency set
+- if you use the `voiceinput` extra, also install Porcupine for wake-word detection
 
 Expected result:
 - the sync finishes without errors
@@ -554,6 +562,14 @@ Recommended choices for NinjaClawBot integration:
 - if `whisper_cpp`: accept the suggested `threads` value on Raspberry Pi
 - if `gemini`: keep the default model unless you have a reason to change it
 - `Maximum clip length`: start with `8`, `10`, or `12`
+- `Prepare always-on voice input now?`: choose `y` only if you want the optional manual wake-word listener
+- if you enable always-on voice input:
+  - keep `Wake word` as `ninja` unless you trained a different wake word
+  - keep `Picovoice access-key environment variable` as `PICOVOICE_ACCESS_KEY`
+  - add the `.ppn` keyword file path when you have it
+  - keep `Silence stop timeout` at `3`
+  - keep `Maximum recorded command length` at `10`
+  - keep `Cooldown` at `1.5`
 
 Purpose:
 - write the actual microphone profile into `~/NinjaClawBot/mic.json`
@@ -572,6 +588,8 @@ Expected result:
 - it prints a short summary of the detected OpenClaw settings
 - it prints either `Configured STT backend looks ready.` or a clear warning
   about what is still missing
+- if always-on voice input is enabled, setup reminds you to run `uv run pi5mic doctor`
+  before starting the listener manually
 - it then runs a safe OpenClaw readiness check
 - if the gateway asks for one-time local pairing approval, `pi5mic` explains the
   problem and offers to approve the newest local request for you
@@ -588,12 +606,18 @@ uv run pi5mic doctor
 Purpose:
 - verify the microphone settings
 - verify the selected STT backend
+- verify the optional always-on wake-word setup when enabled
 - verify the OpenClaw profile wiring
 - show Raspberry Pi health warnings when available
 
 Expected result:
 - for Whisper: command path, model path, and runtime summary are shown
 - for Gemini: `doctor` shows which API key variable it found
+- if always-on voice input is enabled, `doctor` also checks:
+  - whether Porcupine is installed
+  - whether `PICOVOICE_ACCESS_KEY` or the configured variable is present
+  - whether the `.ppn` keyword file exists when needed
+  - whether the voice-input service is currently running or stopped
 - if the profile is `openclaw`, `doctor` also checks:
   - the OpenClaw command
   - the detected OpenClaw config file
@@ -624,6 +648,45 @@ Expected result:
 - if the profile is `openclaw`, the command also submits the transcript to OpenClaw and prints the reply locally
 - if setup enabled dual delivery, the same reply should also appear in the
   detected Telegram chat or topic
+
+### 9.5.7A Optional manual always-on voice input
+
+Use this only after `doctor` is clean.
+
+1. Set your Picovoice access key:
+
+```bash
+cd ~/NinjaClawBot
+export PICOVOICE_ACCESS_KEY="your_key_here"
+```
+
+2. Start the listener:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool start
+```
+
+3. Check status:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool status
+```
+
+4. Stop it when you no longer want the microphone listening:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool stop
+```
+
+Expected result:
+
+- the listener stays idle until it hears the wake word
+- after the wake word, it records until 3 seconds of silence or 10 seconds max
+- it sends the original-language transcript to OpenClaw when the profile is `openclaw`
+- it ignores new wake-word triggers while the previous request is still being transcribed or dispatched
 
 ### 9.5.8 If OpenClaw says `pairing required`
 

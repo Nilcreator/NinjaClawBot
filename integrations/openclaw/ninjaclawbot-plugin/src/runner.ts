@@ -90,6 +90,30 @@ export interface DisplayConfigSummary {
   configExists: boolean;
 }
 
+type VoiceInputSummaryState =
+  | "running"
+  | "manual_start_required"
+  | "configured"
+  | "not_configured"
+  | "invalid";
+
+export interface VoiceInputStatusSummary {
+  status: VoiceInputSummaryState;
+  configPath: string | null;
+  rootConfigPath: string | null;
+  packageConfigPath: string | null;
+  usingRootConfig: boolean;
+  configExists: boolean;
+  enabled: boolean;
+  wakewordEnabled: boolean;
+  running: boolean;
+  manualStartRequired: boolean;
+  stateFile: string | null;
+  logFile: string | null;
+  lastError: string | null;
+  guidance: string[];
+}
+
 export interface DeploymentHealth {
   status: ReadinessStatus;
   persistentBridgeEnabled: boolean;
@@ -116,6 +140,7 @@ export interface NinjaClawbotDiagnostics {
   service: Record<string, unknown> | null;
   deployment: DeploymentHealth;
   display: DisplayConfigSummary;
+  voiceInput: VoiceInputStatusSummary;
   startup: {
     trackingMode: "service_sequence" | "workspace_boot_md" | "unknown";
     configured: boolean;
@@ -284,6 +309,108 @@ export function readDisplayConfigSummary(config: OpenClawPluginConfig): DisplayC
   };
 }
 
+export function readVoiceInputStatusSummary(config: OpenClawPluginConfig): VoiceInputStatusSummary {
+  const rootConfigPath = path.resolve(config.rootDir ?? config.projectRoot, "mic.json");
+  const packageConfigPath = path.resolve(config.projectRoot, "pi5mic", "mic.json");
+  const usingRootConfig = fs.existsSync(rootConfigPath);
+  const configPath = usingRootConfig ? rootConfigPath : packageConfigPath;
+  const configExists = fs.existsSync(configPath);
+  const stateFile = configExists ? path.join(path.dirname(configPath), ".pi5mic-voiceinput-state.json") : null;
+  const logFile = configExists ? path.join(path.dirname(configPath), ".pi5mic-voiceinput.log") : null;
+
+  const baseSummary: VoiceInputStatusSummary = {
+    status: "not_configured",
+    configPath,
+    rootConfigPath,
+    packageConfigPath,
+    usingRootConfig,
+    configExists,
+    enabled: false,
+    wakewordEnabled: false,
+    running: false,
+    manualStartRequired: false,
+    stateFile,
+    logFile,
+    lastError: null,
+    guidance: [],
+  };
+
+  if (!configExists) {
+    baseSummary.guidance.push(
+      "pi5mic voice input is optional. If you want wake-word voice commands later, install it with `uv sync --extra dev --extra voiceinput`, run `uv run pi5mic setup`, then start it manually with `uv run pi5mic voiceinput-tool start`.",
+    );
+    return baseSummary;
+  }
+
+  let parsedConfig: Record<string, unknown>;
+  try {
+    parsedConfig = JSON.parse(fs.readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+  } catch (error) {
+    return {
+      ...baseSummary,
+      status: "invalid",
+      guidance: [
+        `The pi5mic config could not be parsed: ${error instanceof Error ? error.message : String(error)}`,
+        "Rerun `uv run pi5mic setup` to repair mic.json before trying to use voice input.",
+      ],
+    };
+  }
+
+  const voiceinput = asObject(parsedConfig.voiceinput);
+  const wakeword = asObject(parsedConfig.wakeword);
+  const enabled = asBoolean(voiceinput.enabled, false);
+  const wakewordEnabled = asBoolean(wakeword.enabled, false);
+
+  let running = false;
+  let lastError: string | null = null;
+  if (stateFile && fs.existsSync(stateFile)) {
+    try {
+      const parsedState = JSON.parse(fs.readFileSync(stateFile, "utf-8")) as Record<string, unknown>;
+      running = parsedState.running === true;
+      lastError =
+        typeof parsedState.last_error === "string" && parsedState.last_error.trim()
+          ? parsedState.last_error.trim()
+          : null;
+    } catch {
+      lastError = "The pi5mic voice-input state file could not be parsed.";
+    }
+  }
+
+  const manualStartRequired = enabled && wakewordEnabled && !running;
+  const guidance: string[] = [];
+  if (!enabled) {
+    guidance.push(
+      "pi5mic is installed, but always-on voice input is disabled. Run `uv run pi5mic setup` if you want to enable the optional wake-word listener.",
+    );
+  } else if (!wakewordEnabled) {
+    guidance.push(
+      "pi5mic voice input is enabled, but wake-word detection is still off. Rerun `uv run pi5mic setup` and finish the always-on voice setup.",
+    );
+  } else if (manualStartRequired) {
+    guidance.push(
+      "Voice input is configured and waiting for a manual start. Use `uv run pi5mic voiceinput-tool start` or `uv run ninjaclawbot voiceinput-tool start` on the Raspberry Pi when you want to listen for the wake word.",
+    );
+  }
+  if (lastError) {
+    guidance.push(`Last recorded voice-input error: ${lastError}`);
+  }
+
+  return {
+    ...baseSummary,
+    status: running
+      ? "running"
+      : enabled && wakewordEnabled
+        ? "manual_start_required"
+        : "configured",
+    enabled,
+    wakewordEnabled,
+    running,
+    manualStartRequired,
+    lastError,
+    guidance,
+  };
+}
+
 export function inspectDeploymentHealth(api: OpenClawPluginApiLike): DeploymentHealth {
   const rawPluginConfig = readRawPluginEntryConfig(api);
   const rawPluginKeys = Object.keys(rawPluginConfig);
@@ -381,11 +508,11 @@ export function inspectDeploymentHealth(api: OpenClawPluginApiLike): DeploymentH
 function buildRecoveryHints(
   diagnostics: Pick<
     NinjaClawbotDiagnostics,
-    "bridge" | "deployment" | "display" | "summary" | "startup"
+    "bridge" | "deployment" | "display" | "summary" | "startup" | "voiceInput"
   >,
 ): string[] {
   const hints: string[] = [];
-  const { bridge, deployment, display, summary, startup } = diagnostics;
+  const { bridge, deployment, display, summary, startup, voiceInput } = diagnostics;
 
   if (bridge.lastError && bridge.lastError.includes("ENOENT")) {
     hints.push("Set plugins.entries.ninjaclawbot.config.uvCommand to the absolute path from `command -v uv`.");
@@ -412,6 +539,16 @@ function buildRecoveryHints(
   if (!display.usingRootConfig) {
     hints.push(
       "If display orientation is wrong, export the pi5disp config into the project root with `uv run pi5disp config export \"$PWD/display.json\"`.",
+    );
+  }
+  if (voiceInput.status === "not_configured") {
+    hints.push(
+      "pi5mic voice input is optional. If you want wake-word control later, install the `voiceinput` extra and run `uv run pi5mic setup`.",
+    );
+  }
+  if (voiceInput.status === "manual_start_required") {
+    hints.push(
+      "pi5mic voice input is configured but stopped. Start it manually with `uv run pi5mic voiceinput-tool start` when you want the robot to listen for the wake word.",
     );
   }
 
@@ -965,6 +1102,27 @@ export async function runDiagnostics(
           usingRootConfig: false,
           configExists: false,
         };
+  const voiceInput =
+    config !== null
+      ? readVoiceInputStatusSummary(config)
+      : {
+          status: "not_configured" as const,
+          configPath: null,
+          rootConfigPath: null,
+          packageConfigPath: null,
+          usingRootConfig: false,
+          configExists: false,
+          enabled: false,
+          wakewordEnabled: false,
+          running: false,
+          manualStartRequired: false,
+          stateFile: null,
+          logFile: null,
+          lastError: null,
+          guidance: [
+            "pi5mic voice input is optional and was not inspected because the plugin config is incomplete.",
+          ],
+        };
   const startup = buildStartupDiagnostics(deployment, serviceStatus);
   const summary = summarizeDiagnostics(bridge, deployment);
 
@@ -973,12 +1131,14 @@ export async function runDiagnostics(
     service: serviceStatus,
     deployment,
     display,
+    voiceInput,
     startup,
     summary,
     recoveryHints: buildRecoveryHints({
       bridge,
       deployment,
       display,
+      voiceInput,
       startup,
       summary,
     }),

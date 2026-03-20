@@ -20,11 +20,15 @@ dev = [
     "pytest>=7.0",
     "ruff",
 ]
+voiceinput = [
+    "pi5mic[wakeword]",
+]
 
 [tool.uv.sources]
 pi5buzzer = { path = "../pi5buzzer", editable = true }
 pi5servo = { path = "../pi5servo", editable = true }
 pi5disp = { path = "../pi5disp", editable = true }
+pi5mic = { path = "../pi5mic", editable = true }
 pi5vl53l0x = { path = "../pi5vl53l0x", editable = true }
 
 [project.scripts]

@@ -6,7 +6,16 @@ from pathlib import Path
 
 import click
 
-from pi5mic.cli import config_cmd, doctor, install_cmd, mic_tool, run_cmd, setup_cmd, status
+from pi5mic.cli import (
+    config_cmd,
+    doctor,
+    install_cmd,
+    mic_tool,
+    run_cmd,
+    setup_cmd,
+    status,
+    voiceinput_tool,
+)
 from pi5mic.cli._common import build_stt_backend, load_manager
 from pi5mic.core.devices import get_default_input_device, list_input_devices
 from pi5mic.core.recorder import RecorderSettings, record_wav
@@ -142,6 +151,7 @@ cli.add_command(mic_tool)
 cli.add_command(run_cmd)
 cli.add_command(setup_cmd)
 cli.add_command(status)
+cli.add_command(voiceinput_tool)
 
 
 if __name__ == "__main__":

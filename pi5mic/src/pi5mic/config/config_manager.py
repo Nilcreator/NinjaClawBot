@@ -28,8 +28,18 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "wakeword": {
         "enabled": False,
-        "backend": "none",
+        "backend": "porcupine",
         "keyword": "ninja",
+        "keyword_path": None,
+        "access_key_env_var": "PICOVOICE_ACCESS_KEY",
+    },
+    "voiceinput": {
+        "enabled": False,
+        "silence_timeout_seconds": 3.0,
+        "max_capture_seconds": 10.0,
+        "cooldown_seconds": 1.5,
+        "vad_rms_threshold": 200.0,
+        "session_strategy": "agent_main",
     },
     "stt": {
         "selected": "whisper_cpp",
@@ -55,6 +65,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "gateway_url": "ws://127.0.0.1:18789",
             "agent_id": "main",
             "session_key": DEFAULT_OPENCLAW_SESSION_ID,
+            "session_strategy": "dedicated_mic",
             "request_timeout_seconds": 180,
             "reply_channel": None,
             "reply_to": None,
