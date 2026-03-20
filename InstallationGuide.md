@@ -541,6 +541,43 @@ Expected result:
 - no output is normal
 - if both keys are set, the Google SDK uses `GOOGLE_API_KEY`
 
+### 9.5.4A What the Picovoice access key is and how to get it
+
+You only need this if you want the optional always-on wake-word listener.
+
+What it is:
+- Picovoice is the company behind `Porcupine`, the wake-word engine used by
+  the always-on `pi5mic` listener
+- the `PICOVOICE_ACCESS_KEY` is Picovoice's own authentication token
+- it is separate from your OpenClaw settings and separate from any Gemini API
+  key
+- `pi5mic` needs it so Porcupine can detect the wake word before a voice
+  command starts recording
+
+How to get it:
+1. Open [Picovoice Console](https://console.picovoice.ai).
+2. Create a free account or sign in.
+3. Copy the `AccessKey` shown on the Console home page.
+4. Open the `Porcupine` page in the Console.
+5. Create a custom wake word for `Ninja`.
+6. Choose the Raspberry Pi target platform when generating it.
+7. Download the generated `.ppn` keyword file.
+8. Save the `.ppn` file somewhere stable, for example:
+
+```bash
+mkdir -p ~/NinjaClawBot/voiceinput
+mv ~/Downloads/*.ppn ~/NinjaClawBot/voiceinput/
+```
+
+Purpose:
+- gives `pi5mic` permission to run the wake-word engine
+- gives `pi5mic` the custom `Ninja` keyword file used for better wake-word
+  detection on Raspberry Pi
+
+Expected result:
+- you have an `AccessKey`
+- you have a `.ppn` file saved somewhere you can point to during setup
+
 ### 9.5.5 Run the guided setup
 
 Recommended first run:
@@ -653,28 +690,89 @@ Expected result:
 
 Use this only after `doctor` is clean.
 
-1. Set your Picovoice access key:
+1. Set your Picovoice access key in the current terminal:
 
 ```bash
 cd ~/NinjaClawBot
 export PICOVOICE_ACCESS_KEY="your_key_here"
 ```
 
-2. Start the listener:
+Purpose:
+- gives the current shell access to the Porcupine wake-word engine
+
+Expected result:
+- no output is normal
+
+2. Do the safest first test in the foreground:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool foreground
+```
+
+Purpose:
+- starts the always-on listener in the current terminal
+- lets you watch the listener state directly
+- is the safest first test because you can stop it with `Ctrl+C`
+
+Expected result:
+- the tool says it is waiting for the wake word
+- say `Ninja`, then a short sentence
+- it records after the wake word
+- it stops recording after 3 seconds of silence or 10 seconds max
+- it sends the original-language transcript to OpenClaw
+- OpenClaw prints the reply locally, and if dual delivery is enabled, the same
+  reply also appears in Telegram
+
+3. Start the background listener after the foreground test passes:
 
 ```bash
 cd ~/NinjaClawBot
 uv run pi5mic voiceinput-tool start
 ```
 
-3. Check status:
+Purpose:
+- moves the always-on listener into the background so you can keep using the
+  terminal
+
+Expected result:
+- the tool reports that the listener started
+
+4. Check status:
 
 ```bash
 cd ~/NinjaClawBot
 uv run pi5mic voiceinput-tool status
 ```
 
-4. Stop it when you no longer want the microphone listening:
+Purpose:
+- confirms whether the background listener is running
+- shows the state file and log file locations
+
+Expected result:
+- the tool reports `running` when the listener is active
+
+5. If you prefer to launch it from the robot package instead of directly from
+   `pi5mic`, you can use the NinjaClawBot wrapper:
+
+```bash
+cd ~/NinjaClawBot
+uv run ninjaclawbot voiceinput-tool foreground
+# or:
+uv run ninjaclawbot voiceinput-tool start
+uv run ninjaclawbot voiceinput-tool status
+uv run ninjaclawbot voiceinput-tool stop
+```
+
+Purpose:
+- gives you the same listener controls through the NinjaClawBot CLI
+- helps keep the full robot workflow in one command namespace
+
+Expected result:
+- these commands behave the same as the matching `pi5mic voiceinput-tool ...`
+  commands
+
+6. Stop it when you no longer want the microphone listening:
 
 ```bash
 cd ~/NinjaClawBot
@@ -687,6 +785,7 @@ Expected result:
 - after the wake word, it records until 3 seconds of silence or 10 seconds max
 - it sends the original-language transcript to OpenClaw when the profile is `openclaw`
 - it ignores new wake-word triggers while the previous request is still being transcribed or dispatched
+- `stop` ends the listener cleanly when you no longer want the microphone active
 
 ### 9.5.8 If OpenClaw says `pairing required`
 

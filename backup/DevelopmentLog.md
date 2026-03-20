@@ -2723,3 +2723,27 @@ Follow-up:
 - then test `uv run pi5mic voiceinput-tool start`, `status`, and `stop`
 - if using the integrated robot layer, also test `uv run ninjaclawbot health-check`
   and `uv run ninjaclawbot voiceinput-tool status`
+
+## 2026-03-20 - Documentation refinement for always-on setup
+
+Summary:
+
+- refined the user-facing always-on voice-input documentation without changing
+  runtime code
+
+Documentation updates:
+
+- updated [README.md](../README.md) with clearer standalone always-on setup and
+  testing steps, including what the Picovoice AccessKey is and how to get it
+- updated [InstallationGuide.md](../InstallationGuide.md) with a plain-language
+  Picovoice subsection and a safer OpenClaw/NinjaClawBot always-on validation
+  flow using `voiceinput-tool foreground`, `start`, `status`, and `stop`
+
+Validation:
+
+- `git diff --check`
+
+Notes:
+
+- this pass was documentation-only
+- no code paths or Raspberry Pi behavior changed
