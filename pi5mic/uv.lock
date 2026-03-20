@@ -303,6 +303,9 @@ dev = [
     { name = "pytest" },
     { name = "ruff" },
 ]
+voiceinput = [
+    { name = "pvporcupine" },
+]
 wakeword = [
     { name = "pvporcupine" },
 ]
@@ -311,12 +314,13 @@ wakeword = [
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "google-genai", specifier = ">=1.33.0" },
+    { name = "pvporcupine", marker = "extra == 'voiceinput'", specifier = ">=3.0" },
     { name = "pvporcupine", marker = "extra == 'wakeword'", specifier = ">=3.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "sounddevice", specifier = ">=0.5" },
 ]
-provides-extras = ["wakeword", "dev"]
+provides-extras = ["wakeword", "voiceinput", "dev"]
 
 [[package]]
 name = "pluggy"

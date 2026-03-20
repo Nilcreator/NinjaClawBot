@@ -2747,3 +2747,24 @@ Notes:
 
 - this pass was documentation-only
 - no code paths or Raspberry Pi behavior changed
+
+## 2026-03-20 - Standalone `pi5mic` voiceinput extra alias
+
+Summary:
+
+- fixed the standalone `pi5mic` packaging mismatch where
+  `uv sync --extra dev --extra voiceinput` failed inside the `pi5mic` package
+  directory because only the older `wakeword` extra was defined locally
+
+Changes:
+
+- updated [pi5mic/pyproject.toml](../pi5mic/pyproject.toml) to add a
+  `voiceinput` optional dependency alias that installs the same Porcupine
+  wake-word dependency as `wakeword`
+
+Validation:
+
+- `cd pi5mic && uv sync --extra dev --extra voiceinput`
+- `cd pi5mic && uv run --extra dev ruff check src tests`
+- `cd pi5mic && uv run --extra dev ruff format --check src tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`

@@ -17,6 +17,9 @@ readme = "README.md"
 wakeword = [
     "pvporcupine>=3.0",
 ]
+voiceinput = [
+    "pvporcupine>=3.0",
+]
 dev = [
     "pytest>=7.0",
     "ruff",
