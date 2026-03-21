@@ -700,6 +700,9 @@ What you should expect:
 - `OK   wake-word detector: openwakeword ...`
 - `OK   wake model: ...`
 - `OK   wake framework: ...`
+- if OpenClaw presence updates are slow or unavailable, `doctor` may now show a
+  warning about degraded presence support without treating the whole voice
+  handoff path as broken
 
 ### Step 22. Start the listener in the background
 
@@ -1287,6 +1290,8 @@ What `pi5mic` now does automatically:
   can keep running instead of getting stuck on a degraded stream
 - runs OpenClaw presence updates in the background so a slow `idle` update does
   not block the next wake-word cycle
+- disables further OpenClaw presence updates for the rest of the listener
+  session after the first hard presence failure so the mic loop can stay alive
 
 What to try next:
 
@@ -1303,6 +1308,9 @@ Then:
 - keep the command short for the first tests
 - in OpenClaw mode, wait for the reply to finish before expecting the next wake
   word to fire; the listener ignores overlapping requests on purpose
+- if `doctor` warns that presence is degraded but the gateway and agent path are
+  otherwise healthy, you can still test voice handoff; that warning only means
+  robot presence changes such as `idle` or `thinking` may be skipped
 - if false triggers continue, raise `Wake-word detection threshold` slightly in
   `uv run pi5mic setup`
 - if the wake word is fine but the command is often missed, lower the threshold

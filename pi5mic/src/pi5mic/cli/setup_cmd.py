@@ -189,16 +189,23 @@ def _run_openclaw_readiness_check(config: dict) -> None:
     )
 
     try:
-        lines = probe_openclaw_voice_ready(
+        report = probe_openclaw_voice_ready(
             command=openclaw_config.get("command"),
             gateway_url=openclaw_config.get("gateway_url"),
             check_presence=check_presence,
         )
-        for line in lines:
+        for line in report.ok_lines:
             click.echo(f"OK   {line}")
+        for warning in report.warnings:
+            click.echo(f"WARNING: {warning}")
         click.echo(
-            "OpenClaw voice handoff is ready. You can now use `5. Run one capture cycle` or "
-            "`uv run pi5mic run --once`."
+            "OpenClaw voice handoff is ready. "
+            + (
+                "Presence updates are degraded for now, but you can already use "
+                "`5. Run one capture cycle` or `uv run pi5mic run --once`."
+                if report.warnings
+                else "You can now use `5. Run one capture cycle` or `uv run pi5mic run --once`."
+            )
         )
         return
     except (IntegrationError, TransportError) as exc:
@@ -231,7 +238,7 @@ def _run_openclaw_readiness_check(config: dict) -> None:
     try:
         approval_message = approve_latest_openclaw_pairing(openclaw_config.get("command"))
         click.echo(f"OK   {approval_message}")
-        lines = probe_openclaw_voice_ready(
+        report = probe_openclaw_voice_ready(
             command=openclaw_config.get("command"),
             gateway_url=openclaw_config.get("gateway_url"),
             check_presence=check_presence,
@@ -245,11 +252,18 @@ def _run_openclaw_readiness_check(config: dict) -> None:
         )
         return
 
-    for line in lines:
+    for line in report.ok_lines:
         click.echo(f"OK   {line}")
+    for warning in report.warnings:
+        click.echo(f"WARNING: {warning}")
     click.echo(
-        "OpenClaw voice handoff is ready. You can now use `5. Run one capture cycle` or "
-        "`uv run pi5mic run --once`."
+        "OpenClaw voice handoff is ready. "
+        + (
+            "Presence updates are degraded for now, but you can already use "
+            "`5. Run one capture cycle` or `uv run pi5mic run --once`."
+            if report.warnings
+            else "You can now use `5. Run one capture cycle` or `uv run pi5mic run --once`."
+        )
     )
 
 

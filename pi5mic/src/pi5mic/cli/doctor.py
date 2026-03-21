@@ -307,12 +307,14 @@ def doctor(ctx: click.Context) -> None:
                     "NinjaClawBot plugin. If voice handoff fails, confirm the plugin is "
                     "installed, allowlisted, and enabled, then restart the gateway."
                 )
-            for line in probe_openclaw_voice_ready(
+            report = probe_openclaw_voice_ready(
                 command=openclaw_config.get("command"),
                 gateway_url=openclaw_config.get("gateway_url"),
                 check_presence=bool(config["integration"].get("presence_enabled", True)),
-            ):
+            )
+            for line in report.ok_lines:
                 click.echo(f"OK   {line}")
+            warnings.extend(report.warnings)
         except (ConfigError, IntegrationError, TransportError) as exc:
             failures.append(explain_openclaw_error(str(exc)))
 

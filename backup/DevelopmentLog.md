@@ -3015,3 +3015,42 @@ Notes:
   stacked voice commands
 - Raspberry Pi field validation is still required to confirm the best threshold
   and overflow behavior for the user’s real USB microphone and room noise
+
+## 2026-03-21 - `pi5mic` fail-open OpenClaw presence diagnostics
+
+Summary:
+
+- refined the OpenClaw presence path so slow or unavailable presence updates no
+  longer fail the whole `doctor` check or keep retrying during an active
+  listener session
+
+Implementation changes:
+
+- added `OpenClawVoiceReadyReport` so the readiness probe can return successful
+  gateway health plus non-fatal presence warnings separately
+- updated `pi5mic doctor` and the OpenClaw setup readiness check to treat
+  non-pairing presence problems as warnings instead of hard failures
+- kept pairing-required behavior as a real failure because that usually blocks
+  the OpenClaw voice handoff path itself
+- updated the async presence updater so the listener disables further presence
+  submissions after the first hard failure and keeps the conversation loop alive
+- added regression coverage for the new doctor warning path and fail-open
+  presence updater behavior
+
+Documentation updates:
+
+- updated [pi5mic/README.md](../pi5mic/README.md)
+- updated [InstallationGuide.md](../InstallationGuide.md)
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md)
+
+Validation:
+
+- `python3 -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Notes:
+
+- if `doctor` now warns that presence is degraded, voice handoff can still be
+  tested as long as the gateway and agent path are otherwise healthy

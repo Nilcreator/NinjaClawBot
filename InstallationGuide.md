@@ -773,6 +773,8 @@ Expected result:
   stopping with a hard Whisper error
 - if repeated audio overflow happens, `pi5mic` now recreates the live
   microphone stream automatically and keeps listening instead of staying stuck
+- if `pi5mic doctor` warned that OpenClaw presence is degraded, voice handoff
+  can still work; that warning only means robot presence updates may be skipped
 
 3. Start the background listener after the foreground test passes:
 

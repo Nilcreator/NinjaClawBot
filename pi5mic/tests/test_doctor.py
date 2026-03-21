@@ -9,7 +9,7 @@ from click.testing import CliRunner
 
 from pi5mic.__main__ import cli
 from pi5mic.errors import IntegrationError
-from pi5mic.integration.openclaw_setup import OpenClawAutoConfig
+from pi5mic.integration.openclaw_setup import OpenClawAutoConfig, OpenClawVoiceReadyReport
 
 doctor_module = importlib.import_module("pi5mic.cli.doctor")
 install_cmd_module = importlib.import_module("pi5mic.cli.install_cmd")
@@ -499,13 +499,104 @@ def test_doctor_fails_when_telegram_delivery_is_configured_but_openclaw_telegram
     monkeypatch.setattr(
         doctor_module,
         "probe_openclaw_voice_ready",
-        lambda **kwargs: ["OpenClaw gateway responded.", "NinjaClawBot presence method responded."],
+        lambda **kwargs: OpenClawVoiceReadyReport(
+            ok_lines=("OpenClaw gateway responded.", "NinjaClawBot presence method responded."),
+        ),
     )
 
     result = runner.invoke(cli, ["--config-file", str(config_path), "doctor"])
 
     assert result.exit_code != 0
     assert "configured to mirror replies to Telegram" in result.output
+
+
+def test_doctor_warns_when_openclaw_presence_probe_times_out(monkeypatch, tmp_path) -> None:
+    runner = CliRunner()
+    config_path = tmp_path / "mic.json"
+    config_path.write_text(
+        """
+{
+  "profile": "openclaw",
+  "audio": {
+    "input_device": 0,
+    "sample_rate": 44100,
+    "channels": 1
+  },
+  "stt": {
+    "selected": "gemini",
+    "gemini": {
+      "model": "gemini-2.5-flash"
+    }
+  },
+  "integration": {
+    "presence_enabled": true,
+    "delivery_mode": "local_only",
+    "openclaw": {
+      "command": "/usr/local/bin/openclaw",
+      "gateway_url": "ws://127.0.0.1:18789",
+      "agent_id": "main",
+      "session_key": "voice-local-mic"
+    }
+  }
+}
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(doctor_module, "list_input_devices", lambda: [object()])
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_supported_input_settings",
+        lambda **kwargs: (0, 44_100, None, None),
+    )
+    monkeypatch.setattr(doctor_module, "is_raspberry_pi", lambda: False)
+    monkeypatch.setattr(doctor_module.importlib.util, "find_spec", lambda name: object())
+    monkeypatch.setattr(
+        doctor_module,
+        "resolve_gemini_api_key",
+        lambda: ("GEMINI_API_KEY", "test-key"),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "build_openclaw_transport",
+        lambda config: type("Transport", (), {"command": Path("/usr/local/bin/openclaw")})(),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "discover_openclaw_auto_config",
+        lambda **kwargs: OpenClawAutoConfig(
+            command=Path("/usr/local/bin/openclaw"),
+            config_path=tmp_path / "openclaw.json",
+            gateway_url="ws://127.0.0.1:18789",
+            agent_id="main",
+            session_key="voice-local-mic",
+            gateway_mode="local",
+            gateway_bind="loopback",
+            plugin_enabled=True,
+            plugin_allowlisted=True,
+            plugin_install_found=True,
+            telegram_enabled=False,
+            telegram_accounts=(),
+            telegram_default_account=None,
+            telegram_reply_target=None,
+        ),
+    )
+    monkeypatch.setattr(
+        doctor_module,
+        "probe_openclaw_voice_ready",
+        lambda **kwargs: OpenClawVoiceReadyReport(
+            ok_lines=("OpenClaw gateway responded.",),
+            warnings=(
+                "OpenClaw presence updates are not ready right now. Voice handoff can still work, but robot presence changes will be skipped until the plugin bridge responds again.",
+                "OpenClaw presence update timed out.",
+            ),
+        ),
+    )
+
+    result = runner.invoke(cli, ["--config-file", str(config_path), "doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert "Warnings:" in result.output
+    assert "presence update timed out" in result.output.lower()
 
 
 def test_install_whispercpp_saves_detected_paths(monkeypatch, tmp_path) -> None:

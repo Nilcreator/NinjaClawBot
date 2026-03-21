@@ -76,6 +76,14 @@ class OpenClawAutoConfig:
         return self.plugin_enabled and self.plugin_allowlisted and self.plugin_install_found
 
 
+@dataclass(frozen=True, slots=True)
+class OpenClawVoiceReadyReport:
+    """Result of a safe OpenClaw voice-path readiness probe."""
+
+    ok_lines: tuple[str, ...]
+    warnings: tuple[str, ...] = ()
+
+
 def get_openclaw_config_path(command: str | Path | None = None) -> Path | None:
     """Return the local OpenClaw config file path when it can be located."""
     if DEFAULT_OPENCLAW_CONFIG_PATH.is_file():
@@ -294,7 +302,7 @@ def probe_openclaw_voice_ready(
     command: str | Path | None,
     gateway_url: str | None,
     check_presence: bool = True,
-) -> list[str]:
+) -> OpenClawVoiceReadyReport:
     """Verify that the gateway is reachable and optionally probe the presence method."""
     resolved_command = resolve_openclaw_command(command)
     health_command = [str(resolved_command), "gateway", "health", "--json"]
@@ -321,16 +329,27 @@ def probe_openclaw_voice_ready(
 
     lines = ["OpenClaw gateway responded."]
     if not check_presence:
-        return lines
+        return OpenClawVoiceReadyReport(ok_lines=tuple(lines))
 
     controller = OpenClawPresenceController(command=resolved_command, gateway_url=gateway_url)
     try:
         controller.set_mode("idle", reason="pi5mic.openclaw.check")
     except IntegrationError as exc:
-        raise IntegrationError(explain_openclaw_error(str(exc))) from exc
+        message = explain_openclaw_error(str(exc))
+        if is_pairing_required_error(message):
+            raise IntegrationError(message) from exc
+        return OpenClawVoiceReadyReport(
+            ok_lines=tuple(lines),
+            warnings=(
+                "OpenClaw presence updates are not ready right now. Voice handoff can still "
+                "work, but robot presence changes will be skipped until the plugin bridge "
+                "responds again.",
+                message,
+            ),
+        )
 
     lines.append("NinjaClawBot presence method responded.")
-    return lines
+    return OpenClawVoiceReadyReport(ok_lines=tuple(lines))
 
 
 def _detect_gateway_url(gateway_config: dict[str, Any], *, fallback: str) -> str:

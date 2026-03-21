@@ -9,7 +9,11 @@ from click.testing import CliRunner
 
 from pi5mic.__main__ import cli
 from pi5mic.errors import IntegrationError
-from pi5mic.integration.openclaw_setup import OpenClawAutoConfig, OpenClawReplyTarget
+from pi5mic.integration.openclaw_setup import (
+    OpenClawAutoConfig,
+    OpenClawReplyTarget,
+    OpenClawVoiceReadyReport,
+)
 from pi5mic.models import AudioDeviceInfo, DispatchResult, RecordedClip, TranscriptionResult
 
 status_module = importlib.import_module("pi5mic.cli.status")
@@ -315,7 +319,9 @@ def test_setup_command_auto_discovers_openclaw_and_repairs_pairing(monkeypatch, 
             raise IntegrationError(
                 "OpenClaw presence update failed: gateway connect failed: Error: pairing required"
             )
-        return ["OpenClaw gateway responded.", "NinjaClawBot presence method responded."]
+        return OpenClawVoiceReadyReport(
+            ok_lines=("OpenClaw gateway responded.", "NinjaClawBot presence method responded."),
+        )
 
     monkeypatch.setattr(setup_cmd_module, "probe_openclaw_voice_ready", _probe)
     monkeypatch.setattr(

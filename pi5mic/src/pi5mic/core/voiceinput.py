@@ -12,7 +12,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from threading import Event
+from threading import Event, Lock
 from typing import Any, Callable
 
 from pi5mic.core.audio_backend import load_sounddevice
@@ -371,12 +371,17 @@ class _AsyncPresenceUpdater:
     ) -> None:
         self._controller = controller
         self._log = log
+        self._lock = Lock()
+        self._enabled = True
         self._executor = ThreadPoolExecutor(
             max_workers=1,
             thread_name_prefix="pi5mic-presence",
         )
 
     def submit(self, mode: str, *, reason: str) -> None:
+        with self._lock:
+            if not self._enabled:
+                return
         future = self._executor.submit(self._controller.set_mode, mode, reason=reason)
         future.add_done_callback(lambda completed: self._handle_result(mode, completed))
 
@@ -384,9 +389,25 @@ class _AsyncPresenceUpdater:
         try:
             future.result()
         except (IntegrationError, TransportError) as exc:
+            with self._lock:
+                first_failure = self._enabled
+                self._enabled = False
             self._log(f"WARNING presence '{mode}' failed: {exc}")
+            if first_failure:
+                self._log(
+                    "WARNING OpenClaw presence updates will be skipped for the rest of this "
+                    "listener session."
+                )
         except Exception as exc:  # pragma: no cover - defensive background path
+            with self._lock:
+                first_failure = self._enabled
+                self._enabled = False
             self._log(f"WARNING presence '{mode}' failed unexpectedly: {exc}")
+            if first_failure:
+                self._log(
+                    "WARNING OpenClaw presence updates will be skipped for the rest of this "
+                    "listener session."
+                )
 
     def shutdown(self) -> None:
         self._executor.shutdown(wait=False, cancel_futures=False)

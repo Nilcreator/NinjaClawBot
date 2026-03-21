@@ -767,6 +767,9 @@ uv run pi5mic voiceinput-tool start
   ALSA/PortAudio drift does not leave the always-on loop stuck
 - OpenClaw presence updates now run off the hot path, so a slow `idle` update
   should no longer delay re-arming the next wake-word cycle
+- if the OpenClaw presence path is still slow or unavailable, `doctor` now
+  reports that as a warning instead of a hard failure when the gateway and
+  agent path itself is healthy
 
 Recommended check:
 
@@ -784,6 +787,9 @@ Then:
 - in OpenClaw mode, remember that the listener intentionally ignores new wake
   words until the prior request has finished transcribing, dispatching, waiting
   for the reply, and cooling down
+- if presence keeps timing out, the listener now disables further presence
+  updates for that session and keeps the mic -> OpenClaw conversation loop
+  alive
 - if false triggers continue, raise the wake-word threshold slightly in
   `uv run pi5mic setup`
 - if the wake word works but the command is often missed, lower the threshold

@@ -452,3 +452,32 @@ def test_voiceinput_loop_recovers_after_repeated_overflow(monkeypatch, tmp_path)
         "Voice input recovered and is waiting for the next wake word." in message
         for message in messages
     )
+
+
+def test_async_presence_updater_disables_after_first_failure() -> None:
+    messages: list[str] = []
+    calls: list[tuple[str, str]] = []
+
+    class _FailingController:
+        def set_mode(self, mode: str, *, reason: str):
+            calls.append((mode, reason))
+            raise voiceinput_module.IntegrationError("OpenClaw presence update timed out.")
+
+    updater = voiceinput_module._AsyncPresenceUpdater(
+        _FailingController(),
+        log=messages.append,
+    )
+
+    updater.submit("listening", reason="test.listening")
+    updater.submit("idle", reason="test.idle")
+    updater.shutdown()
+
+    import time
+
+    time.sleep(0.05)
+
+    assert calls == [("listening", "test.listening")]
+    assert any("presence 'listening' failed" in message for message in messages)
+    assert any(
+        "will be skipped for the rest of this listener session" in message for message in messages
+    )
