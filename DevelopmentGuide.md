@@ -763,6 +763,10 @@ uv run pi5mic voiceinput-tool start
   reduces stale-audio overflow after each wake-word cycle
 - `pi5mic` also now treats empty Whisper output as a recoverable no-speech
   cycle instead of a hard always-on listener failure
+- `pi5mic` now recreates the live microphone stream after repeated overflow so
+  ALSA/PortAudio drift does not leave the always-on loop stuck
+- OpenClaw presence updates now run off the hot path, so a slow `idle` update
+  should no longer delay re-arming the next wake-word cycle
 
 Recommended check:
 
@@ -777,6 +781,9 @@ Then:
 - say the wake phrase clearly
 - start the real command immediately after it
 - keep the first tests short and simple
+- in OpenClaw mode, remember that the listener intentionally ignores new wake
+  words until the prior request has finished transcribing, dispatching, waiting
+  for the reply, and cooling down
 - if false triggers continue, raise the wake-word threshold slightly in
   `uv run pi5mic setup`
 - if the wake word works but the command is often missed, lower the threshold

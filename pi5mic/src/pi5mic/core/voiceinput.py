@@ -8,6 +8,7 @@ import math
 import os
 import tempfile
 import wave
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -45,6 +46,8 @@ _TIMESTAMP_KEYS = {
 }
 _VOICEINPUT_STATE_FILE = ".pi5mic-voiceinput-state.json"
 _VOICEINPUT_LOG_FILE = ".pi5mic-voiceinput.log"
+_DEFAULT_STREAM_LATENCY = "high"
+_OVERFLOW_RECOVERY_THRESHOLD = 3
 _DEFAULT_SERVICE_STATE: dict[str, Any] = {
     "running": False,
     "pid": None,
@@ -357,6 +360,38 @@ def _best_effort_presence(
         log(f"WARNING presence '{mode}' failed: {exc}")
 
 
+class _AsyncPresenceUpdater:
+    """Serialize best-effort presence updates off the live audio hot path."""
+
+    def __init__(
+        self,
+        controller,
+        *,
+        log: Callable[[str], None],
+    ) -> None:
+        self._controller = controller
+        self._log = log
+        self._executor = ThreadPoolExecutor(
+            max_workers=1,
+            thread_name_prefix="pi5mic-presence",
+        )
+
+    def submit(self, mode: str, *, reason: str) -> None:
+        future = self._executor.submit(self._controller.set_mode, mode, reason=reason)
+        future.add_done_callback(lambda completed: self._handle_result(mode, completed))
+
+    def _handle_result(self, mode: str, future: Future[dict[str, Any]]) -> None:
+        try:
+            future.result()
+        except (IntegrationError, TransportError) as exc:
+            self._log(f"WARNING presence '{mode}' failed: {exc}")
+        except Exception as exc:  # pragma: no cover - defensive background path
+            self._log(f"WARNING presence '{mode}' failed unexpectedly: {exc}")
+
+    def shutdown(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=False)
+
+
 class VoiceInputLoop:
     """Run the always-on wake-word -> transcribe -> dispatch loop."""
 
@@ -405,7 +440,7 @@ class VoiceInputLoop:
         sample_rate: int,
         stt_backend,
         transport,
-        presence_controller,
+        presence_updater,
     ) -> None:
         temp_path: Path | None = None
         try:
@@ -431,13 +466,8 @@ class VoiceInputLoop:
             self._detail(f"Transcript: {transcription.text}")
 
             if transport is not None:
-                if presence_controller is not None:
-                    _best_effort_presence(
-                        presence_controller,
-                        "thinking",
-                        reason="pi5mic.voiceinput.dispatch",
-                        log=self._log,
-                    )
+                if presence_updater is not None:
+                    presence_updater.submit("thinking", reason="pi5mic.voiceinput.dispatch")
                 listener.mark_dispatching(request_id)
                 self._publish_listener(listener)
                 listener.mark_waiting_for_reply(request_id)
@@ -483,13 +513,8 @@ class VoiceInputLoop:
             listener.arm()
             self._publish_listener(listener)
         finally:
-            if presence_controller is not None:
-                _best_effort_presence(
-                    presence_controller,
-                    "idle",
-                    reason="pi5mic.voiceinput.idle",
-                    log=self._log,
-                )
+            if presence_updater is not None:
+                presence_updater.submit("idle", reason="pi5mic.voiceinput.idle")
             if temp_path is not None:
                 temp_path.unlink(missing_ok=True)
 
@@ -506,14 +531,17 @@ class VoiceInputLoop:
         stt_backend = build_stt_backend(self._config)
         profile = str(self._config.get("profile", "standalone"))
         transport = None
-        presence_controller = None
+        presence_updater = None
         if profile == "openclaw":
             transport = build_openclaw_transport(
                 self._config,
                 session_strategy_override=normalized["session_strategy"],
             )
             if bool(self._config.get("integration", {}).get("presence_enabled", True)):
-                presence_controller = build_presence_controller(self._config)
+                presence_updater = _AsyncPresenceUpdater(
+                    build_presence_controller(self._config),
+                    log=self._log,
+                )
 
         detector = build_wakeword_detector(self._config)
         listener = MicListener(cooldown_seconds=normalized["cooldown_seconds"])
@@ -573,103 +601,146 @@ class VoiceInputLoop:
         capture_pcm = bytearray()
         active_request_id: str | None = None
         capturing = False
+        overflow_streak = 0
 
         try:
-            with sd.RawInputStream(
-                samplerate=actual_rate,
-                blocksize=int(audio_config["block_size"]),
-                device=resolved_device,
-                channels=int(audio_config["channels"]),
-                dtype="int16",
-            ) as stream:
-                while not stop_event.is_set():
-                    self._sync_listener_state(listener)
-                    data, overflowed = stream.read(int(audio_config["block_size"]))
-                    if overflowed:
-                        self._log(
-                            "WARNING audio overflow detected while monitoring the microphone."
-                        )
-                    frame_buffer.extend(resampler.convert(data))
-
-                    while len(frame_buffer) >= frame_bytes:
-                        frame = bytes(frame_buffer[:frame_bytes])
-                        del frame_buffer[:frame_bytes]
-
-                        if capturing and active_request_id is not None:
-                            capture_pcm.extend(frame)
-                            vad_result = vad.process(frame)
-                            if len(capture_pcm) >= max_capture_bytes or vad_result.should_stop:
-                                self._log("Wake-word capture complete; starting transcription.")
-                                try:
-                                    stream.abort()
-                                except Exception as exc:
-                                    raise RecordingError(
-                                        f"Could not pause the live microphone stream before transcription: {exc}"
-                                    ) from exc
-
+            while not stop_event.is_set():
+                pending_capture: bytes | None = None
+                pending_request_id: str | None = None
+                recovered_from_overflow = False
+                try:
+                    with sd.RawInputStream(
+                        samplerate=actual_rate,
+                        blocksize=int(audio_config["block_size"]),
+                        device=resolved_device,
+                        channels=int(audio_config["channels"]),
+                        dtype="int16",
+                        latency=_DEFAULT_STREAM_LATENCY,
+                    ) as stream:
+                        while not stop_event.is_set():
+                            self._sync_listener_state(listener)
+                            data, overflowed = stream.read(int(audio_config["block_size"]))
+                            if overflowed:
+                                overflow_streak += 1
+                                self._log(
+                                    "WARNING audio overflow detected while monitoring the microphone."
+                                )
                                 frame_buffer.clear()
                                 resampler.reset()
-                                detector.reset()
-                                try:
-                                    self._process_capture(
-                                        listener=listener,
-                                        request_id=active_request_id,
-                                        capture_pcm=bytes(capture_pcm),
-                                        sample_rate=detector.sample_rate,
-                                        stt_backend=stt_backend,
-                                        transport=transport,
-                                        presence_controller=presence_controller,
+                                if overflow_streak >= _OVERFLOW_RECOVERY_THRESHOLD:
+                                    recovered_from_overflow = True
+                                    self._log(
+                                        "WARNING repeated microphone overflows detected; "
+                                        "recreating the live input stream."
                                     )
-                                finally:
+                                    if capturing and active_request_id is not None:
+                                        overflow_message = (
+                                            "Microphone audio overflow interrupted the active voice "
+                                            "capture. The listener is re-arming."
+                                        )
+                                        listener.fail(active_request_id, overflow_message)
+                                        self._publish_listener(
+                                            listener,
+                                            last_error=overflow_message,
+                                        )
+                                        listener.reset()
+                                        listener.arm()
+                                        self._publish_listener(listener)
                                     active_request_id = None
                                     capture_pcm.clear()
                                     vad.reset()
                                     capturing = False
-                                    frame_buffer.clear()
-                                    resampler.reset()
                                     detector.reset()
-                                    if not stop_event.is_set():
-                                        try:
-                                            stream.start()
-                                        except Exception as exc:
-                                            raise RecordingError(
-                                                "Could not restart the live microphone stream after "
-                                                f"transcription: {exc}"
-                                            ) from exc
-                        else:
-                            if not listener.can_accept_trigger():
+                                    break
                                 continue
 
-                            wake = detector.process(list(memoryview(frame).cast("h")))
-                            if wake.detected:
-                                snapshot = listener.start_listening()
-                                active_request_id = snapshot.active_request_id
-                                capture_pcm.clear()
-                                vad.reset()
-                                capturing = True
-                                if presence_controller is not None:
-                                    _best_effort_presence(
-                                        presence_controller,
-                                        "listening",
-                                        reason="pi5mic.voiceinput.listening",
-                                        log=self._log,
-                                    )
-                                current_state = read_voiceinput_state(self._state_paths)
-                                self._publish_listener(
-                                    listener,
-                                    wakeword_hits=current_state["wakeword_hits"] + 1,
-                                    last_triggered_at=_utcnow_iso(),
-                                    last_error=None,
-                                )
-                                self._log("Wake word detected; recording voice command.")
-        finally:
-            if presence_controller is not None:
-                _best_effort_presence(
-                    presence_controller,
-                    "idle",
-                    reason="pi5mic.voiceinput.stopped",
-                    log=self._log,
+                            overflow_streak = 0
+                            frame_buffer.extend(resampler.convert(data))
+
+                            while len(frame_buffer) >= frame_bytes:
+                                frame = bytes(frame_buffer[:frame_bytes])
+                                del frame_buffer[:frame_bytes]
+
+                                if capturing and active_request_id is not None:
+                                    capture_pcm.extend(frame)
+                                    vad_result = vad.process(frame)
+                                    if (
+                                        len(capture_pcm) >= max_capture_bytes
+                                        or vad_result.should_stop
+                                    ):
+                                        self._log(
+                                            "Wake-word capture complete; starting transcription."
+                                        )
+                                        pending_capture = bytes(capture_pcm)
+                                        pending_request_id = active_request_id
+                                        active_request_id = None
+                                        capture_pcm.clear()
+                                        vad.reset()
+                                        capturing = False
+                                        frame_buffer.clear()
+                                        resampler.reset()
+                                        detector.reset()
+                                        break
+                                else:
+                                    if not listener.can_accept_trigger():
+                                        continue
+
+                                    wake = detector.process(list(memoryview(frame).cast("h")))
+                                    if wake.detected:
+                                        snapshot = listener.start_listening()
+                                        active_request_id = snapshot.active_request_id
+                                        capture_pcm.clear()
+                                        vad.reset()
+                                        capturing = True
+                                        if presence_updater is not None:
+                                            presence_updater.submit(
+                                                "listening",
+                                                reason="pi5mic.voiceinput.listening",
+                                            )
+                                        current_state = read_voiceinput_state(self._state_paths)
+                                        self._publish_listener(
+                                            listener,
+                                            wakeword_hits=current_state["wakeword_hits"] + 1,
+                                            last_triggered_at=_utcnow_iso(),
+                                            last_error=None,
+                                        )
+                                        self._log("Wake word detected; recording voice command.")
+
+                                if pending_capture is not None:
+                                    break
+
+                            if pending_capture is not None:
+                                break
+                except Exception as exc:
+                    raise RecordingError(
+                        f"Always-on voice input could not read from the live microphone stream: {exc}"
+                    ) from exc
+
+                if stop_event.is_set():
+                    break
+
+                if recovered_from_overflow:
+                    self._log("Voice input recovered and is waiting for the next wake word.")
+                    continue
+
+                if pending_capture is None or pending_request_id is None:
+                    continue
+
+                self._process_capture(
+                    listener=listener,
+                    request_id=pending_request_id,
+                    capture_pcm=pending_capture,
+                    sample_rate=detector.sample_rate,
+                    stt_backend=stt_backend,
+                    transport=transport,
+                    presence_updater=presence_updater,
                 )
+                if not stop_event.is_set():
+                    self._log("Voice input cycle finished; waiting for the next wake word.")
+        finally:
+            if presence_updater is not None:
+                presence_updater.submit("idle", reason="pi5mic.voiceinput.stopped")
+                presence_updater.shutdown()
             detector.close()
             self._publish(
                 running=False,

@@ -2966,3 +2966,52 @@ Notes:
   unrelated to these always-on fixes
 - Raspberry Pi field validation is still required to tune the wake-word
   threshold for the uploaded `hey_Ninja.onnx` model in the user’s real room
+
+## 2026-03-21 - `pi5mic` continuous OpenClaw voice-loop hardening
+
+Summary:
+
+- hardened the always-on OpenClaw voice-input loop so repeated wake-word cycles
+  can continue even when presence updates are slow or the Raspberry Pi audio
+  stream reports overflow
+
+Implementation changes:
+
+- reduced the default OpenClaw presence timeout to `3` seconds and made it
+  configurable through `integration.openclaw.presence_timeout_seconds`
+- moved OpenClaw presence updates off the live audio hot path by running them in
+  a background serial worker instead of blocking the wake-word loop
+- changed the always-on monitoring loop to recreate the live microphone stream
+  after repeated overflow rather than depending on the same long-lived stream
+  forever
+- added recovery behavior so repeated overflow during an active capture cancels
+  that capture, re-arms the listener, and keeps the always-on service alive
+- added runtime messages that make the intended single-flight behavior clearer:
+  one request is processed at a time through `LISTENING -> TRANSCRIBING ->
+  DISPATCHING -> WAITING_FOR_REPLY -> COOLDOWN`
+- added regression coverage for:
+  - reopening the monitoring stream around a voice cycle
+  - presence submission during OpenClaw dispatch
+  - recovering after repeated microphone overflow
+
+Documentation updates:
+
+- updated [README.md](../README.md)
+- updated [pi5mic/README.md](../pi5mic/README.md)
+- updated [InstallationGuide.md](../InstallationGuide.md)
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md)
+
+Validation:
+
+- `python3 -m compileall pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff check pi5mic/src pi5mic/tests`
+- `uv run --extra dev ruff format --check pi5mic/src pi5mic/tests`
+- `cd pi5mic && uv run --extra dev pytest -q tests -c pyproject.toml`
+
+Notes:
+
+- the listener still intentionally ignores overlapping wake-word triggers while
+  the previous OpenClaw request is active; this is the safeguard that prevents
+  stacked voice commands
+- Raspberry Pi field validation is still required to confirm the best threshold
+  and overflow behavior for the user’s real USB microphone and room noise

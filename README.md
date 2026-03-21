@@ -314,8 +314,13 @@ What you should expect:
 - say `Ninja`, then a short sentence
 - recording should stop after 3 seconds of silence or 10 seconds max
 - the recognized transcript should print in the terminal
+- while OpenClaw is still thinking or replying, new wake words are ignored on
+  purpose so one voice request cannot overlap the previous one
+- after the reply finishes, the listener should return to waiting mode by itself
 - if you did not say a real command after the wake word, `pi5mic` should report
   that no spoken command was detected and then re-arm cleanly
+- if repeated microphone overflow is detected, `pi5mic` now recreates the live
+  input stream automatically instead of staying stuck on the old stream
 
 ### Step 9. Start the background listener
 

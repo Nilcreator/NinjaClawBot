@@ -764,9 +764,15 @@ Expected result:
 - it sends the original-language transcript to OpenClaw
 - OpenClaw prints the reply locally, and if dual delivery is enabled, the same
   reply also appears in Telegram
+- while OpenClaw is still replying, the listener ignores new wake-word triggers
+  on purpose so one request cannot overlap another
+- after the reply finishes, the listener should return to waiting mode by
+  itself
 - if the wake word fired but you did not say a real command, `pi5mic` should
   report that no spoken command was detected and then re-arm cleanly instead of
   stopping with a hard Whisper error
+- if repeated audio overflow happens, `pi5mic` now recreates the live
+  microphone stream automatically and keeps listening instead of staying stuck
 
 3. Start the background listener after the foreground test passes:
 
@@ -829,6 +835,10 @@ Expected result:
 - after the wake word, it records until 3 seconds of silence or 10 seconds max
 - it sends the original-language transcript to OpenClaw when the profile is `openclaw`
 - it ignores new wake-word triggers while the previous request is still being transcribed or dispatched
+- it also ignores new wake words while it is still waiting for the OpenClaw
+  reply, then returns to listening mode when that reply finishes
+- slow or failed OpenClaw presence updates should no longer block the next
+  wake-word cycle because they now run in the background
 - `stop` ends the listener cleanly when you no longer want the microphone active
 
 ### 9.5.8 If OpenClaw says `pairing required`

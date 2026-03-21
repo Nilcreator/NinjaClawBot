@@ -767,9 +767,17 @@ What you should expect:
 - `Press Ctrl+C to stop it.`
 - after a successful wake-word cycle, the terminal should print
   `Transcript: ...`
+- if you are using the OpenClaw profile, the listener intentionally ignores new
+  wake-word hits while the previous request is still being transcribed,
+  dispatched, or waiting for the OpenClaw reply
+- once the OpenClaw reply finishes, the listener should say it is waiting for
+  the next wake word again
 - if the wake word fired but you did not say a real command, the listener
   should say that no spoken command was detected and then re-arm instead of
   crashing
+- if repeated audio overflow is detected, `pi5mic` now recreates the live
+  microphone stream automatically and keeps listening instead of leaving the
+  old stream in a bad state
 
 ## Optional OpenClaw Mode Inside NinjaClawBot
 
@@ -1265,6 +1273,8 @@ this usually means:
   wake word
 - or the room noise made the wake-word cycle harder to separate from the real
   command
+- or the Raspberry Pi microphone stream fell behind briefly and dropped some
+  audio before the next read
 
 What `pi5mic` now does automatically:
 
@@ -1273,6 +1283,10 @@ What `pi5mic` now does automatically:
 - treats an empty Whisper result as a recoverable no-speech cycle instead of a
   hard failure
 - re-arms the listener after the cooldown instead of crashing
+- recreates the live microphone stream after repeated overflow so the listener
+  can keep running instead of getting stuck on a degraded stream
+- runs OpenClaw presence updates in the background so a slow `idle` update does
+  not block the next wake-word cycle
 
 What to try next:
 
@@ -1287,6 +1301,8 @@ Then:
 - say the wake phrase clearly
 - start the real command immediately after the wake phrase
 - keep the command short for the first tests
+- in OpenClaw mode, wait for the reply to finish before expecting the next wake
+  word to fire; the listener ignores overlapping requests on purpose
 - if false triggers continue, raise `Wake-word detection threshold` slightly in
   `uv run pi5mic setup`
 - if the wake word is fine but the command is often missed, lower the threshold

@@ -117,4 +117,5 @@ def build_presence_controller(config: dict) -> OpenClawPresenceController:
     return OpenClawPresenceController(
         command=openclaw_config.get("command"),
         gateway_url=openclaw_config.get("gateway_url"),
+        timeout_seconds=int(openclaw_config.get("presence_timeout_seconds", 3)),
     )

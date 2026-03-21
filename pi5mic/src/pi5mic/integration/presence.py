@@ -26,7 +26,7 @@ class OpenClawPresenceController:
         command: str | Path | None,
         gateway_url: str | None,
         method_name: str = "ninjaclawbot.presence.set",
-        timeout_seconds: int = 20,
+        timeout_seconds: int = 3,
     ) -> None:
         self.command = resolve_openclaw_command(command)
         self.gateway_args = build_gateway_cli_args(gateway_url)

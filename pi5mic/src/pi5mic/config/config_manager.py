@@ -70,6 +70,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "session_key": DEFAULT_OPENCLAW_SESSION_ID,
             "session_strategy": "dedicated_mic",
             "request_timeout_seconds": 180,
+            "presence_timeout_seconds": 3,
             "reply_channel": None,
             "reply_to": None,
             "reply_account": None,
