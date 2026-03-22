@@ -1392,15 +1392,15 @@ uv run ninjaclawbot health-check
   - reopen `uv run pi5servo servo-tool`
   - try calibration again from option `3`
   - if `gpio13` is already listed in `servo.json`, the tool should now reuse
-    the live servo instead of reopening `pwm1`
+    the live servo and keep the current session alive instead of reopening `pwm1`
   - if it still fails, recheck the PWM overlay line in `/boot/firmware/config.txt`
-  - if you are testing an unconfigured endpoint, retry once after confirming the
-    latest build is installed because the fallback path now unexports the sysfs
-    PWM channel before rebuilds
+  - if you are testing an unconfigured endpoint, the tool should now suspend the
+    live group only for that temporary session and rebuild it afterward
   - if a failed run suddenly makes both `gpio12` and `gpio13` unusable, reboot
     once to clear stale kernel sysfs PWM state, then test again with the latest
-    build because current `pi5servo` now retries stale-channel claims and rolls
-    back partial multi-servo startup claims
+    build because current `pi5servo` now retries stale-channel claims, keeps
+    healthy channels exported during normal reloads, and rolls back partial
+    multi-servo startup claims
 - `expression-tool` opens but faces look wrong:
   - export display config again to root `display.json`
 - `movement-tool` opens but movement is risky:

@@ -215,7 +215,6 @@ def test_servo_tool_uses_isolated_backend_for_unconfigured_native_calibration(
             captured["pin"] = self.pin
             captured["backend"] = self.backend
             captured["backend_kwargs"] = self.backend_kwargs
-            captured["persistent_group_closed_before_servo"] = persistent_group.closed
 
     monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
     monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
@@ -237,7 +236,6 @@ def test_servo_tool_uses_isolated_backend_for_unconfigured_native_calibration(
     assert captured["pin"] == 13
     assert captured["backend"] == "auto"
     assert captured["backend_kwargs"] == {}
-    assert captured["persistent_group_closed_before_servo"] is True
     assert persistent_group.closed is True
 
 

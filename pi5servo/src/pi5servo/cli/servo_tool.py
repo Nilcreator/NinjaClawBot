@@ -382,7 +382,8 @@ def servo_tool(
                 if borrowed_servo is not None:
                     calibrate_session(borrowed_servo, owns_servo=False)
                     manager.load()
-                    persistent_group.update_calibration(pin, manager.get_calibration(pin))
+                    if persistent_group is not None:
+                        persistent_group.update_calibration(pin, manager.get_calibration(pin))
                 else:
                     run_with_isolated_temp_servo(
                         pin,

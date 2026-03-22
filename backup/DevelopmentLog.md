@@ -2,6 +2,81 @@
 
 ## 2026-03-23
 
+### pi5servo Healthy PWM Reuse On Calibration Exit
+
+Summary:
+
+- re-audited the latest Raspberry Pi 5 report where `gpio12` calibration worked,
+  `gpio13` calibration wrote `servo.json`, but `servo-tool` froze while leaving
+  calibration and later `servo-tool` / `status --pins 12,13` failed on:
+  - `Unable to create/write to /sys/class/pwm/pwmchip0/pwm0`
+  - `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1`
+- confirmed the newest traceback changed the root cause again:
+  - the failure was now occurring inside `rpi_hardware_pwm.create_pwmX()`
+  - that meant the code was forcing a fresh export/recreate cycle on a channel
+    that had just been healthy moments earlier
+- found two remaining issues in the active source tree:
+  - `servo-tool` still rebuilt the live group after a borrowed configured-GPIO
+    calibration exit, which caused an unnecessary close/reopen cycle
+  - the hardware PWM backend still unexported healthy sysfs PWM nodes during
+    ordinary `release()`, which made the next claim depend on a fresh export
+- fixed `servo-tool` so configured native GPIO calibration now:
+  - reuses the live servo
+  - updates the live group calibration in place
+  - does not rebuild the persistent group after quitting that borrowed session
+- kept the isolated temporary-servo path for endpoints that are not already in
+  the live session, but only suspend and rebuild around that explicit temporary
+  session
+- changed the RP1 hardware PWM backend so normal `release()` no longer
+  unexports healthy sysfs PWM nodes
+- kept the earlier stale-node repair behavior in `claim()`:
+  - pre-clean unwritable `pwm0`/`pwm1` nodes
+  - retry once after `PermissionError`
+- cleaned the merge artifacts that had been left in `servo_tool.py`,
+  `test_servo_tool.py`, and the affected docs
+- updated regression coverage to prove a healthy release does not write
+  `unexport` anymore while stale-claim recovery coverage remains in place
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/InstallationGuide.md)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/src/pi5servo/core/backends/hardware_pwm.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/core/backends/hardware_pwm.py)
+- [pi5servo/tests/test_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_backend.py)
+- [pi5servo/tests/test_servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_servo_tool.py)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/backup/DevelopmentLog.md)
+
+Why:
+
+- your latest traceback showed the failure had moved from stale pre-existing
+  nodes to a fresh `create_pwmX()` export path after calibration exit
+- that meant the previous repair-only claim handling was still necessary, but
+  ordinary healthy release/unexport had become the new unstable step
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff check pi5servo/src pi5servo/tests`
+- `uv run --extra dev pytest -q pi5servo/tests`
+- result: `132 passed`
+
+Raspberry Pi validation status:
+
+- local code validation passed
+- Raspberry Pi follow-up still required:
+  - `cd ~/NinjaClawBot`
+  - `git pull`
+  - `uv sync --extra dev`
+  - `uv run pi5servo servo-tool`
+  - calibrate `gpio12`, then `gpio13`, quit each calibration view, and confirm
+    the menu stays responsive
+  - quit `servo-tool`, restart it, and confirm startup no longer fails
+  - run `uv run pi5servo status --pins 12,13` and confirm the backend probe is
+    ready instead of failing on `pwm0` or `pwm1`
+
 ### pi5servo Stale PWM Claim Recovery And Partial Startup Rollback
 
 Summary:
@@ -219,7 +294,6 @@ Raspberry Pi validation status:
   - confirm the calibration view opens without the old `pwm1` write error
   - return to the menu and run a small Quick Move command such as `F_gpio13:0`
   - confirm the same session still works after calibration without restarting
-
 ## 2026-03-20
 
 ### MicDevelopment.md Audit Consolidation And Always-On Voice Planning Refresh

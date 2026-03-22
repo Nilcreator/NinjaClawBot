@@ -184,7 +184,7 @@ Current highlights:
 - validated startup greeting, idle, thinking, reply, and sleepy lifecycle
 - Telegram text replies plus robot reactions on the validated OpenClaw path
 - `ninjaclawbot_diagnostics` for deployment and readiness checks
-- `pi5servo` now reuses configured live native GPIO servos in `servo-tool`, recovers stale `pwmchip0/pwm0|pwm1` sysfs nodes on claim, and rolls back partial startup claims so one bad PWM channel does not poison the other
+- `pi5servo` now reuses configured live native GPIO servos in `servo-tool`, keeps healthy PWM channels exported across normal reloads, repairs stale `pwmchip0/pwm0|pwm1` sysfs nodes on claim, and rolls back partial startup claims so one bad PWM channel does not poison the other
 - `pi5mic` available as a standalone package and as an optional part of the full build
 - manual always-on voice input preview available through `voiceinput-tool`
 

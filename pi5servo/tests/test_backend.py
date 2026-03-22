@@ -221,8 +221,8 @@ def test_hardware_pwm_backend_claim_preemptively_cleans_unwritable_sysfs_channel
     assert 12 in backend._pwms
 
 
-def test_hardware_pwm_backend_release_unexports_sysfs_channel(tmp_path) -> None:
-    """Releasing a hardware PWM channel should best-effort unexport the sysfs node."""
+def test_hardware_pwm_backend_release_keeps_healthy_sysfs_channel_exported(tmp_path) -> None:
+    """Normal release should not force a fresh sysfs export on the next startup."""
     chippath = tmp_path / "pwmchip0"
     chippath.mkdir()
     unexport_path = chippath / "unexport"
@@ -238,8 +238,8 @@ def test_hardware_pwm_backend_release_unexports_sysfs_channel(tmp_path) -> None:
 
     backend.release(12)
 
-    assert unexport_path.read_text(encoding="ascii") == "0\n"
-    assert not pwm_dir.exists()
+    assert unexport_path.read_text(encoding="ascii") == ""
+    assert pwm_dir.exists()
     assert 12 not in backend._pwms
 
 

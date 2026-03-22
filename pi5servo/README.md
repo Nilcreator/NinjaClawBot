@@ -378,16 +378,18 @@ test the calibrated servo without exiting and restarting the tool first.
 
 For native GPIO endpoints that are already part of the live `servo.json` session,
 `servo-tool` now reuses the existing live servo for `Single Move` and `Calibrate`
-instead of reopening the PWM channel. If you enter an endpoint that is not part of
-the live session yet, the tool falls back to an isolated temporary servo, then
-best-effort unexports the sysfs PWM channel before rebuilding the live group. This
-removes the fragile GPIO13 / `pwm1` reopen path while keeping the same-session
-workflow intact.
+instead of reopening the PWM channel, and quitting that borrowed calibration view
+now updates the live group in place instead of rebuilding it. If you enter an
+endpoint that is not part of the live session yet, the tool falls back to an
+isolated temporary servo, suspends the live group for that temporary session, and
+then rebuilds from `servo.json` afterward.
 
 The native RP1 hardware PWM backend now also recovers stale sysfs PWM nodes during
-claim and rolls back already-claimed channels if a later servo in the same startup
-sequence fails. That means a bad `pwm1` claim should no longer leave `pwm0` stuck
-for later standalone or interactive runs.
+claim, keeps healthy exported PWM channels in place during normal release, and
+rolls back already-claimed channels if a later servo in the same startup sequence
+fails. That means a bad `pwm1` claim should no longer leave `pwm0` stuck for later
+standalone or interactive runs, and healthy channels do not need a fresh export
+cycle every time the tool reloads.
 
 For a DFR0566 servo on the HAT's physical `PWM0` connector, enter `hat_pwm1`.
 For a DFR0566 servo on the HAT's physical `PWM1` connector, enter `hat_pwm2`.
@@ -477,8 +479,7 @@ uv run pi5servo config import backup.json
 > `uv run pi5servo calib ...` only drives the live servo calibration TUI when the optional `blessed` terminal library is installed. If `blessed` is missing, the command falls back to a simple read-only view and the servo will not move.
 
 > [!TIP]
-> If an older build showed `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1 (period, duty_cycle, enable)` while calibrating GPIO13 from `servo-tool`, update to the latest `pi5servo`. Configured native endpoints are now calibrated in place on the live session servo, temporary sessions best-effort unexport sysfs PWM nodes, stale claims are retried once, and partial multi-servo startup claims are rolled back.
-
+> If an older build showed `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1 (period, duty_cycle, enable)` while calibrating GPIO13 from `servo-tool`, update to the latest `pi5servo`. Configured native endpoints are now calibrated in place on the live session servo, healthy PWM channels stay exported during normal reloads, stale claims are retried once with repair cleanup, and partial multi-servo startup claims are rolled back.
 ### Advanced Backend Examples
 
 ```bash

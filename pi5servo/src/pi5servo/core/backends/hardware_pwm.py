@@ -206,9 +206,7 @@ class HardwarePWMServoBackend:
         identifier = self._normalize_pin(identifier)
         if identifier not in self._pwms:
             return
-        pwm = self._pwms[identifier]
         self.off(identifier)
-        self._best_effort_unexport(pwm)
         self._pwms.pop(identifier, None)
         self._active.discard(identifier)
         self._current_pulses.pop(identifier, None)
