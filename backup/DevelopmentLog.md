@@ -3135,3 +3135,58 @@ Validation:
 Raspberry Pi validation status:
 
 - not required for this pass because the change is documentation only
+
+## 2026-03-22 - `InstallationGuide.md` structure and flow rewrite
+
+Summary:
+
+- rewrote the main installation guide so it now follows a clearer end-to-end
+  build flow for Raspberry Pi 5, the `pi5*` libraries, `ninjaclawbot`,
+  OpenClaw integration, Telegram validation, and optional `pi5mic` voice input
+
+Implementation changes:
+
+- reorganized [InstallationGuide.md](../InstallationGuide.md) around the real
+  user journey:
+  - prepare Raspberry Pi
+  - install the NinjaClawBot workspace
+  - wire hardware
+  - configure each `pi5*` library with its interactive tool
+  - validate local NinjaClawBot behavior
+  - install and onboard OpenClaw
+  - patch and validate the OpenClaw integration
+  - validate Telegram and voice input end to end
+- promoted `pi5mic` from a deep `9.5` subsection into a dedicated major setup
+  phase with clearer standalone-first guidance
+- removed the old mixed `9.5.xA` heading pattern and replaced it with a more
+  consistent section hierarchy
+- kept the important technical content from the previous guide, including:
+  - the `openclaw.json` patch script
+  - the `BOOT.md` script
+  - the `AGENTS.md` update script
+  - the diagnostics and Telegram validation steps
+  - the sanitized `openclaw.json` reference example
+- consolidated troubleshooting into more focused appendices for:
+  - Raspberry Pi base setup
+  - hardware and local tests
+  - `pi5mic` and voice input
+  - OpenClaw and Telegram
+
+Documentation updates:
+
+- updated [InstallationGuide.md](../InstallationGuide.md)
+
+Validation:
+
+- `git diff --check -- InstallationGuide.md backup/DevelopmentLog.md`
+- heading and section sanity review with `rg '^#{1,4} ' InstallationGuide.md`
+
+Raspberry Pi validation status:
+
+- not required for this pass because the change is documentation only
+
+Follow-up:
+
+- if desired, mirror the same phased installation structure into the root
+  `README.md` quick-start section later so the high-level and detailed guides
+  feel even more consistent

@@ -15,87 +15,127 @@
 
 ---
 
+This guide is the full Raspberry Pi 5 setup path for NinjaClawBot.
+
+It is designed for users who want one clear document that takes them from a
+fresh Raspberry Pi to:
+
+- the full NinjaClawBot workspace installed
+- all `pi5*` hardware libraries configured through their interactive tools
+- the local robot layer validated
+- OpenClaw installed and connected
+- Telegram reply flow validated
+- optional `pi5mic` one-shot and always-on voice input validated
+
+The guide is longer than the individual `pi5*` library READMEs because it
+combines all of those libraries into one project path. The goal here is not
+just to install packages, but to help you bring up the full robot stack with as
+little confusion as possible.
+
+---
+
 ## Contents
 
-- [1. What you will build](#1-what-you-will-build)
-- [2. What you need](#2-what-you-need)
-- [3. Safety first](#3-safety-first)
+- [1. What You Will Build](#1-what-you-will-build)
+- [2. What You Need](#2-what-you-need)
+- [3. Safety First](#3-safety-first)
 - [4. Prepare the Raspberry Pi](#4-prepare-the-raspberry-pi)
-- [5. Install OpenClaw](#5-install-openclaw)
-- [6. Clone and install NinjaClawBot](#6-clone-and-install-ninjaclawbot)
-- [7. Wire the hardware](#7-wire-the-hardware)
-- [8. Run the guided setup tools](#8-run-the-guided-setup-tools)
-- [9. Run quick local tests](#9-run-quick-local-tests)
-- [9.5 Optional `pi5mic` preview](#95-optional-pi5mic-preview)
-- [10. Save paths and back up OpenClaw config](#10-save-paths-and-back-up-openclaw-config)
-- [11. Patch `openclaw.json` safely](#11-patch-openclawjson-safely)
-- [12. Create `BOOT.md` and `AGENTS.md`](#12-create-bootmd-and-agentsmd)
-- [13. Start OpenClaw and run diagnostics](#13-start-openclaw-and-run-diagnostics)
-- [14. Validate with Telegram](#14-validate-with-telegram)
-- [Appendix A: Raspberry Pi setup help](#appendix-a-raspberry-pi-setup-help)
-- [Appendix B: OpenClaw setup help](#appendix-b-openclaw-setup-help)
-- [Appendix C: Hardware setup help](#appendix-c-hardware-setup-help)
-- [Appendix D: Local test help](#appendix-d-local-test-help)
-- [Appendix E: OpenClaw validation help](#appendix-e-openclaw-validation-help)
-- [Appendix F: Sanitized `openclaw.json` example](#appendix-f-sanitized-openclawjson-example)
+- [5. Clone and Install NinjaClawBot](#5-clone-and-install-ninjaclawbot)
+- [6. Wire the Hardware](#6-wire-the-hardware)
+- [7. Run the Guided Setup Tools](#7-run-the-guided-setup-tools)
+- [8. Optional but Recommended: Configure `pi5mic`](#8-optional-but-recommended-configure-pi5mic)
+- [9. Run Quick Local NinjaClawBot Tests](#9-run-quick-local-ninjaclawbot-tests)
+- [10. Install and Onboard OpenClaw](#10-install-and-onboard-openclaw)
+- [11. Integrate NinjaClawBot with OpenClaw](#11-integrate-ninjaclawbot-with-openclaw)
+- [12. Validate the OpenClaw Plugin and Gateway](#12-validate-the-openclaw-plugin-and-gateway)
+- [13. Validate Telegram and Voice Input End to End](#13-validate-telegram-and-voice-input-end-to-end)
+- [Appendix A. Raspberry Pi Setup Help](#appendix-a-raspberry-pi-setup-help)
+- [Appendix B. Hardware and Local Test Help](#appendix-b-hardware-and-local-test-help)
+- [Appendix C. `pi5mic` and Voice Input Help](#appendix-c-pi5mic-and-voice-input-help)
+- [Appendix D. OpenClaw and Telegram Help](#appendix-d-openclaw-and-telegram-help)
+- [Appendix E. Sanitized `openclaw.json` Example](#appendix-e-sanitized-openclawjson-example)
 
 ## 1. What You Will Build
 
 Purpose:
-- understand what this guide will give you when you finish
+- understand what the finished system should look like
 
-At the end of this guide, you will have:
+At the end of this guide, you should have:
 
-- a Raspberry Pi 5 with all NinjaClawBot libraries installed
-- guided hardware setup completed with interactive tools
-- a working `ninjaclawbot` robot layer
-- OpenClaw connected to the robot
-- a validated flow where:
-  - startup shows a greeting
-  - Telegram messages trigger robot reactions
-  - Telegram still receives normal text replies
-  - shutdown shows a sleepy expression and then turns the display off
+- a Raspberry Pi 5 with the full NinjaClawBot workspace installed
+- working standalone hardware drivers for:
+  - `pi5servo`
+  - `pi5buzzer`
+  - `pi5disp`
+  - `pi5vl53l0x`
+  - optional but recommended: `pi5mic`
+- the integrated `ninjaclawbot` robot layer working locally
+- OpenClaw installed and configured
+- the local NinjaClawBot plugin loaded into OpenClaw
+- Telegram replies validated if Telegram is enabled
+- optional voice input working through `pi5mic` in both one-shot and always-on
+  modes
 
 ## 2. What You Need
 
 Purpose:
-- confirm you have the right hardware and software before you start
+- confirm the hardware, software, and optional accounts before you start
 
-You need:
+Required hardware:
 
 - Raspberry Pi 5
-- Raspberry Pi OS
+- Raspberry Pi OS Bookworm or newer
 - internet connection
-- a small SPI display supported by `pi5disp`
+- SPI display supported by `pi5disp`
 - at least one servo supported by `pi5servo`
-- one buzzer supported by `pi5buzzer`
-- one VL53L0X distance sensor for `pi5vl53l0x`
-- OpenClaw already installed or ready to install
+- buzzer supported by `pi5buzzer`
+- VL53L0X distance sensor for `pi5vl53l0x`
+
+Optional but strongly recommended hardware:
+
+- USB microphone or microphone module if you may want voice input later
+
+Required software and tools:
+
+- a terminal with `sudo` access
+- `uv` for the Python workspace
+- OpenClaw
+
+Optional accounts or secrets:
+
+- a model-provider credential for OpenClaw
+- a Telegram bot token if you want Telegram as the chat interface
+- a Gemini API key if you want Gemini STT in `pi5mic`
+- a custom `openWakeWord` model file if you want always-on wake-word input
 
 Helpful words:
 
 - `GPIO`: control pins on the Raspberry Pi
-- `SPI`: fast pin connection used by displays
-- `I2C`: two-wire connection used by sensors and some controller boards
-- `PWM`: timed signal used to move servos
+- `SPI`: pin connection usually used by the display
+- `I2C`: pin connection usually used by the distance sensor and some servo boards
+- `PWM`: timed control signal used by servos
+- `STT`: speech-to-text, meaning turning recorded speech into text
 
 ## 3. Safety First
 
 Purpose:
-- avoid damaging your Raspberry Pi, servos, or display while testing
+- reduce the risk of damaging hardware during setup and testing
 
 Please keep these rules in mind:
 
 - do not force a servo arm by hand while power is on
-- use a separate safe power source for stronger servos if needed
-- test one hardware part at a time
-- stop immediately if a servo moves in an unexpected way
-- start with display, buzzer, and sensor checks before larger motion tests
+- if a servo moves unexpectedly, stop immediately
+- use a safe external power source for stronger servos when needed
+- test one hardware area at a time
+- do display, buzzer, sensor, and small-motion tests before running larger
+  movements
+- treat always-on voice input as manual and privacy-sensitive: start it yourself
+  and stop it yourself
 
-## 4. Prepare The Raspberry Pi
+## 4. Prepare the Raspberry Pi
 
 Purpose:
-- update the system and install the base tools the project needs
+- update the operating system and install the base tools needed by the project
 
 ### 4.1 Update the system
 
@@ -105,22 +145,48 @@ sudo apt full-upgrade -y
 sudo reboot
 ```
 
-### 4.2 Install basic packages
+What this does:
+
+- updates the Raspberry Pi package index
+- installs the latest available system updates
+- reboots into the updated system
+
+What you should expect:
+
+- the Pi comes back normally after reboot
+
+### 4.2 Install basic system packages
 
 ```bash
 sudo apt update
 sudo apt install -y \
   git \
   curl \
+  ca-certificates \
   python3-dev \
   build-essential \
+  cmake \
+  pkg-config \
   swig \
-  i2c-tools
+  i2c-tools \
+  libportaudio2 \
+  portaudio19-dev
 ```
 
-### 4.3 Enable hardware interfaces
+What this does:
 
-Open the Raspberry Pi setup menu:
+- installs the base build tools
+- installs I2C test tools
+- installs the PortAudio system libraries used by `pi5mic`
+- installs common headers needed by Python and native extensions
+
+What you should expect:
+
+- the install finishes without errors
+
+### 4.3 Enable Raspberry Pi hardware interfaces
+
+Open the Raspberry Pi configuration menu:
 
 ```bash
 sudo raspi-config
@@ -128,10 +194,11 @@ sudo raspi-config
 
 Enable:
 
-1. `Interface Options` -> `SPI` -> `Yes`
-2. `Interface Options` -> `I2C` -> `Yes`
+1. `Interface Options -> SPI -> Yes`
+2. `Interface Options -> I2C -> Yes`
 
-If you plan to drive servos directly from GPIO 12 and GPIO 13, also add the PWM overlay:
+If you plan to drive servos directly from GPIO 12 and GPIO 13, also add the
+two-channel PWM overlay:
 
 ```bash
 sudo nano /boot/firmware/config.txt
@@ -149,9 +216,15 @@ Then reboot:
 sudo reboot
 ```
 
+What this does:
+
+- enables SPI for the display
+- enables I2C for the distance sensor and some servo setups
+- enables the direct-PWM overlay if you plan to use native GPIO PWM for servos
+
 ### 4.4 Install `uv`
 
-`uv` is the Python environment tool used by this project.
+`uv` is the Python environment and command runner used by this project.
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -160,71 +233,26 @@ command -v uv
 uv --version
 ```
 
-Need help later?
-- [Appendix A: Raspberry Pi setup help](#appendix-a-raspberry-pi-setup-help)
+What this does:
 
-## 5. Install OpenClaw
+- installs `uv`
+- loads it into the current shell
+- confirms the command works
 
-Purpose:
-- get OpenClaw working before you connect NinjaClawBot to it
+What you should expect:
 
-Use these references in this order:
-
-- Key Raspberry Pi companion reference:
-  - [NinjaClawAgent README](https://github.com/Nilcreator/NinjaClawAgent/blob/main/README.md)
-- Official references:
-  - [OpenClaw install guide](https://docs.openclaw.ai/start/installation)
-  - [OpenClaw onboarding guide](https://docs.openclaw.ai/start/onboarding)
-
-The NinjaClawAgent guide is the easiest companion guide to follow on Raspberry Pi. The official OpenClaw pages are still the source of truth for the latest installer and onboarding behavior.
-
-### 5.1 Install OpenClaw
-
-```bash
-curl -fsSL https://openclaw.ai/install.sh | bash
-```
-
-### 5.2 Run onboarding
-
-```bash
-openclaw onboard --install-daemon
-```
-
-During onboarding:
-
-- choose your normal provider and model settings
-- enable Telegram if you want Telegram as the chat interface
-- allow the daemon install so OpenClaw can run as a background service
-
-### 5.3 Verify the install
-
-```bash
-openclaw doctor
-openclaw status
-```
-
-When you continue with this guide, you should already have:
-
-- the `openclaw` command
-- a working `~/.openclaw/openclaw.json`
-- your own model settings
-- your own Telegram settings if you want Telegram replies
-
-Important:
-
-- do not overwrite your whole `openclaw.json` with a random template
-- this guide patches your existing file safely
-- never paste real API keys, pairing codes, or tokens into shared screenshots or notes
+- `command -v uv` prints a path
+- `uv --version` prints a version number
 
 Need help later?
-- [Appendix B: OpenClaw setup help](#appendix-b-openclaw-setup-help)
+- [Appendix A. Raspberry Pi setup help](#appendix-a-raspberry-pi-setup-help)
 
-## 6. Clone And Install NinjaClawBot
+## 5. Clone and Install NinjaClawBot
 
 Purpose:
 - install the full project workspace in one clean step
 
-### 6.1 Clone the repo
+### 5.1 Clone the repository
 
 ```bash
 cd ~
@@ -232,14 +260,36 @@ git clone https://github.com/Nilcreator/NinjaClawBot.git
 cd ~/NinjaClawBot
 ```
 
-### 6.2 Install the whole workspace
+What this does:
+
+- downloads the project
+- places you in the workspace root used by the rest of this guide
+
+### 5.2 Install the workspace
+
+Recommended full install if you may want voice input later:
+
+```bash
+cd ~/NinjaClawBot
+uv sync --extra dev --extra voiceinput
+```
+
+Minimal install if you are certain you do not want the wake-word listener yet:
 
 ```bash
 cd ~/NinjaClawBot
 uv sync --extra dev
 ```
 
-### 6.3 Verify the install
+Why the first command is recommended:
+
+- it installs the normal development workspace
+- it also installs the optional `openWakeWord` dependency used by the always-on
+  `pi5mic` listener
+- it avoids having to reinstall the workspace later when you decide to add
+  voice input
+
+### 5.3 Verify the workspace install
 
 ```bash
 cd ~/NinjaClawBot
@@ -258,12 +308,12 @@ Expected result:
 - each help command opens normally
 
 Need help later?
-- [Appendix A: Raspberry Pi setup help](#appendix-a-raspberry-pi-setup-help)
+- [Appendix A. Raspberry Pi setup help](#appendix-a-raspberry-pi-setup-help)
 
-## 7. Wire The Hardware
+## 6. Wire the Hardware
 
 Purpose:
-- connect the robot before running the guided setup tools
+- connect the robot hardware before running the guided setup tools
 
 Use these library guides for wiring details:
 
@@ -271,24 +321,28 @@ Use these library guides for wiring details:
 - Display: [pi5disp/README.md](pi5disp/README.md)
 - Buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
 - Distance sensor: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
+- Microphone: [pi5mic/README.md](pi5mic/README.md)
 
 Quick notes:
 
 - direct servo testing is easiest on GPIO 12 or GPIO 13
 - the VL53L0X usually appears on I2C address `0x29`
-- some servo controller HATs appear on I2C address `0x10`
+- some servo-controller HATs appear on I2C address `0x10`
+- if you plan to use voice input, plug the USB microphone in now so it is
+  visible during `pi5mic` setup
 
 Need help later?
-- [Appendix C: Hardware setup help](#appendix-c-hardware-setup-help)
+- [Appendix B. Hardware and local test help](#appendix-b-hardware-and-local-test-help)
 
-## 8. Run The Guided Setup Tools
+## 7. Run the Guided Setup Tools
 
 Purpose:
-- initialize and test each hardware module using the safest interactive tools first
+- initialize and test each hardware module using the safest interactive tools
+  first
 
 Run these in order.
 
-### 8.1 Servo setup
+### 7.1 Servo setup
 
 ```bash
 cd ~/NinjaClawBot
@@ -307,7 +361,7 @@ Expected result:
 - `servo.json` is created
 - the servo moves safely
 
-### 8.2 Buzzer setup
+### 7.2 Buzzer setup
 
 ```bash
 cd ~/NinjaClawBot
@@ -325,7 +379,7 @@ Expected result:
 - `buzzer.json` is created
 - the buzzer plays a short sound
 
-### 8.3 Display setup
+### 7.3 Display setup
 
 ```bash
 cd ~/NinjaClawBot
@@ -336,10 +390,11 @@ uv run pi5disp display-tool
 Inside the tool:
 
 1. confirm the display settings
-2. show text like `HELLO`
+2. show text such as `HELLO`
 3. confirm the screen rotation looks correct
 
-Then export those same settings into the root project file used by `ninjaclawbot`:
+Then export those same settings into the root project file used by
+`ninjaclawbot`:
 
 ```bash
 cd ~/NinjaClawBot
@@ -357,7 +412,7 @@ Why this matters:
 - `ninjaclawbot` prefers the root `display.json`
 - exporting here keeps both layers in sync
 
-### 8.4 Distance sensor setup
+### 7.4 Distance sensor setup
 
 First check the sensor on I2C:
 
@@ -387,9 +442,251 @@ Expected result:
 - `vl53l0x.json` is created if you save calibration
 
 Need help later?
-- [Appendix C: Hardware setup help](#appendix-c-hardware-setup-help)
+- [Appendix B. Hardware and local test help](#appendix-b-hardware-and-local-test-help)
 
-## 9. Run Quick Local Tests
+## 8. Optional but Recommended: Configure `pi5mic`
+
+Purpose:
+- prepare the voice-input layer now, even if you do not plan to use it on the
+  first day
+
+Why it is recommended:
+
+- it is easier to verify your microphone while you are still doing local
+  hardware bring-up
+- OpenClaw voice input later reuses the same `pi5mic` setup
+- if the microphone works locally first, OpenClaw debugging becomes much easier
+
+If you are certain you do not want voice input yet, you can skip this section
+and come back later.
+
+### 8.1 Build the default local STT backend: `whisper.cpp`
+
+```bash
+cd ~
+git clone https://github.com/ggml-org/whisper.cpp.git
+cd ~/whisper.cpp
+sh ./models/download-ggml-model.sh base
+cmake -B build
+cmake --build build -j
+```
+
+Purpose:
+
+- download and build the local speech-to-text engine used by the default
+  `pi5mic` path
+- install the multilingual `ggml-base.bin` model
+
+Expected result:
+
+- `~/whisper.cpp/build/bin/whisper-cli` exists
+- `~/whisper.cpp/models/ggml-base.bin` exists
+
+### 8.2 Register Whisper with `pi5mic`
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic install whispercpp \
+  --command ~/whisper.cpp/build/bin/whisper-cli \
+  --model-path ~/whisper.cpp/models/ggml-base.bin
+```
+
+Purpose:
+
+- tell `pi5mic` exactly where the Whisper command and model are stored
+
+Expected result:
+
+- the resolved command path is printed
+- the resolved model path is printed
+- the values are saved into `mic.json`
+
+### 8.3 Optional Gemini API key setup
+
+If you want to use Gemini instead of Whisper for STT, set one of these first:
+
+```bash
+cd ~/NinjaClawBot
+export GEMINI_API_KEY="your_key_here"
+```
+
+or:
+
+```bash
+cd ~/NinjaClawBot
+export GOOGLE_API_KEY="your_key_here"
+```
+
+Purpose:
+
+- give the current shell permission to call the Gemini Developer API
+
+Expected result:
+
+- no output is normal
+- if both keys are set, the Google SDK uses `GOOGLE_API_KEY`
+
+### 8.4 Optional: prepare a custom `openWakeWord` model
+
+You only need this if you want the optional always-on wake-word listener.
+
+What changed:
+
+- `pi5mic` now uses `openWakeWord` for always-on wake-word detection
+- there is no extra account and no access key
+- for the word `Ninja`, `pi5mic` needs a custom `.onnx` or `.tflite` model file
+
+Recommended way to get the model:
+
+1. Open the official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord).
+2. Read the `Training New Models` section.
+3. Use the simple Google Colab notebook if you want the easiest first pass.
+4. Train or export a model for the phrase `hey Ninja`.
+5. Download the finished `.onnx` or `.tflite` model.
+6. Save it somewhere stable, for example:
+
+```bash
+mkdir -p ~/NinjaClawBot/voiceinput
+mv ~/Downloads/hey_Ninja.* ~/NinjaClawBot/voiceinput/
+```
+
+Expected result:
+
+- you have a `.onnx` or `.tflite` model saved somewhere you can point to
+  during setup
+
+### 8.5 Run the guided `pi5mic` setup
+
+Recommended first run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic mic-tool
+```
+
+Then choose:
+
+- `1. Run setup wizard`
+
+Recommended first choices for local microphone validation:
+
+- `Profile`: `standalone`
+- `Input device`: your USB microphone or `default`
+- `Sample rate (Hz)`: accept the recommended value
+- `STT backend`: `whisper_cpp` or `gemini`
+- if `whisper_cpp`: use your `whisper-cli` path and `ggml-base.bin` path
+- if `whisper_cpp`: accept the suggested `threads` value on Raspberry Pi
+- if `gemini`: keep the default model unless you have a reason to change it
+- `Maximum clip length`: start with `8`, `10`, or `12`
+- `Prepare always-on voice input now?`: choose `y` only if you want the manual
+  wake-word listener
+- if you enable always-on voice input:
+  - keep `Wake word` as `hey Ninja` unless you trained a different wake phrase
+  - set `openWakeWord model path` to your custom `.onnx` or `.tflite` file
+  - keep `Wake-word detection threshold` at `0.5` for the first test
+  - keep `Wake-word VAD threshold` at `0` unless you need extra false-trigger
+    filtering
+  - keep `Enable openWakeWord noise suppression?` at `n` for the first test
+  - keep `openWakeWord inference framework` at `auto`
+  - keep `Silence stop timeout` at `3`
+  - keep `Maximum recorded command length` at `10`
+  - keep `Cooldown` at `1.5`
+
+Purpose:
+
+- write the actual microphone profile into `~/NinjaClawBot/mic.json`
+- save the standalone-first test path before OpenClaw is involved
+
+Expected result:
+
+- the wizard saves `mic.json`
+- it prints either `Configured STT backend looks ready.` or a clear warning
+  about what is still missing
+- if always-on voice input is enabled, setup reminds you to run
+  `uv run pi5mic doctor` before starting the listener manually
+
+### 8.6 Run `doctor`
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+```
+
+Purpose:
+
+- verify the microphone settings
+- verify the selected STT backend
+- verify the optional always-on wake-word setup when enabled
+- show Raspberry Pi health warnings when available
+
+Expected result:
+
+- for Whisper: command path, model path, and runtime summary are shown
+- for Gemini: `doctor` shows which API key variable it found
+- if always-on voice input is enabled, `doctor` also checks:
+  - whether `openWakeWord` is installed
+  - whether the custom `.onnx` or `.tflite` wake-word model exists
+  - whether the shared runtime assets are available
+  - which inference framework will be used
+  - whether the voice-input service is currently running or stopped
+- success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
+
+### 8.7 Run one real capture cycle
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic run --once
+```
+
+Purpose:
+
+- record one short clip
+- transcribe it with the selected backend
+
+Expected result:
+
+- the command records one clip
+- the transcript is printed locally
+
+### 8.8 Optional first always-on test in the foreground
+
+Use this only after `doctor` is clean.
+
+If you have not registered the custom wake-word model yet, do that first:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic install openwakeword \
+  --model-path ~/NinjaClawBot/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
+```
+
+Then run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool foreground
+```
+
+Purpose:
+
+- starts the always-on listener in the current terminal
+- lets you watch the listener state directly
+- is the safest first test because you can stop it with `Ctrl+C`
+
+Expected result:
+
+- the tool says it is waiting for the wake word
+- say `hey Ninja`, then a short sentence
+- it records after the wake word
+- it stops recording after 3 seconds of silence or 10 seconds max
+- it prints the recognized transcript in the terminal
+
+Need more detail?
+- [pi5mic/README.md](pi5mic/README.md)
+- [Appendix C. `pi5mic` and voice input help](#appendix-c-pi5mic-and-voice-input-help)
+
+## 9. Run Quick Local NinjaClawBot Tests
 
 Purpose:
 - confirm the full robot layer works before adding OpenClaw
@@ -443,484 +740,100 @@ Expected result:
 - `movement-tool` opens normally
 - `using_root_config` is `true`
 
-### 9.5 Optional `pi5mic` preview
+Need help later?
+- [Appendix B. Hardware and local test help](#appendix-b-hardware-and-local-test-help)
+
+## 10. Install and Onboard OpenClaw
 
 Purpose:
-- verify the new local microphone path before you rely on it on Raspberry Pi
+- get OpenClaw working only after the local hardware and robot layer are already
+  known-good
 
-Important note:
-- this is a preview path
-- package-level tests pass, but real Raspberry Pi long-run validation is still required
-- the current build now includes a manual always-on wake-word listener, but it still should be treated as a preview feature until the Raspberry Pi validation checklist is complete
+Use these references in this order:
 
-Backend notes:
-- default STT backend: local `whisper.cpp` with the multilingual `base` model
-- optional fallback: Gemini audio transcription with `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-- OpenClaw profile uses the local `openclaw` CLI plus the NinjaClawBot plugin presence method
+- official getting-started overview:
+  - [OpenClaw Getting Started](https://docs.openclaw.ai/start/getting-started)
+- official install page:
+  - [OpenClaw Install](https://docs.openclaw.ai/start/installation)
+- official onboarding page:
+  - [OpenClaw Onboarding CLI](https://docs.openclaw.ai/start/onboarding-cli)
 
-### 9.5.1 Confirm the workspace install
+### 10.1 Optional: prepare Telegram before onboarding
 
-```bash
-cd ~/NinjaClawBot
-uv sync --extra dev
-```
+If you want Telegram as your user-facing channel, create or confirm your bot
+token first so you can enter it during onboarding.
 
-If you want the optional always-on wake-word path too:
+What to prepare:
 
-```bash
-cd ~/NinjaClawBot
-uv sync --extra dev --extra voiceinput
-```
+- a Telegram bot token from BotFather
 
-Purpose:
-- install the full NinjaClawBot workspace in one environment
-- install `pi5mic`
-- install the Gemini Python SDK automatically through the current `pi5mic` dependency set
-- if you use the `voiceinput` extra, also install `openWakeWord` and its local
-  inference runtime packages
+### 10.2 Install OpenClaw
 
-Expected result:
-- the sync finishes without errors
-- `uv run pi5mic --help` works
-
-### 9.5.2 Build the local Whisper backend
+First, check Node:
 
 ```bash
-cd ~
-git clone https://github.com/ggml-org/whisper.cpp.git
-cd ~/whisper.cpp
-sh ./models/download-ggml-model.sh base
-cmake -B build
-cmake --build build -j
+node --version || true
 ```
 
-Purpose:
-- download and build the local speech-to-text engine used by the default `pi5mic` path
-- install the multilingual `ggml-base.bin` model
+OpenClaw currently recommends Node 24 and also supports Node 22.16+.
 
-Expected result:
-- `~/whisper.cpp/build/bin/whisper-cli` exists
-- `~/whisper.cpp/models/ggml-base.bin` exists
-
-### 9.5.3 Register Whisper with `pi5mic`
+Then install OpenClaw:
 
 ```bash
-cd ~/NinjaClawBot
-uv run pi5mic install whispercpp \
-  --command ~/whisper.cpp/build/bin/whisper-cli \
-  --model-path ~/whisper.cpp/models/ggml-base.bin
+curl -fsSL https://openclaw.ai/install.sh | bash
 ```
 
-Purpose:
-- tell `pi5mic` exactly where the Whisper command and model are stored
-
-Expected result:
-- the resolved command path is printed
-- the resolved model path is printed
-- the values are saved into `mic.json`
-
-### 9.5.4 Optional Gemini API key setup
-
-If you want to use Gemini instead of Whisper for STT, set one of these first:
+### 10.3 Run onboarding
 
 ```bash
-cd ~/NinjaClawBot
-export GEMINI_API_KEY="your_key_here"
+openclaw onboard --install-daemon
 ```
 
-or:
+During onboarding:
+
+- choose your normal provider and model settings
+- enter your model-provider credential
+- enable Telegram if you want Telegram as the chat interface
+- allow the daemon install so OpenClaw can run as a background service
+
+Optional but useful if you want the service to keep working after logout:
 
 ```bash
-cd ~/NinjaClawBot
-export GOOGLE_API_KEY="your_key_here"
+sudo loginctl enable-linger "$USER"
 ```
 
-Purpose:
-- give the current shell permission to call the Gemini Developer API
-
-Expected result:
-- no output is normal
-- if both keys are set, the Google SDK uses `GOOGLE_API_KEY`
-
-### 9.5.4A What `openWakeWord` needs and how to get a `Ninja` model
-
-You only need this if you want the optional always-on wake-word listener.
-
-What changed:
-- `pi5mic` now uses `openWakeWord` for always-on wake-word detection
-- there is no extra account and no access key anymore
-- for the word `Ninja`, `pi5mic` needs a custom `.onnx` or `.tflite` model file
-
-Recommended way to get the model:
-1. Open the official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord).
-2. Read the `Training New Models` section.
-3. Use the simple Google Colab notebook if you want the easiest first pass.
-4. Train or export a model for the word `Ninja`.
-5. Download the finished `.onnx` or `.tflite` model.
-6. Save it somewhere stable, for example:
+### 10.4 Verify the OpenClaw install
 
 ```bash
-mkdir -p ~/NinjaClawBot/voiceinput
-mv ~/Downloads/ninja.* ~/NinjaClawBot/voiceinput/
+openclaw doctor
+openclaw gateway status
+openclaw dashboard
 ```
 
-Purpose:
-- gives `pi5mic` the custom local wake-word model it needs for `Ninja`
+When you continue with this guide, you should already have:
 
-Expected result:
-- you have a `.onnx` or `.tflite` model saved somewhere you can point to during setup
+- the `openclaw` command
+- a working `~/.openclaw/openclaw.json`
+- your own model settings
+- your own Telegram settings if you want Telegram replies
 
-### 9.5.5 Run the guided setup
+Important:
 
-Recommended first run:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic mic-tool
-```
-
-Then choose:
-- `1. Run setup wizard`
-
-Recommended choices for NinjaClawBot integration:
-- `Profile`: `openclaw`
-- `Input device`: your USB microphone or `default`
-- `Sample rate (Hz)`: accept the recommended value
-- `STT backend`: choose `whisper_cpp` or `gemini`
-- if `whisper_cpp`: use your `whisper-cli` path and `ggml-base.bin` path
-- if `whisper_cpp`: accept the suggested `threads` value on Raspberry Pi
-- if `gemini`: keep the default model unless you have a reason to change it
-- `Maximum clip length`: start with `8`, `10`, or `12`
-- `Prepare always-on voice input now?`: choose `y` only if you want the optional manual wake-word listener
-- if you enable always-on voice input:
-  - keep `Wake word` as `ninja` unless you trained a different wake word
-  - set `openWakeWord model path` to your custom `.onnx` or `.tflite` file
-  - keep `Wake-word detection threshold` at `0.5` for the first test
-  - keep `Wake-word VAD threshold` at `0` unless you need extra false-trigger filtering
-  - keep `Enable openWakeWord noise suppression?` at `n` for the first test
-  - keep `openWakeWord inference framework` at `auto`
-  - keep `Silence stop timeout` at `3`
-  - keep `Maximum recorded command length` at `10`
-  - keep `Cooldown` at `1.5`
-
-What the always-on setup options mean:
-- `Wake word`: the word you say to wake the listener. In this project, that is
-  usually `Ninja`.
-- `openWakeWord model path`: the exact file path to the wake-word model file
-  that teaches `pi5mic` how `Ninja` sounds. Example:
-  `~/NinjaClawBot/voiceinput/ninja.tflite`.
-- `.onnx` and `.tflite`: both are local AI model file formats. `.onnx` usually
-  runs with ONNX Runtime. `.tflite` usually runs with LiteRT / TensorFlow Lite.
-  `pi5mic` can use either format.
-- `How to get the model file`: create or download a custom `Ninja` model from
-  the official `openWakeWord` training/export guide, save it in a stable
-  folder, then point both `pi5mic install openwakeword --model-path` and the
-  setup wizard to that same file.
-- `Wake-word detection threshold`: how sure the detector must be before it
-  decides it heard `Ninja`. Higher means fewer false triggers but stricter
-  matching. Lower means easier triggering but more risk of mistakes.
-- `Wake-word VAD threshold`: an extra speech check that helps ignore
-  non-speech noise. `0` turns this extra check off.
-- `Enable openWakeWord noise suppression?`: reduces steady background noise
-  before wake-word detection. Start with `n`, then turn it on later only if
-  your room is noisy.
-- `openWakeWord inference framework`: tells `pi5mic` which runtime should load
-  the model file. Keep `auto` unless you are troubleshooting a runtime issue.
-- `Silence stop timeout`: how long `pi5mic` waits for silence before it stops
-  recording the command.
-- `Maximum recorded command length`: the hard limit for one spoken command,
-  even if the user keeps talking.
-- `Cooldown`: a short pause after one command so the listener does not trigger
-  again too quickly.
-
-Purpose:
-- write the actual microphone profile into `~/NinjaClawBot/mic.json`
-- connect `pi5mic` to the OpenClaw/NinjaClawBot runtime path
-
-Expected result:
-- the wizard saves `mic.json`
-- `pi5mic` auto-detects the local OpenClaw CLI, config file, gateway URL, agent
-  id, and session key when possible
-- if an older `mic.json` still uses the legacy value `voice:local-mic`,
-  `pi5mic` now repairs it automatically to `voice-local-mic`
-- if OpenClaw Telegram is enabled, `pi5mic` looks for the most recent Telegram
-  chat or topic target from OpenClaw session data
-- if a Telegram target is found, the wizard asks whether OpenClaw should reply
-  both locally and in Telegram for voice turns
-- it prints a short summary of the detected OpenClaw settings
-- it prints either `Configured STT backend looks ready.` or a clear warning
-  about what is still missing
-- if always-on voice input is enabled, setup reminds you to run `uv run pi5mic doctor`
-  before starting the listener manually
-- it then runs a safe OpenClaw readiness check
-- if the gateway asks for one-time local pairing approval, `pi5mic` explains the
-  problem and offers to approve the newest local request for you
-- if everything is ready, it ends with:
-  - `OpenClaw voice handoff is ready.`
-
-### 9.5.6 Run doctor
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic doctor
-```
-
-Purpose:
-- verify the microphone settings
-- verify the selected STT backend
-- verify the optional always-on wake-word setup when enabled
-- verify the OpenClaw profile wiring
-- show Raspberry Pi health warnings when available
-
-Expected result:
-- for Whisper: command path, model path, and runtime summary are shown
-- for Gemini: `doctor` shows which API key variable it found
-- if always-on voice input is enabled, `doctor` also checks:
-  - whether `openWakeWord` is installed
-  - whether the custom `.onnx` or `.tflite` wake-word model exists
-  - whether the shared `openWakeWord` runtime assets are available
-  - which inference framework will be used
-  - whether the voice-input service is currently running or stopped
-- if the profile is `openclaw`, `doctor` also checks:
-  - the OpenClaw command
-  - the detected OpenClaw config file
-  - whether OpenClaw Telegram is enabled
-  - the delivery mode
-  - the saved reply target when Telegram mirroring is enabled
-  - the gateway readiness path
-- success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
-
-### 9.5.7 Run one real capture cycle
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic run --once
-```
-
-Purpose:
-- record one short clip
-- transcribe it with the selected backend
-- if the profile is `openclaw`, hand the transcript to OpenClaw and print the reply locally
-- if Telegram mirroring is enabled, ask OpenClaw to send the same reply back to
-  Telegram too
-
-Expected result:
-
-- `pi5mic doctor` reports the selected backend and any missing dependency clearly
-- `pi5mic run --once` records one clip, transcribes it, and prints the transcript locally
-- if the profile is `openclaw`, the command also submits the transcript to OpenClaw and prints the reply locally
-- if setup enabled dual delivery, the same reply should also appear in the
-  detected Telegram chat or topic
-
-### 9.5.7A Optional manual always-on voice input
-
-Use this only after `doctor` is clean.
-
-1. Register the custom `openWakeWord` model:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic install openwakeword \
-  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
-```
-
-Purpose:
-- validates the model path
-- downloads the shared `openWakeWord` runtime assets
-- saves the wake-word settings into `mic.json`
-
-Expected result:
-- the command prints the detected model path and framework
-- it either downloads runtime assets or says they are already present
-
-What these file types mean:
-- `.onnx`: a common local AI model format that usually runs with ONNX Runtime
-- `.tflite`: a common local AI model format that usually runs with LiteRT /
-  TensorFlow Lite
-- if you are unsure which one to use, use whichever file your training/export
-  step gave you and keep the setup option `openWakeWord inference framework` at
-  `auto`
-- do not enter only `.onnx` or `.tflite` in setup; `pi5mic` needs the full
-  real file path, such as `~/NinjaClawBot/voiceinput/hey_ninja.tflite`
-
-2. Do the safest first test in the foreground:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool foreground
-```
-
-Purpose:
-- starts the always-on listener in the current terminal
-- lets you watch the listener state directly
-- is the safest first test because you can stop it with `Ctrl+C`
-
-Expected result:
-- the tool says it is waiting for the wake word
-- say `Ninja`, then a short sentence
-- it records after the wake word
-- it stops recording after 3 seconds of silence or 10 seconds max
-- it prints the recognized transcript in the terminal
-- it sends the original-language transcript to OpenClaw
-- OpenClaw prints the reply locally, and if dual delivery is enabled, the same
-  reply also appears in Telegram
-- while OpenClaw is still replying, the listener ignores new wake-word triggers
-  on purpose so one request cannot overlap another
-- after the reply finishes, the listener should return to waiting mode by
-  itself
-- if the wake word fired but you did not say a real command, `pi5mic` should
-  report that no spoken command was detected and then re-arm cleanly instead of
-  stopping with a hard Whisper error
-- if repeated audio overflow happens, `pi5mic` now recreates the live
-  microphone stream automatically and keeps listening instead of staying stuck
-- if `pi5mic doctor` warned that OpenClaw presence is degraded, voice handoff
-  can still work; that warning only means robot presence updates may be skipped
-
-3. Start the background listener after the foreground test passes:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool start
-```
-
-Purpose:
-- moves the always-on listener into the background so you can keep using the
-  terminal
-
-Expected result:
-- the tool reports that the listener started
-
-4. Check status:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool status
-```
-
-Purpose:
-- confirms whether the background listener is running
-- shows the state file and log file locations
-
-Expected result:
-- the tool reports `running` when the listener is active
-
-5. If you prefer to launch it from the robot package instead of directly from
-   `pi5mic`, you can use the NinjaClawBot wrapper:
-
-```bash
-cd ~/NinjaClawBot
-uv run ninjaclawbot voiceinput-tool foreground
-# or:
-uv run ninjaclawbot voiceinput-tool start
-uv run ninjaclawbot voiceinput-tool status
-uv run ninjaclawbot voiceinput-tool stop
-```
-
-Purpose:
-- gives you the same listener controls through the NinjaClawBot CLI
-- helps keep the full robot workflow in one command namespace
-
-Expected result:
-- these commands behave the same as the matching `pi5mic voiceinput-tool ...`
-  commands
-
-6. Stop it when you no longer want the microphone listening:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool stop
-```
-
-Expected result:
-
-- the listener stays idle until it hears the wake word
-- after the wake word, it records until 3 seconds of silence or 10 seconds max
-- it sends the original-language transcript to OpenClaw when the profile is `openclaw`
-- it ignores new wake-word triggers while the previous request is still being transcribed or dispatched
-- it also ignores new wake words while it is still waiting for the OpenClaw
-  reply, then returns to listening mode when that reply finishes
-- slow or failed OpenClaw presence updates should no longer block the next
-  wake-word cycle because they now run in the background
-- `stop` ends the listener cleanly when you no longer want the microphone active
-
-### 9.5.8 If OpenClaw says `pairing required`
-
-What this means:
-- the microphone part usually worked
-- `pi5mic` reached the OpenClaw CLI
-- but the OpenClaw gateway still wants a one-time approval for the local device
-
-Recommended fix:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-```
-
-Then:
-- choose `Profile: openclaw`
-- let the wizard auto-detect the OpenClaw settings
-- answer `y` if it asks:
-  - `Approve the newest local OpenClaw device request now?`
-
-Manual fallback:
-
-```bash
-openclaw devices approve --latest
-uv run pi5mic doctor
-uv run pi5mic run --once
-```
-
-Expected result after the fix:
-- `pi5mic doctor` should stop failing on pairing
-- `uv run pi5mic run --once` should print both the transcript and the OpenClaw reply
-
-### 9.5.9 If the OpenClaw reply only appears locally
-
-What this means:
-- recording and transcription worked
-- OpenClaw handled the voice turn
-- but `pi5mic` is still in `local_only` mode or does not have a Telegram reply
-  target saved yet
-
-Recommended fix:
-
-1. Send one short message to your OpenClaw bot in the Telegram chat or topic
-   where you want voice replies to appear.
-2. Rerun:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-```
-
-3. Choose `Profile: openclaw`.
-4. Answer `y` if setup asks:
-   - `Ask OpenClaw to reply both here and in Telegram?`
-5. Verify:
-
-```bash
-uv run pi5mic status
-uv run pi5mic doctor
-uv run pi5mic run --once
-```
-
-Expected result:
-- `status` shows a `Reply target:` line
-- `doctor` shows the OpenClaw delivery mode and any detected Telegram target
-- `run --once` prints the reply locally and the same turn should also appear in
-  Telegram
+- do not overwrite your whole `openclaw.json` with a random template
+- this guide patches your existing file safely
+- never paste real API keys, pairing codes, or tokens into shared screenshots
+  or notes
 
 Need help later?
-- [Appendix D: Local test help](#appendix-d-local-test-help)
+- [Appendix D. OpenClaw and Telegram help](#appendix-d-openclaw-and-telegram-help)
 
-## 10. Save Paths And Back Up OpenClaw Config
+## 11. Integrate NinjaClawBot with OpenClaw
 
 Purpose:
-- collect the exact local paths needed by the plugin
-- keep a backup of your working OpenClaw config
+- add NinjaClawBot to your existing OpenClaw setup without losing your own
+  secrets or model settings
 
-### 10.1 Save the important paths
+### 11.1 Save the important paths
 
 ```bash
 cd ~/NinjaClawBot
@@ -930,19 +843,13 @@ export NINJACLAWBOT_UV="$(command -v uv)"
 printf '%s\n%s\n%s\n' "$NINJACLAWBOT_ROOT" "$NINJACLAWBOT_PLUGIN" "$NINJACLAWBOT_UV"
 ```
 
-### 10.2 Back up `openclaw.json`
+### 11.2 Back up `openclaw.json`
 
 ```bash
 cp ~/.openclaw/openclaw.json ~/.openclaw/openclaw.json.backup.$(date +%Y%m%d-%H%M%S)
 ```
 
-Need help later?
-- [Appendix B: OpenClaw setup help](#appendix-b-openclaw-setup-help)
-
-## 11. Patch `openclaw.json` Safely
-
-Purpose:
-- add NinjaClawBot without overwriting your own secrets and model settings
+### 11.3 Patch `openclaw.json` safely
 
 This patch only updates the parts NinjaClawBot needs:
 
@@ -953,15 +860,12 @@ This patch only updates the parts NinjaClawBot needs:
 
 It does not overwrite your existing:
 
-- OpenAI or Codex login/auth profile
-- active primary model selection
-- model provider settings
+- provider credentials
+- active model settings
 - Telegram bot token
 - gateway token
 - workspace history
 - plugin install records
-
-If you are already using an OpenAI-hosted model, that is enough. You do not need an `ollama` provider block unless you also want optional local models later.
 
 Run:
 
@@ -1071,16 +975,7 @@ Keep your own real values private. Never share:
 - API keys
 - pairing codes
 
-Need help later?
-- [Appendix B: OpenClaw setup help](#appendix-b-openclaw-setup-help)
-- [Appendix F: Sanitized `openclaw.json` example](#appendix-f-sanitized-openclawjson-example)
-
-## 12. Create `BOOT.md` And `AGENTS.md`
-
-Purpose:
-- make the startup greeting and reply behavior reliable
-
-### 12.1 Create `BOOT.md`
+### 11.4 Create `BOOT.md`
 
 ```bash
 export OPENCLAW_WORKSPACE="$(
@@ -1109,7 +1004,7 @@ After the tool call, reply with `NO_REPLY`.
 EOF
 ```
 
-### 12.2 Create or update `AGENTS.md`
+### 11.5 Create or update `AGENTS.md`
 
 ```bash
 python3 - <<'PY'
@@ -1143,14 +1038,16 @@ PY
 ```
 
 Need help later?
-- [Appendix B: OpenClaw setup help](#appendix-b-openclaw-setup-help)
+- [Appendix D. OpenClaw and Telegram help](#appendix-d-openclaw-and-telegram-help)
+- [Appendix E. Sanitized `openclaw.json` example](#appendix-e-sanitized-openclawjson-example)
 
-## 13. Start OpenClaw And Run Diagnostics
+## 12. Validate the OpenClaw Plugin and Gateway
 
 Purpose:
-- confirm the plugin, workspace files, and bridge are healthy before Telegram testing
+- confirm the plugin, workspace files, and bridge are healthy before Telegram
+  or voice-input testing
 
-### 13.1 Run basic OpenClaw checks
+### 12.1 Run basic OpenClaw checks
 
 ```bash
 openclaw doctor --fix
@@ -1161,7 +1058,7 @@ openclaw hooks list --verbose | grep -iE 'boot-md|ninjaclawbot|message_received|
 openclaw plugins info ninjaclawbot
 ```
 
-### 13.2 Start the gateway
+### 12.2 Start the gateway
 
 ```bash
 openclaw gateway start
@@ -1174,7 +1071,7 @@ If normal log follow is blocked, use the raw log file:
 tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)"
 ```
 
-### 13.3 Run `ninjaclawbot_diagnostics`
+### 12.3 Run `ninjaclawbot_diagnostics`
 
 This is an OpenClaw tool. It is not a local `uv` command.
 
@@ -1215,14 +1112,14 @@ Expected result:
 - `startup.effectiveCompleted` is `true`
 
 Need help later?
-- [Appendix E: OpenClaw validation help](#appendix-e-openclaw-validation-help)
+- [Appendix D. OpenClaw and Telegram help](#appendix-d-openclaw-and-telegram-help)
 
-## 14. Validate With Telegram
+## 13. Validate Telegram and Voice Input End to End
 
 Purpose:
-- prove the full user-facing workflow works
+- prove the complete user-facing workflow works
 
-### 14.1 Startup check
+### 13.1 Telegram startup check
 
 ```bash
 openclaw gateway restart
@@ -1233,7 +1130,7 @@ Expected result:
 - the robot shows one startup greeting
 - the robot returns to idle
 
-### 14.2 Reply check
+### 13.2 Telegram reply check
 
 In Telegram:
 
@@ -1247,7 +1144,7 @@ Expected result:
 - Telegram still receives a normal text reply
 - the robot returns to idle after the reply
 
-### 14.3 Shutdown check
+### 13.3 Telegram shutdown check
 
 ```bash
 openclaw gateway stop
@@ -1259,19 +1156,192 @@ Expected result:
 - the robot shows the sleepy expression once
 - the display turns off after sleepy finishes
 
-### 14.4 Optional direct local checks
+### 13.4 Switch `pi5mic` into OpenClaw mode
 
 ```bash
 cd ~/NinjaClawBot
-uv run ninjaclawbot health-check
-uv run ninjaclawbot expression-tool
-uv run ninjaclawbot movement-tool
+uv run pi5mic mic-tool
+```
+
+Then choose:
+
+- `1. Run setup wizard`
+
+Recommended choices:
+
+- `Profile`: `openclaw`
+- `Input device`: your USB microphone or `default`
+- `Sample rate (Hz)`: accept the recommended value
+- `STT backend`: choose `whisper_cpp` or `gemini`
+- `Voice-input OpenClaw session strategy`: `agent_main`
+- `Maximum clip length`: start with `8`, `10`, or `12`
+- `Prepare always-on voice input now?`: choose `y` only if you want the
+  manual wake-word listener
+
+If you enable always-on voice input:
+
+- keep `Wake word` as `hey Ninja` unless you trained a different phrase
+- set `openWakeWord model path` to your custom `.onnx` or `.tflite` file
+- keep `Wake-word detection threshold` at `0.5` for the first test
+- keep `Wake-word VAD threshold` at `0`
+- keep `Enable openWakeWord noise suppression?` at `n` for the first test
+- keep `openWakeWord inference framework` at `auto`
+
+Expected result:
+
+- `pi5mic` auto-detects the local OpenClaw CLI, config file, gateway URL, and
+  session details when possible
+- if an older `mic.json` still uses `voice:local-mic`, `pi5mic` now repairs it
+  automatically to `voice-local-mic`
+- if OpenClaw Telegram is enabled, `pi5mic` looks for the most recent Telegram
+  chat or topic target from OpenClaw session data
+- if a Telegram target is found, the wizard asks whether OpenClaw should reply
+  both locally and in Telegram for voice turns
+- it prints a short summary of the detected OpenClaw settings
+- if everything is ready, it ends with:
+  - `OpenClaw voice handoff is ready.`
+
+### 13.5 Run the OpenClaw voice health check
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+```
+
+Expected result:
+
+- the selected STT backend is shown
+- the OpenClaw command and config path are shown
+- the delivery mode is shown
+- if Telegram mirroring is enabled, the saved reply target is shown
+- success ends with `pi5mic doctor passed.` or
+  `pi5mic doctor passed with warnings.`
+
+### 13.6 Run one OpenClaw voice turn
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic run --once
+```
+
+Expected result:
+
+- one short clip is recorded
+- the transcript is printed locally
+- the transcript is submitted to OpenClaw
+- the OpenClaw reply is printed locally
+- if dual delivery is enabled, the same reply also appears in Telegram
+
+### 13.7 If OpenClaw says `pairing required`
+
+Recommended fix:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+
+- choose `Profile: openclaw`
+- let the wizard auto-detect the OpenClaw settings
+- answer `y` if it asks:
+  - `Approve the newest local OpenClaw device request now?`
+
+Manual fallback:
+
+```bash
+openclaw devices approve --latest
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+### 13.8 If the OpenClaw reply only appears locally
+
+Recommended fix:
+
+1. Send one short message to your OpenClaw bot in the Telegram chat or topic
+   where you want voice replies to appear.
+2. Rerun:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+3. Choose `Profile: openclaw`.
+4. Answer `y` if setup asks:
+   - `Ask OpenClaw to reply both here and in Telegram?`
+5. Verify:
+
+```bash
+uv run pi5mic status
+uv run pi5mic doctor
+uv run pi5mic run --once
+```
+
+### 13.9 Test always-on OpenClaw listening in the foreground
+
+Use this only after `doctor` is clean.
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool foreground
+```
+
+Expected result:
+
+- the tool waits for `hey Ninja`
+- after the wake phrase, it records the spoken request
+- it stops recording after 3 seconds of silence or 10 seconds max
+- it prints the recognized transcript
+- it sends the original-language transcript to OpenClaw
+- OpenClaw prints the reply locally
+- if dual delivery is enabled, the same reply also appears in Telegram
+- while OpenClaw is still replying, the listener ignores new wake-word triggers
+  on purpose so one request cannot overlap another
+- after the reply finishes, the listener returns to waiting mode by itself
+
+### 13.10 Optional background always-on listener
+
+Start it:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool start
+```
+
+Check status:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool status
+```
+
+Stop it:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic voiceinput-tool stop
+```
+
+If you prefer to launch it from the robot package instead of directly from
+`pi5mic`, use the NinjaClawBot wrapper:
+
+```bash
+cd ~/NinjaClawBot
+uv run ninjaclawbot voiceinput-tool foreground
+# or:
+uv run ninjaclawbot voiceinput-tool start
+uv run ninjaclawbot voiceinput-tool status
+uv run ninjaclawbot voiceinput-tool stop
 ```
 
 If all of the above work, your NinjaClawBot build is ready.
 
 Need help later?
-- [Appendix E: OpenClaw validation help](#appendix-e-openclaw-validation-help)
+- [Appendix C. `pi5mic` and voice input help](#appendix-c-pi5mic-and-voice-input-help)
+- [Appendix D. OpenClaw and Telegram help](#appendix-d-openclaw-and-telegram-help)
 
 ## Appendix A. Raspberry Pi Setup Help
 
@@ -1286,6 +1356,8 @@ Need help later?
 - PWM pins not working:
   - recheck `/boot/firmware/config.txt`
   - reboot after editing
+- `PortAudio library not found`:
+  - install `libportaudio2` and `portaudio19-dev`
 
 ### Alternative commands
 
@@ -1295,34 +1367,7 @@ sudo apt install -y python3-pip python3-venv
 python3 --version
 ```
 
-## Appendix B. OpenClaw Setup Help
-
-### Troubleshooting
-
-- `openclaw doctor --fix` complains about unsupported keys:
-  - remove optional old NinjaClawBot config keys such as:
-    - `enableAlwaysOn`
-    - `enableStartupGreeting`
-    - `enableAutoThinking`
-    - `enableShutdownSequence`
-    - `plugins.entries.ninjaclawbot.hooks`
-- OpenClaw says `spawn uv ENOENT`:
-  - set `uvCommand` to the absolute result of `command -v uv`
-- startup greeting missing:
-  - check `boot-md`
-  - check workspace `BOOT.md`
-  - check `ninjaclawbot_diagnostics`
-
-### Alternative commands
-
-```bash
-openclaw plugins install -l ~/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin
-openclaw plugins info ninjaclawbot
-openclaw hooks list --verbose
-openclaw skills list --eligible
-```
-
-## Appendix C. Hardware Setup Help
+## Appendix B. Hardware and Local Test Help
 
 ### Troubleshooting
 
@@ -1341,6 +1386,11 @@ uv run ninjaclawbot health-check
 - servo behaves dangerously:
   - stop immediately
   - recalibrate with `servo-tool`
+- `expression-tool` opens but faces look wrong:
+  - export display config again to root `display.json`
+- `movement-tool` opens but movement is risky:
+  - do not run movements yet
+  - go back to `pi5servo servo-tool`
 
 ### Alternative commands
 
@@ -1350,24 +1400,6 @@ uv run pi5servo calib 12
 uv run pi5buzzer status --test
 uv run pi5disp demo
 uv run pi5vl53l0x status
-```
-
-## Appendix D. Local Test Help
-
-### Troubleshooting
-
-- `expression-tool` opens but faces look wrong:
-  - export display config again to root `display.json`
-- `movement-tool` opens but movement is risky:
-  - do not run movements yet
-  - go back to `pi5servo servo-tool`
-- `health-check` shows wrong display config path:
-  - rerun the display export command
-
-### Alternative commands
-
-```bash
-cd ~/NinjaClawBot
 uv run ninjaclawbot list-capabilities
 uv run ninjaclawbot perform-expression greeting
 uv run ninjaclawbot perform-reply --reply-state success "Finished"
@@ -1375,21 +1407,90 @@ uv run ninjaclawbot stop
 uv run ninjaclawbot stop-all
 ```
 
-## Appendix E. OpenClaw Validation Help
+## Appendix C. `pi5mic` and Voice Input Help
 
 ### Troubleshooting
 
-- `ninjaclawbot_diagnostics` says tool not found:
-  - add `ninjaclawbot_diagnostics` to the tool allowlist
-  - restart OpenClaw
+- `Gemini credentials are not configured`:
+  - export `GEMINI_API_KEY` or `GOOGLE_API_KEY`
+  - rerun `uv run pi5mic doctor`
+- `openWakeWord model file not found`:
+  - re-register the real `.onnx` or `.tflite` file with
+    `uv run pi5mic install openwakeword --model-path ...`
+- `Invalid sample rate`:
+  - rerun `uv run pi5mic setup`
+  - keep the same microphone
+  - accept the recommended sample rate
+- foreground mode shows overflow or no spoken command:
+  - keep the test command short
+  - say the command immediately after the wake phrase
+  - retest in foreground mode before using background mode
+- Raspberry Pi powers off or reboots during local Whisper transcription:
+  - run:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic doctor
+vcgencmd get_throttled
+vcgencmd measure_temp
+```
+
+Then:
+
+- use a known-good Raspberry Pi 5 power supply
+- improve cooling
+- shorten the maximum clip length
+- lower `whisper.cpp` thread count
+- or switch to Gemini if local transcription is too heavy
+
+### Useful concepts
+
+- `whisper.cpp`:
+  - the default local speech-to-text backend
+  - it transcribes recorded WAV audio on the Raspberry Pi
+- Gemini API key:
+  - the secret used when `pi5mic` sends audio to Google’s Gemini API
+- `openWakeWord`:
+  - the wake-word engine used by the always-on listener
+  - it detects the wake phrase but does not transcribe the full command
+- `.onnx` and `.tflite`:
+  - both are local AI model file formats used for the custom wake-word model
+
+### Extra references
+
+- [pi5mic/README.md](pi5mic/README.md)
+- [openWakeWord GitHub](https://github.com/dscripka/openWakeWord)
+- [whisper.cpp GitHub](https://github.com/ggml-org/whisper.cpp)
+
+## Appendix D. OpenClaw and Telegram Help
+
+### Troubleshooting
+
+- `openclaw doctor --fix` complains about unsupported keys:
+  - remove optional old NinjaClawBot config keys such as:
+    - `enableAlwaysOn`
+    - `enableStartupGreeting`
+    - `enableAutoThinking`
+    - `enableShutdownSequence`
+- OpenClaw says `spawn uv ENOENT`:
+  - set `uvCommand` to the absolute result of `command -v uv`
+- startup greeting missing:
+  - check `boot-md`
+  - check workspace `BOOT.md`
+  - check `ninjaclawbot_diagnostics`
+- OpenClaw says `pairing required`:
+  - approve the newest local request
+- OpenClaw says `Invalid session ID`:
+  - rerun `pi5mic setup` so the session value is repaired
 - robot reacts but Telegram has no text reply:
   - recheck workspace `AGENTS.md`
   - make sure it says:
     - first animate the robot
     - then send the normal visible text reply
-- shutdown works but startup does not:
-  - recheck `boot-md`
-  - recheck workspace `BOOT.md`
+- voice replies stay local:
+  - send one short Telegram message to the target chat or topic
+  - rerun `pi5mic setup`
+  - enable local plus Telegram reply delivery
 - normal log follow is blocked:
   - use the raw log file
 
@@ -1397,18 +1498,24 @@ uv run ninjaclawbot stop-all
 
 ```bash
 tail -f "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)"
-grep -iE 'ninjaclawbot_reply|ninjaclawbot_diagnostics|boot-md|telegram' "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)" | tail -n 50
+grep -iE 'ninjaclawbot_reply|ninjaclawbot_diagnostics|boot-md|telegram|pi5mic' "$(ls -t /tmp/openclaw/openclaw-*.log | head -n1)" | tail -n 50
 ```
 
 ### Alternative commands
 
 ```bash
+openclaw plugins install -l ~/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin
+openclaw plugins info ninjaclawbot
+openclaw hooks list --verbose
+openclaw hooks info boot-md
+openclaw skills list --eligible
 openclaw gateway restart
 openclaw gateway stop
 openclaw gateway status
+openclaw devices approve --latest
 ```
 
-## Appendix F. Sanitized `openclaw.json` Example
+## Appendix E. Sanitized `openclaw.json` Example
 
 Use this only as a reference shape. Do not overwrite your own real file blindly.
 
@@ -1598,6 +1705,7 @@ Replace placeholders with your own values.
 
 Optional note:
 
-- If you also want local models later, you can add a separate `models.providers.ollama` block.
-- That block is optional.
-- The active model still comes from `agents.defaults.model.primary`.
+- if you also want local models later, you can add a separate
+  `models.providers.ollama` block
+- that block is optional
+- the active model still comes from `agents.defaults.model.primary`
