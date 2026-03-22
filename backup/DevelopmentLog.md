@@ -3190,3 +3190,71 @@ Follow-up:
 - if desired, mirror the same phased installation structure into the root
   `README.md` quick-start section later so the high-level and detailed guides
   feel even more consistent
+
+## 2026-03-22 - Root `README.md` and `DevelopmentGuide.md` audience-focused rewrite
+
+Summary:
+
+- rewrote the top-level `README.md` for end users and rebuilt
+  `DevelopmentGuide.md` for developers and maintainers so the two documents now
+  serve clearer, separate purposes while staying aligned with the current
+  Raspberry Pi 5, OpenClaw, and `pi5mic` build
+
+Implementation changes:
+
+- replaced the old top-level [README.md](../README.md) with a more structured
+  end-user introduction that now focuses on:
+  - project overview and goals
+  - what users can expect from the workspace
+  - system-at-a-glance hardware and software summaries
+  - a clearer package map
+  - explicit "choose your path" guidance
+  - a shorter quick-start path that routes users to the correct detailed guide
+  - more parallel English, Japanese, and Traditional Chinese sections
+- replaced the old [DevelopmentGuide.md](../DevelopmentGuide.md) with a cleaner
+  maintainer reference organized around:
+  - project specification
+  - architecture and runtime boundaries
+  - repository and package ownership
+  - curated repository structure
+  - public CLI, action, and OpenClaw tool surfaces
+  - configuration and runtime files
+  - development workflow
+  - validation gates
+  - Raspberry Pi validation model
+  - maintenance guidance
+  - bug triage and troubleshooting shortcuts
+- removed the oversized static file-tree emphasis from the previous developer
+  guide and replaced it with a smaller curated structure plus clearer ownership
+  tables
+- reduced install-detail duplication in the root README by directing detailed
+  build work to [InstallationGuide.md](../InstallationGuide.md) and package
+  READMEs instead of repeating long setup sections there
+
+Documentation updates:
+
+- updated [README.md](../README.md)
+- updated [DevelopmentGuide.md](../DevelopmentGuide.md)
+
+Validation:
+
+- `git diff --check -- README.md`
+- `uv run ninjaclawbot --help`
+- `uv run pi5mic --help`
+- `git diff --check -- DevelopmentGuide.md`
+- `uv run ninjaclawbot --help`
+- `uv run pi5servo --help`
+- `uv run pi5disp --help`
+- `uv run pi5buzzer --help`
+- `uv run pi5mic --help`
+- `uv run pi5vl53l0x --help`
+
+Raspberry Pi validation status:
+
+- not required for this pass because the change is documentation only
+
+Follow-up:
+
+- if desired, apply the same audience-and-navigation cleanup next to the
+  package-level `ninjaclawbot/README.md` so the integrated runtime guide mirrors
+  the new top-level documentation structure even more closely

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**Developer Reference for the Final Validated NinjaClawBot Build**
+**Developer and maintainer reference for the NinjaClawBot workspace**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python Workspace](https://img.shields.io/badge/workspace-uv-blue.svg)](https://docs.astral.sh/uv/)
@@ -17,428 +17,290 @@
 
 ## Contents
 
-- [Project summary](#project-summary)
-- [Repository map](#repository-map)
-- [Complete file structure](#complete-file-structure)
-- [Library guides](#library-guides)
-- [Validated runtime model](#validated-runtime-model)
-- [ninjaclawbot package map](#ninjaclawbot-package-map)
-- [OpenClaw plugin map](#openclaw-plugin-map)
-- [Action surface](#action-surface)
-- [Main commands](#main-commands)
-- [Runtime files](#runtime-files)
-- [Development workflow](#development-workflow)
-- [Validation gates](#validation-gates)
-- [Raspberry Pi validation](#raspberry-pi-validation)
-- [Troubleshooting shortcuts](#troubleshooting-shortcuts)
+- [Purpose And Audience](#purpose-and-audience)
+- [Project Specification](#project-specification)
+- [Architecture At A Glance](#architecture-at-a-glance)
+- [Repository And Package Map](#repository-and-package-map)
+- [Curated Structure](#curated-structure)
+- [Ownership And Runtime Boundaries](#ownership-and-runtime-boundaries)
+- [Main Runtime Flows](#main-runtime-flows)
+- [Public Surfaces](#public-surfaces)
+- [Configuration And Runtime Files](#configuration-and-runtime-files)
+- [Development Workflow](#development-workflow)
+- [Validation Matrix](#validation-matrix)
+- [Raspberry Pi Validation Model](#raspberry-pi-validation-model)
+- [Maintenance And Extension Guidelines](#maintenance-and-extension-guidelines)
+- [Bug Triage Map](#bug-triage-map)
+- [Troubleshooting Shortcuts](#troubleshooting-shortcuts)
 
-## Project Summary
+## Purpose And Audience
 
-This repository contains the full NinjaClawBot software workspace.
+This document is for developers and maintainers.
 
-Think of it in three layers:
+Use it when you need to:
 
-1. standalone Raspberry Pi 5 hardware libraries
-2. the integrated robot layer `ninjaclawbot`
-3. the OpenClaw integration layer
+- understand the repository layout
+- choose the correct package or layer for a fix
+- locate the main command and API surfaces
+- validate a change safely
+- diagnose integration issues between the hardware libraries, `ninjaclawbot`, and OpenClaw
 
-If you only need a hardware driver, open the matching library README first.
-If you need the full robot behavior, start from `ninjaclawbot`.
-If you need chat-driven behavior, start from the OpenClaw plugin and the root installation guide.
+Use other docs when your goal is different:
 
-## Repository Map
+- start with [README.md](README.md) for a project introduction
+- start with [InstallationGuide.md](InstallationGuide.md) for a full Raspberry Pi build
+- start with the package README in `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x`, or `ninjaclawbot` if you are only touching one package
 
-Top-level folders you will work with most often:
+## Project Specification
 
-- [ninjaclawbot](ninjaclawbot): integrated robot package
-- [pi5servo](pi5servo): servo driver and calibration tooling
-- [pi5disp](pi5disp): display driver and display tooling
-- [pi5buzzer](pi5buzzer): buzzer driver and sound tooling
-- [pi5mic](pi5mic): microphone capture, STT, and OpenClaw handoff tooling
-- [pi5vl53l0x](pi5vl53l0x): distance sensor driver and sensor tooling
-- [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin): official OpenClaw plugin
-- [ninjaclawbot_data](ninjaclawbot_data): saved movement and expression assets
-- [InstallationGuide.md](InstallationGuide.md): end-user deployment guide
-- [README.md](README.md): project introduction
-- [backup/README.md](backup/README.md): archived plans and logs
+The current repository targets this validated direction:
 
-Root workspace facts:
+| Area | Current expectation |
+| --- | --- |
+| Development host | macOS or similar desktop environment |
+| Deployment target | Raspberry Pi 5 |
+| Python | 3.11+ |
+| Workspace manager | `uv` |
+| Robot runtime | `ninjaclawbot` |
+| Hardware packages | `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x` |
+| Chat integration | OpenClaw plugin + workspace `BOOT.md` / `AGENTS.md` |
+| Voice input | `pi5mic`, manual start, optional always-on listener |
 
-- the root `pyproject.toml` installs the whole workspace in one step
-- `uv sync --extra dev` from the repository root is the normal install path
-- root tests cover all Python libraries together
+Important design rules:
 
-## Complete File Structure
+1. Each `pi5*` library should be usable and testable on its own.
+2. `ninjaclawbot` composes the libraries into one robot runtime.
+3. The OpenClaw plugin owns the bridge and chat-facing tool layer.
+4. `pi5mic` owns microphone capture, STT selection, and the optional always-on voice-input loop.
+5. Voice input is manual-start for safety and privacy. It is not an automatic background service by default.
 
-This is the current development-facing repository layout for the final validated build.
+## Architecture At A Glance
 
-Generated folders such as local virtual environments, `node_modules`, cache folders, and other machine-local artifacts are intentionally left out here so the structure stays useful for real development work.
+```mermaid
+flowchart LR
+    USER["User / Telegram / Local CLI"] --> OC["OpenClaw Gateway"]
+    USER --> MIC["pi5mic CLI / voiceinput-tool"]
+    MIC --> STT["STT backend<br/>whisper.cpp or Gemini"]
+    STT --> OC
+    OC --> PLUGIN["OpenClaw plugin<br/>ninjaclawbot-plugin"]
+    PLUGIN --> BRIDGE["Persistent bridge"]
+    BRIDGE --> CORE["ninjaclawbot runtime"]
+    CORE --> SERVO["pi5servo"]
+    CORE --> DISP["pi5disp"]
+    CORE --> BUZZER["pi5buzzer"]
+    CORE --> SENSOR["pi5vl53l0x"]
+    CORE --> PRES["robot presence / expressions"]
+```
+
+Think of the system as three layers:
+
+1. **Standalone hardware libraries**
+   Each `pi5*` package owns direct device interaction and its own setup/testing tool.
+
+2. **Integrated robot layer**
+   `ninjaclawbot` composes the packages into actions, expressions, movements, and persistent robot presence.
+
+3. **OpenClaw integration layer**
+   The plugin exposes robot tools to the OpenClaw gateway and keeps the bridge healthy during chat-driven operation.
+
+## Repository And Package Map
+
+| Path | Role | First place to look |
+| --- | --- | --- |
+| `README.md` | End-user introduction and navigation | New users |
+| `InstallationGuide.md` | Full Raspberry Pi and OpenClaw deployment guide | End-to-end build work |
+| `DevelopmentGuide.md` | Developer and maintainer reference | Architecture, validation, triage |
+| `backup/DevelopmentLog.md` | Chronological change archive | What changed and why |
+| `ninjaclawbot/` | Integrated robot runtime | Robot actions, expressions, assets |
+| `pi5servo/` | Servo driver package | Servo issues, calibration, motion |
+| `pi5disp/` | Display driver package | Display setup and rendering |
+| `pi5buzzer/` | Buzzer driver package | Sound and buzzer behavior |
+| `pi5mic/` | Microphone and voice input package | STT, voice flow, OpenClaw voice handoff |
+| `pi5vl53l0x/` | Distance sensor package | I2C and range sensing |
+| `integrations/openclaw/ninjaclawbot-plugin/` | OpenClaw plugin | Tool exposure, diagnostics, lifecycle hooks |
+| `ninjaclawbot_data/` | Saved expressions and movements | Content assets |
+
+## Curated Structure
+
+This is the developer-facing repository shape you will use most often.
 
 ```text
 NinjaClawBot/
-├── AGENTS.md
 ├── README.md
-├── DevelopmentGuide.md
 ├── InstallationGuide.md
+├── DevelopmentGuide.md
 ├── LICENSE
 ├── pyproject.toml
 ├── uv.lock
-├── conftest.py
-├── src/
-│   └── ninjaclawbot_workspace/
-│       └── __init__.py
-├── .agents/
-│   └── skills/
-│       ├── ninjaclawbot-implementation/
-│       │   └── SKILL.md
-│       ├── pi-validation/
-│       │   └── SKILL.md
-│       └── project-documentation/
-│           └── SKILL.md
 ├── backup/
 │   ├── README.md
-│   ├── DevelopmentLog.md
-│   ├── EnhancementPlan.md
-│   └── developmentPlan.md
+│   └── DevelopmentLog.md
 ├── ninjaclawbot/
-│   ├── LICENSE
 │   ├── README.md
 │   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── ninjaclawbot_data/
+│   ├── src/ninjaclawbot/
+│   │   ├── __main__.py
+│   │   ├── actions.py
+│   │   ├── adapters.py
+│   │   ├── assets.py
+│   │   ├── config.py
+│   │   ├── executor.py
+│   │   ├── presence.py
+│   │   ├── runtime.py
+│   │   ├── cli/
 │   │   ├── expressions/
-│   │   └── movements/
-│   ├── src/
-│   │   └── ninjaclawbot/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── actions.py
-│   │       ├── adapters.py
-│   │       ├── assets.py
-│   │       ├── config.py
-│   │       ├── errors.py
-│   │       ├── executor.py
-│   │       ├── locks.py
-│   │       ├── presence.py
-│   │       ├── results.py
-│   │       ├── runtime.py
-│   │       ├── cli/
-│   │       │   ├── __init__.py
-│   │       │   ├── common.py
-│   │       │   ├── expression_tool.py
-│   │       │   └── movement_tool.py
-│   │       ├── expressions/
-│   │       │   ├── __init__.py
-│   │       │   ├── catalog.py
-│   │       │   ├── faces.py
-│   │       │   ├── player.py
-│   │       │   ├── policy.py
-│   │       │   └── sounds.py
-│   │       └── openclaw/
-│   │           ├── __init__.py
-│   │           ├── bridge.py
-│   │           └── service.py
+│   │   └── openclaw/
 │   └── tests/
-│       ├── test_actions.py
-│       ├── test_adapters.py
-│       ├── test_assets.py
-│       ├── test_cli_tools.py
-│       ├── test_dependency_imports.py
-│       ├── test_executor.py
-│       ├── test_expressions.py
-│       ├── test_openclaw_bridge.py
-│       ├── test_policy.py
-│       ├── test_repo_hygiene.py
-│       ├── test_results.py
-│       └── test_runtime.py
+├── pi5servo/
+│   ├── README.md
+│   ├── src/pi5servo/
+│   └── tests/
+├── pi5disp/
+│   ├── README.md
+│   ├── src/pi5disp/
+│   └── tests/
+├── pi5buzzer/
+│   ├── README.md
+│   ├── src/pi5buzzer/
+│   └── tests/
+├── pi5mic/
+│   ├── README.md
+│   ├── src/pi5mic/
+│   │   ├── __main__.py
+│   │   ├── cli/
+│   │   ├── config/
+│   │   ├── core/
+│   │   ├── install/
+│   │   ├── integration/
+│   │   ├── stt/
+│   │   ├── transport/
+│   │   ├── vad/
+│   │   └── wakeword/
+│   └── tests/
+├── pi5vl53l0x/
+│   ├── README.md
+│   ├── src/pi5vl53l0x/
+│   └── tests/
 ├── ninjaclawbot_data/
 │   ├── expressions/
 │   └── movements/
-├── pi5servo/
-│   ├── LICENSE
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── src/
-│   │   └── pi5servo/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── driver.py
-│   │       ├── cli/
-│   │       ├── config/
-│   │       ├── core/
-│   │       ├── motion/
-│   │       └── parser/
-│   └── tests/
-│       ├── __init__.py
-│       ├── conftest.py
-│       ├── test_backend.py
-│       ├── test_cli.py
-│       ├── test_config.py
-│       ├── test_core.py
-│       ├── test_motion.py
-│       ├── test_parser.py
-│       └── test_servo_tool.py
-├── pi5disp/
-│   ├── LICENSE
-│   ├── README.md
-│   ├── display.json
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── src/
-│   │   └── pi5disp/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── cli/
-│   │       ├── config/
-│   │       ├── core/
-│   │       ├── effects/
-│   │       └── fonts/
-│   └── tests/
-│       ├── conftest.py
-│       ├── test_cli.py
-│       ├── test_config.py
-│       ├── test_display_tool.py
-│       ├── test_driver.py
-│       ├── test_renderer.py
-│       ├── test_smoke.py
-│       └── test_text_ticker.py
-├── pi5buzzer/
-│   ├── LICENSE
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── src/
-│   │   └── pi5buzzer/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── driver.py
-│   │       ├── notes.py
-│   │       ├── cli/
-│   │       ├── config/
-│   │       └── core/
-│   └── tests/
-│       ├── conftest.py
-│       ├── test_config.py
-│       ├── test_driver.py
-│       └── test_music.py
-├── pi5vl53l0x/
-│   ├── LICENSE
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── uv.lock
-│   ├── src/
-│   │   └── pi5vl53l0x/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── driver.py
-│   │       ├── registers.py
-│   │       ├── cli/
-│   │       ├── config/
-│   │       └── core/
-│   └── tests/
-│       ├── test_cli.py
-│       ├── test_config.py
-│       ├── test_i2c.py
-│       └── test_sensor.py
-├── pi5mic/
-│   ├── LICENSE
-│   ├── README.md
-│   ├── pyproject.toml
-│   ├── src/
-│   │   └── pi5mic/
-│   │       ├── __init__.py
-│   │       ├── __main__.py
-│   │       ├── driver.py
-│   │       ├── cli/
-│   │       ├── config/
-│   │       ├── core/
-│   │       ├── install/
-│   │       ├── integration/
-│   │       ├── stt/
-│   │       ├── transport/
-│   │       ├── vad/
-│   │       └── wakeword/
-│   └── tests/
-│       ├── test_cli.py
-│       ├── test_config.py
-│       ├── test_doctor.py
-│       ├── test_listener.py
-│       ├── test_mic_tool.py
-│       ├── test_recorder.py
-│       ├── test_stt_gemini.py
-│       ├── test_stt_whisper_cpp.py
-│       ├── test_transport_openclaw.py
-│       ├── test_vad.py
-│       └── test_wakeword.py
-└── integrations/
-    └── openclaw/
-        └── ninjaclawbot-plugin/
-            ├── openclaw.plugin.json
-            ├── package.json
-            ├── package-lock.json
-            ├── tsconfig.json
-            ├── src/
-            │   ├── index.ts
-            │   ├── runner.ts
-            │   └── schemas.ts
-            ├── tests/
-            │   ├── index.test.ts
-            │   └── runner.test.ts
-            └── skills/
-                └── ninjaclawbot_control/
-                    └── SKILL.md
+└── integrations/openclaw/ninjaclawbot-plugin/
+    ├── openclaw.plugin.json
+    ├── src/
+    └── tests/
 ```
 
-## Library Guides
+## Ownership And Runtime Boundaries
 
-Use these first if you are touching one hardware area only:
+| Layer | Owns | Does not own |
+| --- | --- | --- |
+| `pi5servo` | Servo endpoints, calibration, movement hardware behavior | High-level robot conversation logic |
+| `pi5disp` | Display driver, display config, display rendering | Reply policy or Telegram flow |
+| `pi5buzzer` | Tone generation and buzzer playback | OpenClaw bridge behavior |
+| `pi5vl53l0x` | Distance sensor access and sensor diagnostics | Robot expression policy |
+| `pi5mic` | Recording, STT, OpenClaw voice handoff, always-on listener | Main text-chat bridge ownership |
+| `ninjaclawbot` | Integrated actions, expressions, asset playback, persistent idle/listening/thinking states | Direct microphone streaming loop |
+| OpenClaw plugin | Lifecycle hooks, bridge startup, tool registration, diagnostics | Hardware drivers themselves |
 
-- Servo: [pi5servo/README.md](pi5servo/README.md)
-- Display: [pi5disp/README.md](pi5disp/README.md)
-- Buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
-- Distance sensor: [pi5vl53l0x/README.md](pi5vl53l0x/README.md)
-- Microphone: [pi5mic/README.md](pi5mic/README.md)
-- Integrated robot layer: [ninjaclawbot/README.md](ninjaclawbot/README.md)
+Important practical rules:
 
-What each README is best for:
+- If only one hardware module is wrong, start in the matching `pi5*` package.
+- If an action or expression is wrong, start in `ninjaclawbot`.
+- If the robot behaves correctly locally but not through chat, start in the OpenClaw plugin and deployment files.
+- If the microphone records correctly but voice-to-OpenClaw flow is wrong, start in `pi5mic`, not in the plugin.
 
-- `pi5servo`: endpoint model, calibration, backend selection, safe movement testing
-- `pi5disp`: display wiring, brightness, rotation, `display-tool`, and config export
-- `pi5buzzer`: buzzer initialization, tones, emotion sounds, `buzzer-tool`
-- `pi5vl53l0x`: I2C checks, calibration, `sensor-tool`
-- `pi5mic`: microphone setup, `whisper.cpp` default STT, optional Gemini, `run`, `mic-tool`, manual `voiceinput-tool`, OpenClaw auto-setup, and optional local-plus-Telegram voice reply mirroring
-- `ninjaclawbot`: integrated commands, assets, OpenClaw-facing usage
+## Main Runtime Flows
 
-## Validated Runtime Model
+### Local hardware tool flow
 
-The final validated build is hybrid. That matters for future development.
+1. A package CLI such as `pi5servo servo-tool` or `pi5disp display-tool` loads its package config.
+2. The tool calls package-local driver and core modules.
+3. The tool saves or exports package config and assets.
+4. `ninjaclawbot` later reuses that config or those assets.
 
-### What owns what
+### Local integrated robot flow
 
-- Standalone driver libraries own direct hardware behavior
-- `pi5mic` owns local microphone capture, STT selection, OpenClaw auto-discovery, Telegram reply-target discovery for voice turns, the optional always-on wake-word listener, and the preview OpenClaw voice handoff
-- `ninjaclawbot` owns runtime composition, assets, expressions, and structured actions
-- `ninjaclawbot` may expose convenience wrappers such as `voiceinput-tool`, but it does not own the microphone runtime
-- the OpenClaw plugin owns the persistent bridge and diagnostics/operator-facing status surface
-- startup greeting is validated through:
-  - OpenClaw internal `boot-md`
-  - workspace `BOOT.md`
-- reply reliability is validated through:
-  - workspace `AGENTS.md`
-  - enabled `ninjaclawbot_control` skill
-  - tool allowlist in `openclaw.json`
-- shutdown is validated through the plugin-managed persistent bridge
+1. `uv run ninjaclawbot ...` enters `ninjaclawbot/src/ninjaclawbot/__main__.py`.
+2. CLI helpers build an executor from the root project directory.
+3. `ActionRequest` validates the action name and parameters.
+4. `executor.py` dispatches to the runtime.
+5. `runtime.py` calls the standalone packages through adapters.
 
-### What this means in practice
+### OpenClaw text flow
 
-- do not assume the Python service `startup_sequence()` is the only startup path
-- do not assume `pi5mic` is already a fully validated always-on voice daemon; the current build is a manual-start preview path with package tests passing
-- do not auto-start voice input from the plugin or from `ninjaclawbot`; manual start and manual stop are the current safety model
-- do not assume plugin config alone makes replies work
-- when debugging reply behavior, always check:
-  - allowlist
-  - skill
-  - workspace `AGENTS.md`
-- when debugging startup greeting, always check:
-  - `boot-md`
-  - workspace `BOOT.md`
-  - `ninjaclawbot_diagnostics`
+1. A user sends a message through Telegram or another OpenClaw channel.
+2. OpenClaw selects the NinjaClawBot tool path.
+3. The plugin forwards the tool call through the persistent bridge.
+4. `ninjaclawbot` animates the robot and returns structured output.
+5. OpenClaw still sends the normal visible text reply after the robot action.
 
-## ninjaclawbot Package Map
+### `pi5mic` voice flow
 
-Main source folder:
+1. `voiceinput-tool` or `run --once` captures audio locally.
+2. `pi5mic` sends the audio to `whisper.cpp` or Gemini.
+3. `pi5mic` sends the original-language transcript to OpenClaw.
+4. OpenClaw replies through the normal agent path.
+5. The listener stays single-flight and uses this state sequence:
 
-- [ninjaclawbot/src/ninjaclawbot](ninjaclawbot/src/ninjaclawbot)
+`LISTENING -> TRANSCRIBING -> DISPATCHING -> WAITING_FOR_REPLY -> COOLDOWN`
 
-Important modules:
+During this sequence, new wake words are intentionally ignored so multiple voice requests cannot overlap.
 
-- [actions.py](ninjaclawbot/src/ninjaclawbot/actions.py)
-  - stable machine action names
-  - request validation
-  - required parameter checks
-- [executor.py](ninjaclawbot/src/ninjaclawbot/executor.py)
-  - dispatches validated actions into runtime operations
-- [runtime.py](ninjaclawbot/src/ninjaclawbot/runtime.py)
-  - owns adapters, lifecycle cleanup, and runtime state
-- [adapters.py](ninjaclawbot/src/ninjaclawbot/adapters.py)
-  - bridges `ninjaclawbot` to the standalone `pi5*` libraries
-- [assets.py](ninjaclawbot/src/ninjaclawbot/assets.py)
-  - saved movement and expression asset loading
-- [presence.py](ninjaclawbot/src/ninjaclawbot/presence.py)
-  - persistent presence modes: `idle`, `thinking`, `listening`
-- [locks.py](ninjaclawbot/src/ninjaclawbot/locks.py)
-  - runtime execution locking and overlap protection
-- [config.py](ninjaclawbot/src/ninjaclawbot/config.py)
-  - root-level config paths and runtime path resolution
-- [results.py](ninjaclawbot/src/ninjaclawbot/results.py)
-  - structured action results
-- [errors.py](ninjaclawbot/src/ninjaclawbot/errors.py)
-  - typed runtime and validation errors
+## Public Surfaces
 
-### CLI modules
+### `ninjaclawbot` CLI
 
-- [__main__.py](ninjaclawbot/src/ninjaclawbot/__main__.py)
-  - main CLI entrypoint
-  - commands such as `health-check`, `perform-reply`, `run-action`, `openclaw-serve`, and the optional `voiceinput-tool` wrapper
-- [cli/common.py](ninjaclawbot/src/ninjaclawbot/cli/common.py)
-  - shared CLI helpers
-- [cli/expression_tool.py](ninjaclawbot/src/ninjaclawbot/cli/expression_tool.py)
-  - interactive expression preview and management
-- [cli/movement_tool.py](ninjaclawbot/src/ninjaclawbot/cli/movement_tool.py)
-  - interactive movement preview and management
+Command source: `ninjaclawbot/src/ninjaclawbot/__main__.py`
 
-### Expression system
+| Command | Purpose |
+| --- | --- |
+| `health-check` | Run an integrated hardware availability check |
+| `list-assets` | List saved movement and expression assets |
+| `list-capabilities` | Show supported actions, reply states, and asset types |
+| `run-action` | Execute a JSON action payload |
+| `move-servos` | Move servos using `movement-tool` style endpoint syntax |
+| `perform-movement` | Run a saved movement asset |
+| `perform-reply` | Run the built-in reply-emotion pipeline |
+| `perform-expression` | Run a saved or built-in expression |
+| `set-idle` | Start the persistent idle expression |
+| `stop-expression` | Stop the active expression loop |
+| `expression-tool` | Interactive expression creation and preview |
+| `movement-tool` | Interactive movement creation and preview |
+| `voiceinput-tool` | Optional wrapper around `pi5mic voiceinput-tool` |
 
-- [expressions/catalog.py](ninjaclawbot/src/ninjaclawbot/expressions/catalog.py)
-  - built-in expression definitions
-- [expressions/faces.py](ninjaclawbot/src/ninjaclawbot/expressions/faces.py)
-  - built-in face frames
-- [expressions/sounds.py](ninjaclawbot/src/ninjaclawbot/expressions/sounds.py)
-  - built-in sound patterns
-- [expressions/policy.py](ninjaclawbot/src/ninjaclawbot/expressions/policy.py)
-  - reply-state mapping such as `greeting`, `thinking`, `success`, `error`
-- [expressions/player.py](ninjaclawbot/src/ninjaclawbot/expressions/player.py)
-  - expression playback, presence mode, idle reset, and shutdown sequencing
+### `pi5mic` CLI
 
-### OpenClaw bridge internals
+Command source: `pi5mic/src/pi5mic/__main__.py`
 
-- [openclaw/service.py](ninjaclawbot/src/ninjaclawbot/openclaw/service.py)
-  - persistent Python bridge service
-  - service-side arbitration and dedupe
-- [openclaw/bridge.py](ninjaclawbot/src/ninjaclawbot/openclaw/bridge.py)
-  - stdio request/response bridge transport
+| Command | Purpose |
+| --- | --- |
+| `devices` | List available microphone input devices |
+| `record` | Record a bounded WAV file |
+| `transcribe` | Transcribe an existing audio file |
+| `run` | Run one configured standalone or OpenClaw microphone cycle |
+| `setup` | Guided configuration wizard |
+| `doctor` | Check config, microphone readiness, STT, voice-input readiness, and OpenClaw handoff |
+| `status` | Show current config and readiness summary |
+| `mic-tool` | Guided menu for common setup and testing tasks |
+| `voiceinput-tool` | Manual always-on listener controls |
+| `install whispercpp` | Register the local `whisper.cpp` backend |
+| `install openwakeword` | Register the wake-word model path and runtime assets |
+| `config show/export/import` | Manage `mic.json` files |
 
-## OpenClaw Plugin Map
+### Other `pi5*` interactive tools
 
-Plugin folder:
+| Package | Tool | Purpose |
+| --- | --- | --- |
+| `pi5servo` | `servo-tool` | Servo setup, calibration, safe motion tests |
+| `pi5disp` | `display-tool` | Display setup, preview, and config export |
+| `pi5buzzer` | `buzzer-tool` | Tone and sound testing |
+| `pi5vl53l0x` | `sensor-tool` | Distance sensor verification |
 
-- [integrations/openclaw/ninjaclawbot-plugin](integrations/openclaw/ninjaclawbot-plugin)
+### Stable robot action surface
 
-Important files:
+Action source: `ninjaclawbot/src/ninjaclawbot/actions.py`
 
-- [src/index.ts](integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
-  - registers plugin lifecycle hooks and tool definitions
-- [src/runner.ts](integrations/openclaw/ninjaclawbot-plugin/src/runner.ts)
-  - bridge management
-  - deployment inspection
-  - diagnostics generation
-- [src/schemas.ts](integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts)
-  - tool parameter schemas
-- [openclaw.plugin.json](integrations/openclaw/ninjaclawbot-plugin/openclaw.plugin.json)
-  - plugin metadata and config schema
-- [skills/ninjaclawbot_control/SKILL.md](integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
-  - OpenClaw skill guidance for tool use
-
-Important rule:
-
-- `ninjaclawbot_reply` animates the robot first
-- OpenClaw should still send the normal visible text reply to the user after that tool call
-
-## Action Surface
-
-The machine action surface is defined in [actions.py](ninjaclawbot/src/ninjaclawbot/actions.py).
-
-### Stable action names
+Stable action names:
 
 - `health_check`
 - `list_capabilities`
@@ -457,90 +319,64 @@ The machine action surface is defined in [actions.py](ninjaclawbot/src/ninjaclaw
 - `list_assets`
 - `stop_all`
 
-### Required parameters
+Important required parameters:
 
-| Action | Required parameters | Notes |
+| Action | Required parameters |
+| --- | --- |
+| `move_servos` | `targets` |
+| `perform_movement` | `name` |
+| `perform_reply` | `text`, `reply_state` |
+| `display_text` | `text` |
+| `perform_expression` | `name` |
+| `set_presence_mode` | `mode` |
+
+### OpenClaw plugin tool surface
+
+Tool source: `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
+
+| Tool | Purpose |
+| --- | --- |
+| `ninjaclawbot_reply` | Animate a conversational reply, then let OpenClaw send the visible text reply |
+| `ninjaclawbot_perform_expression` | Run a saved or built-in expression |
+| `ninjaclawbot_perform_movement` | Run a saved movement asset |
+| `ninjaclawbot_move_servos` | Move servos directly |
+| `ninjaclawbot_read_distance` | Read the current distance value |
+| `ninjaclawbot_health` | Run a hardware health check |
+| `ninjaclawbot_voiceinput_status` | Report whether optional `pi5mic` voice input is installed and ready |
+| `ninjaclawbot_capabilities` | List supported actions and assets |
+| `ninjaclawbot_set_idle` | Start the idle face |
+| `ninjaclawbot_diagnostics` | Inspect bridge health and deployment readiness |
+| `ninjaclawbot_stop` | Stop the active expression loop |
+| `ninjaclawbot_stop_all` | Stop all active robot outputs |
+
+Also exposed:
+
+- gateway method `ninjaclawbot.presence.set` for presence updates used by `pi5mic` and the plugin lifecycle path
+
+## Configuration And Runtime Files
+
+| File | Owner | Purpose |
 | --- | --- | --- |
-| `move_servos` | `targets` | `per_servo_speeds` is optional; valid speed values are `S`, `M`, `F` |
-| `perform_movement` | `name` | runs a saved movement asset |
-| `perform_reply` | `text`, `reply_state` | optional `display_text`, `idle_reset`, `sound_enabled` |
-| `display_text` | `text` | plain display output |
-| `perform_expression` | `name` | saved or built-in expression name |
-| `set_presence_mode` | `mode` | valid modes: `idle`, `thinking`, `listening` |
-| `list_assets` | none | optional `asset_type`: `all`, `movements`, `expressions` |
-| all others above | none | no required parameters |
+| `pyproject.toml` | root workspace | Installs the whole workspace |
+| `uv.lock` | root workspace | Locked dependency graph |
+| `servo.json` | root project | Servo runtime config |
+| `display.json` | root project | Display config used by `ninjaclawbot` |
+| `buzzer.json` | root project | Buzzer runtime config |
+| `vl53l0x.json` | root project | Distance sensor config |
+| `mic.json` | root project or standalone `pi5mic` directory | Microphone, STT, OpenClaw, and voice-input config |
+| `ninjaclawbot_data/movements/*.json` | root project | Saved motion assets |
+| `ninjaclawbot_data/expressions/*.json` | root project | Saved expression assets |
+| `BOOT.md` | root workspace | Startup greeting and session boot guidance |
+| `AGENTS.md` | root workspace | Tool and behavior instructions for OpenClaw/Codex-style agents |
+| `~/.openclaw/openclaw.json` | OpenClaw install | Gateway, plugins, skills, allowlist, and deployment config |
+| `.pi5mic-voiceinput-state.json` | `pi5mic` runtime | Listener state file |
+| `.pi5mic-voiceinput.log` | `pi5mic` runtime | Listener log file |
 
-### Reply states
+Important note for display maintenance:
 
-Canonical reply states currently include:
-
-- `greeting`
-- `confirmation`
-- `success`
-- `speaking`
-- `listening`
-- `thinking`
-- `confusing`
-- `asking_clarification`
-- `cannot_answer`
-- `warning`
-- `error`
-- `sad`
-- `sleepy`
-- `curious`
-
-Aliases such as `hello`, `reply`, `done`, and `clarify` are normalized in [expressions/policy.py](ninjaclawbot/src/ninjaclawbot/expressions/policy.py).
-
-## Main Commands
-
-From the project root:
-
-```bash
-uv sync --extra dev
-uv run ninjaclawbot --help
-uv run ninjaclawbot health-check
-uv run ninjaclawbot list-capabilities
-uv run ninjaclawbot expression-tool
-uv run ninjaclawbot movement-tool
-uv run ninjaclawbot perform-expression greeting
-uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
-uv run ninjaclawbot run-action '{"action":"read_distance"}'
-```
-
-Standalone library tools:
-
-```bash
-uv run pi5servo servo-tool
-uv run pi5disp display-tool
-uv run pi5buzzer buzzer-tool
-uv run pi5vl53l0x sensor-tool
-```
-
-Plugin validation:
-
-```bash
-cd integrations/openclaw/ninjaclawbot-plugin
-npm install
-npm run typecheck
-npm test
-```
-
-## Runtime Files
-
-The normal root-level runtime files are:
-
-- `servo.json`
-- `buzzer.json`
-- `display.json`
-- `vl53l0x.json`
-- `ninjaclawbot_data/movements/*.json`
-- `ninjaclawbot_data/expressions/*.json`
-
-Important display note:
-
-- `pi5disp` keeps its own package config file
-- `ninjaclawbot` prefers the root `display.json`
-- after display setup, export the package config into the root file:
+- `pi5disp` stores its own package config
+- `ninjaclawbot` prefers the root-level `display.json`
+- after display setup, export the package config to the root:
 
 ```bash
 cd ~/NinjaClawBot
@@ -549,35 +385,34 @@ uv run pi5disp config export "$PWD/display.json"
 
 ## Development Workflow
 
-Use this order for normal work:
+Use this order for normal development work:
 
-1. reproduce the problem or confirm the desired behavior
-2. identify the correct layer:
-   - standalone library
-   - integrated `ninjaclawbot`
-   - OpenClaw plugin or workspace setup
+1. reproduce the issue or confirm the desired behavior
+2. choose the correct layer
 3. make the smallest safe change
-4. run the validation gate
+4. run the matching validation gate
 5. update the docs
-6. write Pi validation steps if hardware behavior changed
+6. write Raspberry Pi validation steps if hardware behavior changed
 
 ### Which layer to change
 
-- Servo motion issue only:
-  - start in [pi5servo/README.md](pi5servo/README.md)
-- Display orientation or brightness issue:
-  - start in [pi5disp/README.md](pi5disp/README.md)
-- Expression composition or reply-state issue:
-  - start in `ninjaclawbot`
-- OpenClaw startup, Telegram reply, or diagnostics issue:
-  - start in the plugin plus workspace/deployment checks
+| Symptom | Start here |
+| --- | --- |
+| Servo endpoint or calibration issue | `pi5servo` |
+| Display orientation, contrast, or config issue | `pi5disp` |
+| Buzzer playback issue | `pi5buzzer` |
+| VL53L0X or I2C issue | `pi5vl53l0x` |
+| Microphone recording, STT, wake-word, or voice dispatch issue | `pi5mic` |
+| Expression policy or action orchestration issue | `ninjaclawbot` |
+| Chat-driven behavior differs from local behavior | OpenClaw plugin and deployment files |
 
-## Validation Gates
+## Validation Matrix
 
-Workspace-level Python gate:
+### Workspace Python gate
+
+Use this from the repository root:
 
 ```bash
-cd /path/to/NinjaClawBot
 uv run --extra dev python -m compileall .
 uv run --extra dev ruff check .
 uv run --extra dev ruff format --check .
@@ -585,28 +420,29 @@ uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml
 uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml
 uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml
 uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml
+uv run pytest -q pi5mic/tests -c pi5mic/pyproject.toml
 uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
 ```
 
-Why this is written this way:
+Why it is written this way:
 
-- this workspace uses sibling package folders such as `pi5buzzer/` and
-  `pi5disp/`
-- a generic root `pytest -q` can resolve those folders before their `src/`
-  packages
-- the package-specific pytest commands above are the stable, validated path
+- the workspace contains multiple sibling packages
+- package-specific pytest commands are the stable validated path
+- a generic root `pytest -q` is not the preferred gate for this repo
 
-Package-level `ninjaclawbot` gate:
+### Package-level Python gate
+
+Example for one package:
 
 ```bash
-cd /path/to/NinjaClawBot/ninjaclawbot
+cd /path/to/NinjaClawBot/pi5mic
 uv run --extra dev python -m compileall src tests
 uv run --extra dev ruff check src tests
 uv run --extra dev ruff format --check src tests
 uv run --extra dev pytest -q tests -c pyproject.toml
 ```
 
-Plugin gate:
+### OpenClaw plugin gate
 
 ```bash
 cd /path/to/NinjaClawBot/integrations/openclaw/ninjaclawbot-plugin
@@ -615,9 +451,9 @@ npm run typecheck
 npm test
 ```
 
-## Raspberry Pi Validation
+## Raspberry Pi Validation Model
 
-Use four buckets whenever hardware-facing behavior changes.
+Use these four buckets whenever hardware-facing behavior changes.
 
 ### Safe smoke tests
 
@@ -625,264 +461,150 @@ Use four buckets whenever hardware-facing behavior changes.
 - `uv run ninjaclawbot expression-tool`
 - `uv run pi5disp display-tool`
 - `uv run pi5vl53l0x sensor-tool`
+- `uv run pi5mic doctor`
 
 ### Device communication tests
 
 - `i2cdetect -y 1`
+- microphone device listing
 - OpenClaw startup
 - `ninjaclawbot_diagnostics`
-- Telegram message / reply cycle
+- Telegram message and reply cycle
 
 ### Actuator-moving tests
 
 - `uv run pi5servo servo-tool`
 - `uv run ninjaclawbot movement-tool`
-- one small known-safe saved movement only
+- one small known-safe movement only
 
 ### Power-risk tests
 
 - `openclaw gateway restart`
 - `openclaw gateway stop`
-- confirm sleepy then display power-down
+- confirm sleepy face then display power-down
+- for voice input, run a repeated wake-word cycle test and watch Pi temperature and throttling
+
+## Maintenance And Extension Guidelines
+
+### Adding a new hardware behavior
+
+1. Put direct device logic in the matching `pi5*` package.
+2. Add or update its interactive tool if the new behavior needs setup or manual testing.
+3. Only then expose it through `ninjaclawbot` if it belongs in the integrated robot layer.
+
+### Adding a new robot action
+
+1. Add the action to `ActionType` in `ninjaclawbot/src/ninjaclawbot/actions.py`.
+2. Define validation rules and required parameters.
+3. Teach the executor/runtime how to run it.
+4. Add tests.
+5. If OpenClaw should call it directly, decide whether a new plugin tool is needed.
+
+### Adding a new OpenClaw tool
+
+1. Confirm the behavior already exists in `ninjaclawbot`.
+2. Register the tool in `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`.
+3. Add schema support if needed.
+4. Update plugin tests and deployment docs.
+
+### Adding a new voice feature
+
+1. Start in `pi5mic`.
+2. Keep microphone runtime ownership there.
+3. Only add a thin wrapper or status surface in `ninjaclawbot` or the plugin when needed.
+4. Avoid turning voice input into an automatic background service without an explicit safety decision.
+
+## Bug Triage Map
+
+| Problem | First check | Likely owner |
+| --- | --- | --- |
+| Local hardware tool fails | matching package README and package tests | matching `pi5*` package |
+| `ninjaclawbot health-check` fails | root config files and adapters | `ninjaclawbot` |
+| Robot reacts locally but not through OpenClaw | plugin diagnostics, allowlist, skill, bridge | OpenClaw plugin |
+| Telegram text missing but robot motion/expression works | OpenClaw tool usage and reply path | OpenClaw deployment |
+| Voice capture works but chat handoff fails | `pi5mic doctor`, `status`, OpenClaw profile | `pi5mic` |
+| Wake word works once but not repeatedly | `voiceinput-tool` state, overflow handling, presence timing | `pi5mic` |
+| Startup greeting missing | `BOOT.md`, `boot-md`, diagnostics | OpenClaw deployment + plugin |
 
 ## Troubleshooting Shortcuts
 
-### `pi5mic` says `SyntaxError: unterminated string literal` in `run_cmd.py`
-
-- this is a Python-code issue from an older `pi5mic` build, not a Raspberry Pi
-  microphone wiring problem
-- the broken build failed during import, so `uv run pi5mic setup` and
-  `uv run pi5mic mic-tool` crashed before they could even open
-- fix it by updating the workspace environment and then rerunning the command:
-
-```bash
-cd ~/NinjaClawBot
-git pull
-uv sync --extra dev
-uv run pi5mic setup
-```
-
-- if you want to check the repair before opening the wizard, run:
-
-```bash
-cd ~/NinjaClawBot
-python3 -m compileall pi5mic/src pi5mic/tests
-uv run pi5mic --help
-```
-
-- expected result:
-  - `compileall` finishes without syntax errors
-  - `uv run pi5mic --help` prints the CLI help text
-  - `setup` and `mic-tool` open normally again
-
 ### `pi5mic` says `PortAudio library not found`
 
-- this is usually a Raspberry Pi system-library issue, not a Python-code issue
-- install PortAudio first:
+Install the Raspberry Pi system packages first:
 
 ```bash
 sudo apt update
 sudo apt install -y libportaudio2 portaudio19-dev
 ```
 
-- then re-run:
+Then rerun:
 
 ```bash
-cd ~/NinjaClawBot
 uv run pi5mic doctor
 ```
 
 ### `pi5mic` says `Invalid sample rate`
 
-- this usually means the microphone exists, but the saved sample rate in
-  `mic.json` does not match what ALSA accepts for that device
-- rerun setup and accept the recommended rate:
+The microphone exists, but ALSA does not accept the saved rate in `mic.json`.
+
+Fix path:
 
 ```bash
-cd ~/NinjaClawBot
 uv run pi5mic setup
 uv run pi5mic doctor
 ```
 
-- many Raspberry Pi microphones prefer `44100` Hz or `48000` Hz instead of
-  `16000` Hz
-- the current `pi5mic` build will try to recommend the device default and the
-  doctor command may pass with a warning when it can auto-correct safely
+Accept the sample rate recommended by the wizard. Many Raspberry Pi microphones prefer `44100` Hz or `48000` Hz.
 
-### `pi5mic` says `Gemini credentials are not configured in the environment`
+### `pi5mic` says `openwakeword` is missing or the model is not ready
 
-- this is a real configuration problem, not a code crash
-- the Gemini backend requires one of these environment variables in the current
-  shell:
-  - `GEMINI_API_KEY`
-  - `GOOGLE_API_KEY`
-- fix it with:
+Install the optional dependency and register the model:
 
 ```bash
-export GEMINI_API_KEY="your_key_here"
-uv run pi5mic doctor
-```
-
-- if both keys are set, the Google SDK will prefer `GOOGLE_API_KEY`
-- if the Python package is missing, install it with:
-
-```bash
-cd ~/NinjaClawBot
-uv sync --extra dev
-```
-
-### `pi5mic` says `openwakeword` is missing or `voiceinput-tool` is not ready
-
-- this means the optional always-on wake-word dependency or custom model setup is still incomplete
-- install the voice-input extra, register your custom model, and then rerun doctor:
-
-```bash
-cd ~/NinjaClawBot
 uv sync --extra dev --extra voiceinput
-uv run pi5mic install openwakeword --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
+uv run pi5mic install openwakeword --model-path ~/NinjaClawBot/voiceinput/hey_ninja.onnx
 uv run pi5mic doctor
 ```
-
-- `openWakeWord` does not need an API key
-- for the `Ninja` wake word, you need a custom `.onnx` or `.tflite` model file
-- a saved path like `/home/pi/pi5mic/.tflite` is only a placeholder and not a
-  real model file; use the full file path such as
-  `~/NinjaClawBot/voiceinput/hey_ninja.tflite`
-- if `doctor` still fails, check the model path and whether the shared runtime assets were downloaded
-- once `doctor` is clean, start the listener manually:
-
-```bash
-uv run pi5mic voiceinput-tool start
-```
-
-### `voiceinput-tool foreground` says `No spoken command was detected` or shows audio overflow warnings
-
-- this means the wake word likely fired, but the follow-up command was empty,
-  too delayed, or too weak to turn into a usable Whisper transcript
-- `pi5mic` now pauses the live input stream while Whisper is running, which
-  reduces stale-audio overflow after each wake-word cycle
-- `pi5mic` also now treats empty Whisper output as a recoverable no-speech
-  cycle instead of a hard always-on listener failure
-- `pi5mic` now recreates the live microphone stream after repeated overflow so
-  ALSA/PortAudio drift does not leave the always-on loop stuck
-- OpenClaw presence updates now run off the hot path, so a slow `idle` update
-  should no longer delay re-arming the next wake-word cycle
-- if the OpenClaw presence path is still slow or unavailable, `doctor` now
-  reports that as a warning instead of a hard failure when the gateway and
-  agent path itself is healthy
-
-Recommended check:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic doctor
-uv run pi5mic voiceinput-tool foreground
-```
-
-Then:
-
-- say the wake phrase clearly
-- start the real command immediately after it
-- keep the first tests short and simple
-- in OpenClaw mode, remember that the listener intentionally ignores new wake
-  words until the prior request has finished transcribing, dispatching, waiting
-  for the reply, and cooling down
-- if presence keeps timing out, the listener now disables further presence
-  updates for that session and keeps the mic -> OpenClaw conversation loop
-  alive
-- if false triggers continue, raise the wake-word threshold slightly in
-  `uv run pi5mic setup`
-- if the wake word works but the command is often missed, lower the threshold
-  slightly or move the microphone closer
 
 ### `pi5mic` says `pairing required` in OpenClaw mode
 
-- this is usually not a microphone or STT problem
-- it means `pi5mic` reached the local OpenClaw CLI, but the gateway still wants
-  a one-time local device approval
-- the preferred recovery path is now:
+Use the guided recovery path first:
 
 ```bash
-cd ~/NinjaClawBot
 uv run pi5mic setup
 ```
 
-- then:
-  - choose `Profile: openclaw`
-  - let `pi5mic` auto-detect the OpenClaw settings
-  - answer `y` if it offers to approve the newest local device request
-- manual fallback:
-
-```bash
-openclaw devices approve --latest
-uv run pi5mic doctor
-uv run pi5mic run --once
-```
-
-- if pairing succeeds, `doctor` should stop failing on the OpenClaw readiness
-  path and `run --once` should print the OpenClaw reply
+Choose `Profile: openclaw` and let `pi5mic` auto-discover the OpenClaw settings. Approve the newest local device request when asked.
 
 ### `pi5mic` says `Invalid session ID` in OpenClaw mode
 
-- this is an OpenClaw handoff-format problem, not a microphone recording failure
-- older `pi5mic` configs used the legacy value `voice:local-mic`
-- current OpenClaw validates `--session-id` more strictly and rejects `:`
-- the current `pi5mic` build now migrates that legacy value automatically to the
-  safe session id `voice-local-mic`
-- safest recovery path:
+Older configs used a legacy `voice:local-mic` session id. Current `pi5mic` migrates that automatically to the safe value `voice-local-mic`.
+
+Safest recovery:
 
 ```bash
-cd ~/NinjaClawBot
 uv run pi5mic setup
 uv run pi5mic doctor
 uv run pi5mic run --once
 ```
 
-- if you want to verify the OpenClaw side directly, this should work:
+### Voice listener works once but does not re-arm well
 
-```bash
-openclaw agent --agent main --session-id voice-local-mic --message "hello" --json
-```
+Check:
 
-### Raspberry Pi powers off or reboots after `pi5mic` finishes recording
+- `uv run pi5mic doctor`
+- `uv run pi5mic voiceinput-tool foreground`
+- `.pi5mic-voiceinput.log`
 
-- treat this as a likely Raspberry Pi resource or power problem first, not a
-  normal Python exception
-- the current `pi5mic` build now reduces local Whisper load by:
-  - shorter default clip length
-  - safer automatic thread limit on Raspberry Pi when threads are left blank
-  - normalizing WAV clips to `16000` Hz mono before calling `whisper.cpp`
-  - showing Raspberry Pi temperature / throttling / undervoltage warnings in
-    `pi5mic doctor` when available
-- run:
+Important current behavior:
 
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic doctor
-vcgencmd get_throttled
-vcgencmd measure_temp
-```
-
-- if `doctor` or `vcgencmd` shows undervoltage or throttling:
-  - use a stronger Raspberry Pi 5 power supply
-  - reduce the clip length to `8` to `10` seconds
-  - set Whisper threads to `1` or `2`
-  - improve cooling
-  - switch to Gemini if the hardware budget is still too tight
-
-### `uv` not found in OpenClaw
-
-- check the absolute path:
-
-```bash
-command -v uv
-```
-
-- store that path in `plugins.entries.ninjaclawbot.config.uvCommand`
+- wake words are ignored while the previous request is still busy on purpose
+- repeated audio overflow should trigger stream recovery, not permanent failure
+- OpenClaw presence issues should degrade to warnings, not block the whole voice loop
 
 ### Display works in `display-tool` but looks wrong in `expression-tool`
 
-- export the display config to the root:
+Export the display package config to the root project file:
 
 ```bash
 cd ~/NinjaClawBot
@@ -892,50 +614,28 @@ uv run ninjaclawbot health-check
 
 ### Robot reacts but Telegram shows no text
 
-- check:
-  - workspace `AGENTS.md`
-  - `ninjaclawbot_control` skill
-  - allowlist contains `ninjaclawbot_reply`
-- if this happened on a `pi5mic` voice turn:
-  - rerun `uv run pi5mic status`
-  - confirm it shows a `Reply target:` line
-  - if it does not, send one short Telegram message to the OpenClaw bot in the
-    desired chat or topic, then rerun `uv run pi5mic setup`
-- the correct behavior is:
-  - robot animation first
-  - normal visible text reply after that
+Check:
 
-### Startup greeting missing
+- workspace `AGENTS.md`
+- the `ninjaclawbot_control` skill
+- OpenClaw allowlist entries for `ninjaclawbot_reply`
 
-- check:
-  - `boot-md` enabled
-  - workspace `BOOT.md`
-  - `ninjaclawbot_diagnostics`
-- on the validated build, trust:
-  - `startup.trackingMode`
-  - `startup.effectiveCompleted`
-  more than the raw service field `startup_completed`
+If this only happens on `pi5mic` voice turns, rerun:
+
+```bash
+uv run pi5mic status
+```
+
+Confirm that a reply target is saved.
+
+### Startup greeting is missing
+
+Check:
+
+- `boot-md` is enabled
+- workspace `BOOT.md` exists and contains the intended greeting
+- `ninjaclawbot_diagnostics` shows startup tracking as expected
 
 ### Best first debugging command
 
-Run this through the OpenClaw gateway:
-
-```bash
-curl -sS "http://127.0.0.1:YOUR_GATEWAY_PORT/tools/invoke" \
-  -H "Authorization: Bearer YOUR_OPENCLAW_GATEWAY_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "tool": "ninjaclawbot_diagnostics",
-    "args": {},
-    "sessionKey": "main"
-  }' | python3 -m json.tool
-```
-
-That one tool gives you:
-
-- bridge health
-- service state
-- startup interpretation
-- deployment readiness
-- display config summary
-- recovery hints
+When the bridge is up, start with the OpenClaw diagnostics tool. It usually gives the fastest single view of deployment readiness, bridge health, and recovery hints.

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-**A Modular Raspberry Pi 5 Robot Control Stack for OpenClaw**
+**A modular Raspberry Pi 5 robot workspace with interactive hardware tools, an integrated robot layer, and OpenClaw deployment support**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -20,18 +20,20 @@
 - [English](#english)
 - [日本語](#japanese)
 - [繁體中文](#traditional-chinese)
-- [Installation Guide](InstallationGuide.md)
-- [Development Guide](DevelopmentGuide.md)
-- Library guides:
+- Main guides:
+  - [InstallationGuide.md](InstallationGuide.md)
+  - [DevelopmentGuide.md](DevelopmentGuide.md)
+- Package guides:
   - [ninjaclawbot](ninjaclawbot/README.md)
   - [pi5servo](pi5servo/README.md)
   - [pi5disp](pi5disp/README.md)
   - [pi5buzzer](pi5buzzer/README.md)
+  - [pi5mic](pi5mic/README.md)
   - [pi5vl53l0x](pi5vl53l0x/README.md)
 - OpenClaw integration:
   - [Plugin folder](integrations/openclaw/ninjaclawbot-plugin)
   - [Plugin skill](integrations/openclaw/ninjaclawbot-plugin/skills/ninjaclawbot_control/SKILL.md)
-- Archived planning and logs:
+- Archive:
   - [backup/README.md](backup/README.md)
 
 ---
@@ -42,351 +44,153 @@
 
 ## Project Overview
 
-**NinjaClawBot** is a Raspberry Pi 5 robot software workspace built around small, reusable hardware libraries and one integrated robot layer.
+**NinjaClawBot** is a Raspberry Pi 5 robot software workspace built from small hardware libraries plus one integrated robot layer.
 
-It is designed for a practical real-world workflow:
+The design goal is practical and beginner-friendly:
 
-- test each hardware module on its own first
-- combine them through the `ninjaclawbot` integration layer
-- connect the robot to OpenClaw
-- use Telegram or another OpenClaw channel as the communication interface
+1. test each hardware module by itself first
+2. combine the modules through `ninjaclawbot`
+3. connect the full robot to OpenClaw
+4. optionally add microphone input with `pi5mic`
 
-The current validated build supports this flow:
+This structure makes the project easier to build, test, and repair because each layer can be validated on its own before you move to the next one.
+
+## What You Can Expect
+
+From this repository, you can expect:
+
+- standalone `pi5*` libraries with interactive tools for setup and testing
+- one integrated robot package, `ninjaclawbot`, that combines display, sound, movement, sensing, and optional voice input
+- an OpenClaw plugin for chat-driven robot behavior
+- a documented Raspberry Pi 5 build path from scratch
+- optional voice input with one-shot capture or manual always-on listening
+
+The current validated OpenClaw build supports this flow:
 
 1. OpenClaw starts
 2. the robot shows a startup greeting
-3. the robot stays in an idle face while waiting
+3. the robot stays in an idle expression while waiting
 4. a user message triggers robot reaction and AI processing
 5. the robot shows the matching reply expression
-6. Telegram still receives the normal text answer
+6. Telegram still receives the normal text reply
 7. OpenClaw stop triggers the sleepy power-off sequence
 
-## Robot Specifications
+## System At A Glance
 
 ### Hardware
 
-| Component | Current validated direction |
-|-----------|-----------------------------|
-| **Brain** | Raspberry Pi 5 |
-| **Display** | SPI display supported by `pi5disp` |
-| **Distance Sensor** | VL53L0X supported by `pi5vl53l0x` |
-| **Microphone** | `pi5mic` voice-input preview |
-| **Sound** | Passive buzzer supported by `pi5buzzer` |
-| **Movement** | Servos supported by `pi5servo` |
-| **Integration** | OpenClaw + Telegram validated |
+| Part | Current validated direction |
+| --- | --- |
+| Brain | Raspberry Pi 5 |
+| Display | SPI display supported by `pi5disp` |
+| Microphone | USB microphone or mic module through `pi5mic` |
+| Sound | Passive buzzer supported by `pi5buzzer` |
+| Movement | Servos supported by `pi5servo` |
+| Distance sensing | VL53L0X through `pi5vl53l0x` |
+| Chat interface | OpenClaw + Telegram validated |
 
-### Software Stack
+### Software
 
-| Layer | Technology |
-|-------|------------|
-| **Python workspace** | `uv` + editable packages |
-| **Robot integration** | `ninjaclawbot` |
-| **Servo library** | `pi5servo` |
-| **Display library** | `pi5disp` |
-| **Buzzer library** | `pi5buzzer` |
-| **Microphone library** | `pi5mic` |
-| **Distance sensor library** | `pi5vl53l0x` |
-| **Agent integration** | OpenClaw plugin + workspace `BOOT.md` / `AGENTS.md` |
+| Layer | Purpose |
+| --- | --- |
+| Root workspace | Installs and syncs all packages with `uv` |
+| `pi5*` libraries | Standalone hardware setup, drivers, and test tools |
+| `ninjaclawbot` | High-level robot runtime and saved assets |
+| OpenClaw plugin | Bridge, diagnostics, and chat-facing tool surface |
+| `pi5mic` | One-shot capture, STT, and optional always-on voice input |
 
-## Key Features
+## Core Packages
 
-### Modular hardware libraries
+| Package | Main role | Interactive tool |
+| --- | --- | --- |
+| `pi5servo` | Servo calibration, movement control, motion assets | `servo-tool` |
+| `pi5disp` | Display initialization, rendering, brightness, rotation | `display-tool` |
+| `pi5buzzer` | Tones, emotion sounds, buzzer config | `buzzer-tool` |
+| `pi5mic` | Recording, STT, OpenClaw handoff, optional always-on listening | `mic-tool`, `voiceinput-tool` |
+| `pi5vl53l0x` | Distance sensor setup and testing | `sensor-tool` |
+| `ninjaclawbot` | Integrated robot actions, expressions, movement playback | `expression-tool`, `movement-tool` |
 
-- `pi5servo`: servo calibration, motion assets, and interactive `servo-tool`
-- `pi5disp`: display initialization, rendering, and interactive `display-tool`
-- `pi5buzzer`: tone and sound playback with `buzzer-tool`
-- `pi5mic`: microphone capture, safer Raspberry Pi Whisper defaults, built-in Gemini SDK support, guided `mic-tool`, manual `voiceinput-tool` start/stop controls, OpenClaw auto-setup with pairing guidance, optional always-on wake-word mode, automatic legacy session-id migration, and optional local-plus-Telegram voice reply mirroring
-- `pi5vl53l0x`: VL53L0X sensor access and `sensor-tool`
+## Choose Your Path
 
-### Integrated robot layer
+Choose the path that matches what you want to do:
 
-- structured robot actions through `ninjaclawbot`
-- saved expressions and movement assets
-- interactive `expression-tool` and `movement-tool`
-- reply-state driven expressions such as `greeting`, `thinking`, `success`, and `sleepy`
-- health checks and deployment diagnostics
+1. **I only want to test one hardware module.**
+   Open the matching package guide in `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, or `pi5vl53l0x`.
 
-### OpenClaw deployment
+2. **I want to build the full robot locally first.**
+   Start with [InstallationGuide.md](InstallationGuide.md), wire the hardware, and run the interactive tools one by one.
 
-- persistent bridge between OpenClaw and the robot runtime
-- startup greeting driven by `boot-md` and workspace `BOOT.md`
-- normal text reply plus robot expression on each validated Telegram turn
-- sleepy shutdown and display power-off when OpenClaw stops
-- `ninjaclawbot_diagnostics` for bridge, deployment, and readiness checks
+3. **I want the robot to work with OpenClaw and Telegram.**
+   Follow [InstallationGuide.md](InstallationGuide.md) end to end. It covers Raspberry Pi setup, OpenClaw onboarding, config patching, validation, and Telegram checks.
+
+4. **I want voice input now or later.**
+   Use [pi5mic/README.md](pi5mic/README.md). `pi5mic` can be used by itself or inside the full NinjaClawBot build.
 
 ## Quick Start
 
+This is the shortest safe first path from a fresh clone.
+
 ```bash
-# Clone the repository
 git clone https://github.com/Nilcreator/NinjaClawBot.git
 cd NinjaClawBot
-
-# Install the workspace
 uv sync --extra dev
-
-# Optional but recommended if you may want always-on wake-word voice input later
-uv sync --extra dev --extra voiceinput
-
-# Check the integrated robot layer
 uv run ninjaclawbot health-check
-
-# Open the guided hardware tools
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
 uv run pi5mic mic-tool
-uv run pi5mic voiceinput-tool
-uv run ninjaclawbot voiceinput-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
-## Standalone Always-On Voice Input Setup
-
-Use this path if you want to test the new always-on microphone feature by itself
-before involving OpenClaw or the full robot workflow.
-
-### Step 1. Install the optional wake-word dependency
+If you already know that you want always-on voice input, install the optional wake-word dependency too:
 
 ```bash
-cd ~/NinjaClawBot
 uv sync --extra dev --extra voiceinput
 ```
 
-What this does:
+What this quick start does:
 
-- installs the normal workspace packages
-- installs the optional `openWakeWord` wake-word stack used by the always-on
-  listener
+- installs the whole Python workspace
+- checks that the integrated robot layer can load
+- opens the guided tools you will use to configure and test each hardware module
 
-What you should expect:
+What to do next:
 
-- the command finishes without errors
-- `uv run pi5mic --help` shows `voiceinput-tool`
+- For a complete Raspberry Pi build: go to [InstallationGuide.md](InstallationGuide.md)
+- For voice setup and always-on listening: go to [pi5mic/README.md](pi5mic/README.md)
+- For developer architecture and maintenance details: go to [DevelopmentGuide.md](DevelopmentGuide.md)
 
-### Step 2. Build and register the default local STT backend
+## Documentation Map
 
-```bash
-cd ~
-git clone https://github.com/ggml-org/whisper.cpp.git
-cd ~/whisper.cpp
-sh ./models/download-ggml-model.sh base
-cmake -B build
-cmake --build build -j
-
-cd ~/NinjaClawBot
-uv run pi5mic install whispercpp \
-  --command ~/whisper.cpp/build/bin/whisper-cli \
-  --model-path ~/whisper.cpp/models/ggml-base.bin
-```
-
-What this does:
-
-- builds the local `whisper.cpp` speech-to-text engine
-- tells `pi5mic` where the command and model file are stored
-
-What you should expect:
-
-- `whisper-cli` and `ggml-base.bin` are found successfully
-- the paths are saved into `mic.json`
-
-### Step 3. Understand `openWakeWord`
-
-`openWakeWord` is the local wake-word engine now used by the optional always-on
-listener. It does not need an access key.
-
-What matters now:
-
-- the `voiceinput` extra installs the `openWakeWord` runtime stack
-- `pi5mic` needs a custom `.onnx` or `.tflite` model file for the word `Ninja`
-- the listener stays fully local and offline on the Raspberry Pi
-
-### Step 4. Create or download a custom `Ninja` wake-word model
-
-The official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord)
-documents two supported paths for new models:
-
-- a simple Google Colab notebook for the fastest first model
-- a more detailed notebook when you want more control
-
-Recommended path:
-
-1. Open the official `openWakeWord` repository.
-2. Read the `Training New Models` section.
-3. Use the simple Google Colab notebook if this is your first custom model.
-4. Train or export a model for the word `Ninja`.
-5. Download the resulting `.onnx` or `.tflite` file.
-6. Save it somewhere stable, for example:
-
-```bash
-mkdir -p ~/NinjaClawBot/voiceinput
-mv ~/Downloads/ninja.* ~/NinjaClawBot/voiceinput/
-```
-
-What this does:
-
-- gives `pi5mic` the custom local wake-word model it needs for `Ninja`
-
-### Step 5. Register the custom wake-word model
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic install openwakeword \
-  --model-path ~/NinjaClawBot/voiceinput/ninja.tflite
-```
-
-What this does:
-
-- validates the model path
-- downloads the shared `openWakeWord` runtime assets
-- saves the wake-word settings into `mic.json`
-
-What you should expect:
-
-- `openWakeWord model: ...`
-- `openWakeWord framework: ...`
-- either `Downloaded runtime assets:` or `openWakeWord runtime assets are already present.`
-
-### Step 6. Run `pi5mic setup` for standalone always-on use
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-```
-
-Recommended choices:
-
-- `Profile`: `standalone`
-- `STT backend`: `whisper_cpp`
-- `Prepare always-on voice input now?`: `y`
-- `Wake word`: `ninja`
-- `openWakeWord model path`: the `.onnx` or `.tflite` file you saved
-- `Wake-word detection threshold`: `0.5`
-- `Wake-word VAD threshold`: `0`
-- `Enable openWakeWord noise suppression?`: usually `n` for the first test
-- `openWakeWord inference framework`: `auto`
-- `Silence stop timeout`: `3`
-- `Maximum recorded command length`: `10`
-- `Cooldown`: `1.5`
-
-What this does:
-
-- saves the microphone config into `mic.json`
-- prepares the always-on listener, but does not start it yet
-
-### Step 7. Validate the full setup
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic doctor
-```
-
-What this does:
-
-- checks the microphone
-- checks Whisper
-- checks the `openWakeWord` dependency
-- checks the custom wake-word model path
-- checks the effective inference framework and listener settings
-
-What you should expect:
-
-- `INFO always-on voice input: enabled`
-- `OK   wake-word detector: openwakeword ...`
-- `OK   wake model: ...`
-- either `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
-
-### Step 8. Test safely in foreground mode first
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool foreground
-```
-
-What this does:
-
-- starts the always-on listener in the current terminal
-- lets you watch the status live
-- is the safest first test because you can stop it immediately with `Ctrl+C`
-
-What you should expect:
-
-- the terminal says it is waiting for the wake word
-- say `Ninja`, then a short sentence
-- recording should stop after 3 seconds of silence or 10 seconds max
-- the recognized transcript should print in the terminal
-- while OpenClaw is still thinking or replying, new wake words are ignored on
-  purpose so one voice request cannot overlap the previous one
-- after the reply finishes, the listener should return to waiting mode by itself
-- if you did not say a real command after the wake word, `pi5mic` should report
-  that no spoken command was detected and then re-arm cleanly
-- if repeated microphone overflow is detected, `pi5mic` now recreates the live
-  input stream automatically instead of staying stuck on the old stream
-
-### Step 9. Start the background listener
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool start
-uv run pi5mic voiceinput-tool status
-```
-
-What this does:
-
-- starts the listener in the background
-- confirms whether it is running and shows the state/log file paths
-
-### Step 10. Stop it manually
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool stop
-```
-
-What this does:
-
-- stops the always-on listener cleanly
-
-What you should expect:
-
-- the tool confirms it stopped
-
-For the full Raspberry Pi build, OpenClaw setup, `openclaw.json` patching, and Telegram validation, follow [InstallationGuide.md](InstallationGuide.md).
-
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [InstallationGuide.md](InstallationGuide.md) | Step-by-step Raspberry Pi and OpenClaw build guide |
-| [DevelopmentGuide.md](DevelopmentGuide.md) | Developer reference, architecture, commands, and workflow |
-| [ninjaclawbot/README.md](ninjaclawbot/README.md) | Integrated robot layer usage |
-| [pi5servo/README.md](pi5servo/README.md) | Servo setup and calibration |
-| [pi5disp/README.md](pi5disp/README.md) | Display wiring and setup |
-| [pi5buzzer/README.md](pi5buzzer/README.md) | Buzzer setup and sounds |
-| [pi5mic/README.md](pi5mic/README.md) | Microphone setup, STT backends, and OpenClaw handoff |
-| [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | Distance sensor setup |
-| [backup/README.md](backup/README.md) | Archived plans and logs |
+| Document | Best for |
+| --- | --- |
+| [InstallationGuide.md](InstallationGuide.md) | Full Raspberry Pi 5 install, OpenClaw setup, Telegram validation, and voice integration |
+| [DevelopmentGuide.md](DevelopmentGuide.md) | Developer reference, architecture, package ownership, validation workflow, and troubleshooting |
+| [ninjaclawbot/README.md](ninjaclawbot/README.md) | Integrated robot runtime, expressions, movements, and main CLI |
+| [pi5servo/README.md](pi5servo/README.md) | Servo wiring, calibration, and safe movement testing |
+| [pi5disp/README.md](pi5disp/README.md) | Display wiring, display config, and display testing |
+| [pi5buzzer/README.md](pi5buzzer/README.md) | Buzzer setup and sound playback |
+| [pi5mic/README.md](pi5mic/README.md) | Microphone setup, STT backends, always-on listening, and OpenClaw handoff |
+| [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | Distance sensor setup and verification |
+| [backup/README.md](backup/README.md) | Archived planning documents and development history |
 
 ## Current Status
 
-**Status:** Stage 2 OpenClaw integration implemented and validated on Raspberry Pi 5
+**Status:** Stage 2 OpenClaw integration is implemented and validated on Raspberry Pi 5.
 
-Validated outcomes:
+Current highlights:
 
-- persistent bridge reuse
-- startup greeting
-- idle / thinking / reply / sleepy lifecycle
-- Telegram text reply plus robot reaction
-- deployment diagnostics through `ninjaclawbot_diagnostics`
-- `pi5mic` preview package implemented with package-level tests passing
-- `pi5mic` CLI import path repaired, so `uv run pi5mic setup` and
-  `uv run pi5mic mic-tool` no longer fail on the OpenClaw delivery-status
-  banner parser bug
-- `pi5mic` now includes a manual always-on voice-input path with:
-  - guided setup for wake-word config
-  - background and foreground `voiceinput-tool` control
-  - optional `ninjaclawbot voiceinput-tool` wrapper
-  - optional voice-input readiness reporting in `ninjaclawbot` and the OpenClaw plugin diagnostics path
-- Raspberry Pi long-run validation for the always-on wake-word path is still pending, but `pi5mic doctor` now surfaces sample-rate, Gemini-auth, Raspberry Pi health warnings, wake-word readiness, and OpenClaw handoff guidance
+- persistent bridge between OpenClaw and the robot runtime
+- validated startup greeting, idle, thinking, reply, and sleepy lifecycle
+- Telegram text replies plus robot reactions on the validated OpenClaw path
+- `ninjaclawbot_diagnostics` for deployment and readiness checks
+- `pi5mic` available as a standalone package and as an optional part of the full build
+- manual always-on voice input preview available through `voiceinput-tool`
+
+Still important:
+
+- the always-on voice path is a manual-start feature, not an auto-start daemon
+- long-run Raspberry Pi room-noise tuning is still something users should validate on their own hardware
 
 ## License
 
@@ -402,76 +206,72 @@ This project is licensed under the **MIT License**.
 
 ## プロジェクト概要
 
-**NinjaClawBot** は、Raspberry Pi 5 向けに構成されたロボット制御ワークスペースです。小さく再利用しやすいハードウェアライブラリと、それらをまとめる統合レイヤー `ninjaclawbot` で構成されています。
+**NinjaClawBot** は、Raspberry Pi 5 向けに作られたロボット制御ワークスペースです。小さく分けられたハードウェア用ライブラリと、それらを統合する `ninjaclawbot` で構成されています。
 
-このプロジェクトは、次の順番で使うことを前提にしています。
+基本的な考え方は次のとおりです。
 
-- まず各ハードウェアを単体ライブラリで確認する
-- 次に `ninjaclawbot` で統合する
-- 最後に OpenClaw と接続して会話型ロボットとして動かす
+1. 各ハードウェアを単体ライブラリで確認する
+2. `ninjaclawbot` で統合する
+3. OpenClaw と接続して会話型ロボットとして動かす
+4. 必要なら `pi5mic` で音声入力を追加する
 
-現在の検証済みビルドでは、次の流れが動作します。
+## 期待できること
 
-1. OpenClaw 起動
-2. ロボットが起動あいさつを表示
-3. 待機中はアイドル表情
-4. ユーザーメッセージでロボットが反応
-5. 返信内容に合った表情を表示
-6. Telegram には通常のテキスト返信も届く
-7. OpenClaw 停止時に sleepy 表情を出して画面を消灯
+このリポジトリでは次のことができます。
 
-## ロボット構成
+- 各 `pi5*` ライブラリを対話ツールで単体テストする
+- `ninjaclawbot` でロボット全体をまとめる
+- OpenClaw と Telegram を使った会話型ロボットを構成する
+- `pi5mic` で単発音声入力や常時待機音声入力を試す
+
+## 全体構成
 
 ### ハードウェア
 
 | 構成 | 現在の検証方向 |
-|------|----------------|
-| **本体** | Raspberry Pi 5 |
-| **表示** | `pi5disp` 対応の SPI ディスプレイ |
-| **距離センサー** | `pi5vl53l0x` 対応の VL53L0X |
-| **マイク** | `pi5mic` 音声入力プレビュー |
-| **音** | `pi5buzzer` 対応のパッシブブザー |
-| **動作** | `pi5servo` 対応のサーボ |
-| **連携** | OpenClaw + Telegram 検証済み |
+| --- | --- |
+| 本体 | Raspberry Pi 5 |
+| 表示 | `pi5disp` 対応の SPI ディスプレイ |
+| マイク | `pi5mic` を使う USB マイクまたはマイクモジュール |
+| 音 | `pi5buzzer` 対応のパッシブブザー |
+| 動作 | `pi5servo` 対応のサーボ |
+| 距離検知 | `pi5vl53l0x` 対応の VL53L0X |
+| 会話連携 | OpenClaw + Telegram 検証済み |
 
-### ソフトウェアスタック
+### ソフトウェア
 
-| レイヤー | 技術 |
-|---------|------|
-| **Python ワークスペース** | `uv` + editable packages |
-| **統合レイヤー** | `ninjaclawbot` |
-| **サーボ** | `pi5servo` |
-| **ディスプレイ** | `pi5disp` |
-| **ブザー** | `pi5buzzer` |
-| **マイク** | `pi5mic` |
-| **距離センサー** | `pi5vl53l0x` |
-| **エージェント連携** | OpenClaw plugin + `BOOT.md` / `AGENTS.md` |
+| レイヤー | 役割 |
+| --- | --- |
+| ルートワークスペース | `uv` で全パッケージをまとめて導入 |
+| `pi5*` ライブラリ | 単体のハードウェア設定とテスト |
+| `ninjaclawbot` | ロボット統合ランタイム |
+| OpenClaw plugin | ブリッジ、診断、会話ツール連携 |
+| `pi5mic` | 録音、STT、OpenClaw 連携、常時待機音声入力 |
 
-## 主な機能
+## 主なパッケージ
 
-### モジュール式ハードウェアライブラリ
+| パッケージ | 主な役割 | 対話ツール |
+| --- | --- | --- |
+| `pi5servo` | サーボ校正、動作制御、モーション管理 | `servo-tool` |
+| `pi5disp` | 画面初期化、描画、明るさや回転設定 | `display-tool` |
+| `pi5buzzer` | 音再生、音パターン確認 | `buzzer-tool` |
+| `pi5mic` | 録音、STT、OpenClaw 引き渡し、常時待機音声入力 | `mic-tool`, `voiceinput-tool` |
+| `pi5vl53l0x` | 距離センサー設定と確認 | `sensor-tool` |
+| `ninjaclawbot` | 統合アクション、表情、モーション再生 | `expression-tool`, `movement-tool` |
 
-- `pi5servo`: キャリブレーション、モーション制御、`servo-tool`
-- `pi5disp`: 画面初期化、描画、`display-tool`
-- `pi5buzzer`: 音再生、`buzzer-tool`
-- `pi5mic`: マイク録音、Raspberry Pi 向けに安全寄りにした `whisper.cpp` 既定値、任意の Gemini STT、`mic-tool`、OpenClaw のローカル＋Telegram 音声返信ミラー
-- `pi5vl53l0x`: センサー読み取り、`sensor-tool`
+## 使い始める道順
 
-### 統合ロボットレイヤー
+1. **単体ハードウェアだけ試したい**
+   対応する `pi5*` パッケージの README を開いてください。
 
-- `ninjaclawbot` による統合アクション
-- 表情とモーションのアセット
-- `expression-tool` と `movement-tool`
-- `greeting`、`thinking`、`success`、`sleepy` などの返信状態ベース表情
-- ヘルスチェックと診断出力
+2. **ロボット全体を Raspberry Pi で組みたい**
+   [InstallationGuide.md](InstallationGuide.md) を最初から順に進めてください。
 
-### OpenClaw 連携
+3. **OpenClaw と Telegram まで含めて完成させたい**
+   [InstallationGuide.md](InstallationGuide.md) の OpenClaw 部分まで含めて実施してください。
 
-- 永続ブリッジによる OpenClaw とロボットの接続
-- `boot-md` とワークスペース `BOOT.md` による起動あいさつ
-- Telegram への通常返信とロボット表情の両立
-- 停止時の sleepy シャットダウン
-- `ninjaclawbot_diagnostics` による状態確認
+4. **音声入力を使いたい**
+   [pi5mic/README.md](pi5mic/README.md) を参照してください。単体でも、NinjaClawBot の一部としても使えます。
 
 ## クイックスタート
 
@@ -487,35 +287,44 @@ uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
-Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更新、Telegram 検証は [InstallationGuide.md](InstallationGuide.md) を参照してください。
+常時待機音声入力も使う予定がある場合は、追加で次を実行します。
 
-## ドキュメント
+```bash
+uv sync --extra dev --extra voiceinput
+```
 
-| ドキュメント | 内容 |
-|-------------|------|
-| [InstallationGuide.md](InstallationGuide.md) | Raspberry Pi と OpenClaw の導入手順 |
-| [DevelopmentGuide.md](DevelopmentGuide.md) | 開発者向け構成資料とコマンド一覧 |
-| [ninjaclawbot/README.md](ninjaclawbot/README.md) | 統合レイヤーの使い方 |
-| [pi5servo/README.md](pi5servo/README.md) | サーボ設定 |
-| [pi5disp/README.md](pi5disp/README.md) | ディスプレイ設定 |
-| [pi5buzzer/README.md](pi5buzzer/README.md) | ブザー設定 |
-| [pi5mic/README.md](pi5mic/README.md) | マイク設定、STT バックエンド、OpenClaw 連携 |
+次のステップ:
+
+- Raspberry Pi で一式構築したい場合: [InstallationGuide.md](InstallationGuide.md)
+- 音声入力を詳しく設定したい場合: [pi5mic/README.md](pi5mic/README.md)
+- 開発や保守の情報が必要な場合: [DevelopmentGuide.md](DevelopmentGuide.md)
+
+## ドキュメント案内
+
+| ドキュメント | 用途 |
+| --- | --- |
+| [InstallationGuide.md](InstallationGuide.md) | Raspberry Pi 5、OpenClaw、Telegram、音声入力まで含む導入手順 |
+| [DevelopmentGuide.md](DevelopmentGuide.md) | 開発者向けの構成、所有レイヤー、検証手順、トラブルシュート |
+| [ninjaclawbot/README.md](ninjaclawbot/README.md) | 統合ロボットレイヤーの使い方 |
+| [pi5servo/README.md](pi5servo/README.md) | サーボ設定と安全な動作確認 |
+| [pi5disp/README.md](pi5disp/README.md) | ディスプレイ設定と表示確認 |
+| [pi5buzzer/README.md](pi5buzzer/README.md) | ブザー設定と音再生 |
+| [pi5mic/README.md](pi5mic/README.md) | マイク設定、STT、常時待機音声入力、OpenClaw 連携 |
 | [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | 距離センサー設定 |
-| [backup/README.md](backup/README.md) | 過去計画と履歴 |
+| [backup/README.md](backup/README.md) | 過去の計画と履歴 |
 
 ## 現在のステータス
 
-**ステータス:** Stage 2 OpenClaw 連携は Raspberry Pi 5 上で実装・検証済み
+**ステータス:** Stage 2 OpenClaw 連携は Raspberry Pi 5 上で実装・検証済みです。
 
-検証済み項目:
+現在の主な状態:
 
-- 永続ブリッジ
-- 起動あいさつ
-- idle / thinking / reply / sleepy のライフサイクル
-- Telegram テキスト返信とロボット反応
-- `ninjaclawbot_diagnostics`
-- `pi5mic` プレビュー実装とパッケージテスト完了
-- 新しい音声経路の Raspberry Pi 実機検証はまだ必要だが、`pi5mic doctor` はサンプルレート、Gemini 認証、Raspberry Pi の電源・温度警告を表示できるようになった
+- OpenClaw とロボットランタイムの永続ブリッジ
+- 起動、待機、思考中、返信、sleepy の基本ライフサイクル
+- Telegram 文字返信とロボット反応の両立
+- `ninjaclawbot_diagnostics` による診断
+- `pi5mic` の単体利用と統合利用
+- `voiceinput-tool` による手動開始の常時待機音声入力プレビュー
 
 ## ライセンス
 
@@ -531,76 +340,73 @@ Raspberry Pi の初期構築、OpenClaw 接続、`openclaw.json` の安全な更
 
 ## 專案概要
 
-**NinjaClawBot** 是以 Raspberry Pi 5 為核心的機器人控制工作區。它由幾個可獨立測試的硬體函式庫，以及一個整合層 `ninjaclawbot` 組成。
+**NinjaClawBot** 是一個以 Raspberry Pi 5 為核心的機器人控制工作區，由多個可獨立測試的硬體函式庫，以及一個整合層 `ninjaclawbot` 組成。
 
-建議的使用流程是：
+建議的使用順序如下：
 
-- 先個別測試每個硬體模組
-- 再用 `ninjaclawbot` 把它們整合起來
-- 最後接上 OpenClaw，讓機器人透過聊天介面工作
+1. 先個別測試每個硬體模組
+2. 再用 `ninjaclawbot` 把模組整合起來
+3. 之後接上 OpenClaw，讓機器人透過聊天介面運作
+4. 需要時再加入 `pi5mic` 語音輸入
 
-目前已驗證的版本支援以下流程：
+## 你可以期待什麼
 
-1. OpenClaw 啟動
-2. 機器人顯示開機問候
-3. 等待時保持 idle 表情
-4. 使用者傳送訊息後機器人先反應
-5. 回答時顯示對應情緒表情
-6. Telegram 仍會收到正常文字回覆
-7. OpenClaw 停止時顯示 sleepy 並關閉螢幕
+這個專案目前提供：
 
-## 機器人配置
+- 各 `pi5*` 函式庫的互動式設定與測試工具
+- 一個整合好的機器人層 `ninjaclawbot`
+- OpenClaw plugin，讓機器人能與聊天代理整合
+- 從零開始的 Raspberry Pi 5 建置文件
+- `pi5mic` 單次語音輸入與手動啟動的常時聆聽語音輸入
+
+## 系統總覽
 
 ### 硬體
 
 | 元件 | 目前驗證方向 |
-|------|--------------|
-| **主機** | Raspberry Pi 5 |
-| **顯示器** | `pi5disp` 支援的 SPI 顯示器 |
-| **距離感測器** | `pi5vl53l0x` 支援的 VL53L0X |
-| **麥克風** | `pi5mic` 語音輸入預覽 |
-| **聲音** | `pi5buzzer` 支援的被動式蜂鳴器 |
-| **動作** | `pi5servo` 支援的伺服馬達 |
-| **整合** | 已驗證 OpenClaw + Telegram |
+| --- | --- |
+| 主機 | Raspberry Pi 5 |
+| 顯示器 | `pi5disp` 支援的 SPI 顯示器 |
+| 麥克風 | 透過 `pi5mic` 使用的 USB 麥克風或麥克風模組 |
+| 聲音 | `pi5buzzer` 支援的被動式蜂鳴器 |
+| 動作 | `pi5servo` 支援的伺服馬達 |
+| 距離感測 | `pi5vl53l0x` 支援的 VL53L0X |
+| 對話介面 | 已驗證 OpenClaw + Telegram |
 
-### 軟體堆疊
+### 軟體
 
-| 層級 | 技術 |
-|------|------|
-| **Python 工作區** | `uv` + editable packages |
-| **整合層** | `ninjaclawbot` |
-| **伺服馬達** | `pi5servo` |
-| **顯示器** | `pi5disp` |
-| **蜂鳴器** | `pi5buzzer` |
-| **麥克風** | `pi5mic` |
-| **距離感測器** | `pi5vl53l0x` |
-| **代理整合** | OpenClaw plugin + `BOOT.md` / `AGENTS.md` |
+| 層級 | 作用 |
+| --- | --- |
+| 根工作區 | 用 `uv` 一次安裝全部套件 |
+| `pi5*` 函式庫 | 各硬體模組的單獨設定與測試 |
+| `ninjaclawbot` | 機器人整合執行層 |
+| OpenClaw plugin | 橋接、診斷、聊天工具面 |
+| `pi5mic` | 錄音、STT、OpenClaw 交接與常時聆聽 |
 
-## 主要功能
+## 核心套件
 
-### 模組化硬體函式庫
+| 套件 | 主要用途 | 互動工具 |
+| --- | --- | --- |
+| `pi5servo` | 伺服馬達校正、動作控制、動作資產 | `servo-tool` |
+| `pi5disp` | 顯示初始化、畫面渲染、亮度與旋轉設定 | `display-tool` |
+| `pi5buzzer` | 聲音播放與音效測試 | `buzzer-tool` |
+| `pi5mic` | 錄音、STT、OpenClaw 交接、常時語音輸入 | `mic-tool`, `voiceinput-tool` |
+| `pi5vl53l0x` | 距離感測器設定與檢查 | `sensor-tool` |
+| `ninjaclawbot` | 整合動作、表情、動作播放 | `expression-tool`, `movement-tool` |
 
-- `pi5servo`: 校正、動作控制、`servo-tool`
-- `pi5disp`: 顯示初始化、畫面測試、`display-tool`
-- `pi5buzzer`: 聲音播放、`buzzer-tool`
-- `pi5mic`: 麥克風錄音、較安全的 Raspberry Pi `whisper.cpp` 預設值、可選 Gemini STT、`mic-tool`，以及 OpenClaw 本地加 Telegram 的語音回覆鏡像
-- `pi5vl53l0x`: 感測器讀值、`sensor-tool`
+## 依需求選擇路徑
 
-### 整合式機器人層
+1. **只想測試單一硬體模組**
+   直接閱讀對應的 `pi5*` 套件 README。
 
-- 透過 `ninjaclawbot` 執行整合動作
-- 已保存的表情與動作資產
-- `expression-tool` 與 `movement-tool`
-- `greeting`、`thinking`、`success`、`sleepy` 等回覆狀態表情
-- 健康檢查與診斷輸出
+2. **想先在本地完成整體機器人建置**
+   請依照 [InstallationGuide.md](InstallationGuide.md) 的流程進行。
 
-### OpenClaw 整合
+3. **想完成 OpenClaw 與 Telegram 整合**
+   請完整執行 [InstallationGuide.md](InstallationGuide.md)。
 
-- 透過持久橋接連接 OpenClaw 與機器人
-- 以 `boot-md` 和工作區 `BOOT.md` 完成開機問候
-- 每次 Telegram 回覆同時保留文字與機器人表情
-- 停止時執行 sleepy 關機流程
-- 透過 `ninjaclawbot_diagnostics` 檢查部署狀態
+4. **想加入語音輸入**
+   請閱讀 [pi5mic/README.md](pi5mic/README.md)。它可單獨使用，也可整合進完整機器人流程。
 
 ## 快速開始
 
@@ -616,35 +422,44 @@ uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
-如果你要從零開始完成 Raspberry Pi、OpenClaw、`openclaw.json` 設定與 Telegram 驗證，請直接依照 [InstallationGuide.md](InstallationGuide.md)。
+如果你之後要用常時語音輸入，再執行：
 
-## 文件
+```bash
+uv sync --extra dev --extra voiceinput
+```
 
-| 文件 | 說明 |
-|------|------|
-| [InstallationGuide.md](InstallationGuide.md) | Raspberry Pi 與 OpenClaw 完整安裝流程 |
-| [DevelopmentGuide.md](DevelopmentGuide.md) | 開發者用架構與指令說明 |
-| [ninjaclawbot/README.md](ninjaclawbot/README.md) | 整合層使用方式 |
-| [pi5servo/README.md](pi5servo/README.md) | 伺服馬達設定 |
-| [pi5disp/README.md](pi5disp/README.md) | 顯示器設定 |
-| [pi5buzzer/README.md](pi5buzzer/README.md) | 蜂鳴器設定 |
-| [pi5mic/README.md](pi5mic/README.md) | 麥克風設定、STT 後端與 OpenClaw 交接 |
+接下來建議：
+
+- 要完整安裝 Raspberry Pi 與 OpenClaw: 看 [InstallationGuide.md](InstallationGuide.md)
+- 要進一步設定語音輸入: 看 [pi5mic/README.md](pi5mic/README.md)
+- 要查看開發與維護資訊: 看 [DevelopmentGuide.md](DevelopmentGuide.md)
+
+## 文件導覽
+
+| 文件 | 適合用途 |
+| --- | --- |
+| [InstallationGuide.md](InstallationGuide.md) | 從零開始完成 Raspberry Pi 5、OpenClaw、Telegram 與語音整合 |
+| [DevelopmentGuide.md](DevelopmentGuide.md) | 開發者參考資料、架構、模組責任與驗證流程 |
+| [ninjaclawbot/README.md](ninjaclawbot/README.md) | 整合機器人層的使用方式 |
+| [pi5servo/README.md](pi5servo/README.md) | 伺服馬達設定與安全測試 |
+| [pi5disp/README.md](pi5disp/README.md) | 顯示器設定與顯示測試 |
+| [pi5buzzer/README.md](pi5buzzer/README.md) | 蜂鳴器設定與聲音播放 |
+| [pi5mic/README.md](pi5mic/README.md) | 麥克風設定、STT、常時語音輸入與 OpenClaw 交接 |
 | [pi5vl53l0x/README.md](pi5vl53l0x/README.md) | 距離感測器設定 |
-| [backup/README.md](backup/README.md) | 歷史規劃與記錄 |
+| [backup/README.md](backup/README.md) | 歷史規劃與紀錄 |
 
 ## 目前狀態
 
-**狀態:** Stage 2 OpenClaw 整合已在 Raspberry Pi 5 上完成並驗證
+**狀態:** Stage 2 OpenClaw 整合已在 Raspberry Pi 5 上完成並驗證。
 
-已驗證內容:
+目前重點：
 
-- 持久橋接
-- 開機問候
-- idle / thinking / reply / sleepy 生命週期
-- Telegram 文字回覆與機器人反應
-- `ninjaclawbot_diagnostics`
-- `pi5mic` 預覽套件已完成，套件測試通過
-- 新語音路徑仍需要 Raspberry Pi 實機驗證，但 `pi5mic doctor` 現在會顯示取樣率、Gemini 驗證與 Raspberry Pi 電源／溫度警告
+- OpenClaw 與機器人執行層之間的持久橋接
+- 開機、待機、思考中、回覆、sleepy 的基本生命週期
+- Telegram 文字回覆與機器人反應同時成立
+- `ninjaclawbot_diagnostics` 診斷工具
+- `pi5mic` 可單獨使用，也可作為完整建置的一部分
+- `voiceinput-tool` 提供手動啟動的常時聆聽語音輸入預覽
 
 ## 授權
 
