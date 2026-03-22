@@ -1,168 +1,321 @@
 # pi5mic
 
-`pi5mic` is the standalone-first microphone library for the NinjaClawBot workspace.
+<div align="center">
 
-This README is written for normal Raspberry Pi users, not only developers. You can use `pi5mic` as a standalone microphone tool without OpenClaw. The current build also includes an optional OpenClaw profile, but the safest first test is the standalone path.
+**Standalone-First Microphone Tools and Always-On Voice Input for Raspberry Pi 5**
 
-## What `pi5mic` Can Do Right Now
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Platform: Raspberry Pi 5](https://img.shields.io/badge/platform-Raspberry%20Pi%205-red.svg)](https://www.raspberrypi.com/)
 
-Current implemented features:
+[NinjaClawBot README](../README.md) | [Installation Guide](../InstallationGuide.md) | [Development Guide](../DevelopmentGuide.md)
+
+</div>
+
+---
+
+A standalone-first microphone library for Raspberry Pi 5.
+
+`pi5mic` helps a Raspberry Pi 5 record voice, transcribe speech, and optionally
+run an always-on wake-word listener. It can work by itself as a local
+microphone tool, or it can hand voice requests to an OpenClaw agent inside the
+larger NinjaClawBot project.
+
+This package is designed for normal Raspberry Pi users, not only developers.
+The safest first path is the standalone workflow. After that works, you can
+switch the same microphone setup into OpenClaw mode.
+
+Main functions available today:
 
 - find available microphone devices
-- record a short WAV file
+- record a WAV audio file
 - transcribe speech locally with `whisper.cpp`
-- optionally use Gemini instead of `whisper.cpp`
-- guide you through setup with `pi5mic setup`
-- provide a simple menu with `pi5mic mic-tool`
-- run one full record-and-transcribe test with `pi5mic run --once`
-- prepare manual always-on wake-word config during `pi5mic setup`
-- start, stop, and inspect the optional background listener with `pi5mic voiceinput-tool`
-- optionally reuse the OpenClaw main session for always-on voice turns
-- show Raspberry Pi health warnings in `pi5mic doctor` when power or thermal history is available
+- optionally transcribe with Gemini instead
+- guide first-time setup with `pi5mic setup`
+- provide a beginner-friendly menu with `pi5mic mic-tool`
+- run one full record-and-transcribe cycle with `pi5mic run --once`
+- register a custom `openWakeWord` model for always-on listening
+- start, stop, inspect, and debug the always-on listener with `voiceinput-tool`
+- hand transcripts to OpenClaw and optionally mirror replies to Telegram
+- show Raspberry Pi microphone, power, and thermal warnings in `pi5mic doctor`
 
-Current limit:
+Current project status:
 
-- the package is ready for guided/manual testing, including the first always-on listener build
-- the always-on wake-word path still needs long-run Raspberry Pi validation before it should be treated as fully production-ready
+- one-time recording and transcription are ready for standalone and OpenClaw use
+- the always-on listener is ready for guided testing and real-device tuning
+- long-run Raspberry Pi validation is still recommended before treating the
+  always-on path as fully production-ready
 
-## Before You Start
+**Part of the [NinjaClawBot](../README.md) project.**
 
-You need:
+---
 
-- a Raspberry Pi with internet access
-- a working microphone, usually USB
-- `uv` installed
-- your standalone `pi5mic` folder ready
+## Contents
 
-You also need PortAudio system libraries. These are required for microphone access on Raspberry Pi.
+- [Features](#features)
+- [Architecture](#architecture)
+- [Installation](#installation)
+- [Getting Started](#getting-started)
+- [Always-On Voice Input](#always-on-voice-input)
+- [OpenClaw Mode Testing](#openclaw-mode-testing)
+- [Gemini Backend](#gemini-backend)
+- [Full Command-Line Reference](#full-command-line-reference)
+- [Appendix](#appendix)
 
-## 1. Standalone Installation
+---
 
-These steps install `pi5mic` as a standalone microphone tool.
+## Features
 
-Important path note:
+| Feature | Description |
+|---|---|
+| **Standalone-first workflow** | You can install and test `pi5mic` by itself before connecting it to OpenClaw or NinjaClawBot |
+| **Microphone discovery** | Lists audio input devices and helps choose a working sample rate |
+| **Guided setup** | `pi5mic setup` creates or updates `mic.json` with beginner-friendly prompts |
+| **Interactive tools** | Includes `mic-tool` for first-time setup/testing and `voiceinput-tool` for always-on control |
+| **Local speech-to-text** | Uses `whisper.cpp` as the default offline transcription backend |
+| **Cloud speech-to-text** | Can use Gemini when you prefer cloud transcription and have an API key |
+| **Always-on wake-word mode** | Supports a custom `openWakeWord` model for manual start/stop voice listening |
+| **OpenClaw handoff** | Can send transcripts into an OpenClaw agent and reuse the main agent conversation |
+| **Telegram reply mirroring** | Can ask OpenClaw to reply both locally and in Telegram when Telegram routing is configured |
+| **Pi health checks** | `doctor` reports microphone readiness plus Raspberry Pi thermal or power warnings when available |
 
-- this standalone guide assumes your working folder is `~/pi5mic`
-- if your standalone copy lives somewhere else, replace `~/pi5mic` with your
-  real folder path
-- if you cloned the full NinjaClawBot workspace, you can still follow this
-  section by using `~/NinjaClawBot/pi5mic` instead
+---
 
-### Step 1. Install required Raspberry Pi system packages
+## Architecture
 
-```bash
-sudo apt update
-sudo apt install -y git build-essential cmake pkg-config libportaudio2 portaudio19-dev python3-dev
+```text
+pi5mic/
+├── LICENSE
+├── pyproject.toml
+├── README.md
+├── voiceinput/
+│   ├── hey_Ninja.onnx           # Example custom wake-word model
+│   └── hey_Ninja.tflite         # Example custom wake-word model
+├── src/pi5mic/
+│   ├── __init__.py
+│   ├── __main__.py              # CLI entry point
+│   ├── driver.py                # Compatibility re-exports
+│   ├── errors.py                # Shared pi5mic exceptions
+│   ├── models.py                # Shared config/runtime models
+│   ├── cli/
+│   │   ├── _common.py           # Shared CLI helpers
+│   │   ├── config_cmd.py        # mic.json import/export/show commands
+│   │   ├── doctor.py            # Readiness and health checks
+│   │   ├── install_cmd.py       # Backend and model registration commands
+│   │   ├── mic_tool.py          # Beginner-friendly interactive menu
+│   │   ├── run_cmd.py           # One-shot recording/transcription workflow
+│   │   ├── setup_cmd.py         # Guided setup wizard
+│   │   ├── status.py            # Current config and local readiness summary
+│   │   └── voiceinput_tool.py   # Always-on listener controls
+│   ├── config/
+│   │   └── config_manager.py    # mic.json defaults, load/save, migration
+│   ├── core/
+│   │   ├── audio_backend.py     # PortAudio/sounddevice loader
+│   │   ├── devices.py           # Microphone discovery helpers
+│   │   ├── listener.py          # Single-flight conversation state machine
+│   │   ├── recorder.py          # WAV capture helpers
+│   │   ├── session.py           # Temporary file/session helpers
+│   │   ├── system_info.py       # Raspberry Pi health reporting
+│   │   └── voiceinput.py        # Always-on wake-word loop
+│   ├── install/
+│   │   ├── openwakeword.py      # openWakeWord model registration helpers
+│   │   └── whisper_cpp.py       # whisper.cpp discovery helpers
+│   ├── integration/
+│   │   ├── delivery.py          # Reply-target selection helpers
+│   │   ├── openclaw_session.py  # OpenClaw session strategy helpers
+│   │   ├── openclaw_setup.py    # OpenClaw autodiscovery and readiness checks
+│   │   └── presence.py          # Optional OpenClaw presence updates
+│   ├── stt/
+│   │   ├── base.py              # Speech-to-text interface
+│   │   ├── gemini.py            # Gemini backend
+│   │   └── whisper_cpp.py       # whisper.cpp backend
+│   ├── transport/
+│   │   ├── base.py              # Agent transport interface
+│   │   └── openclaw_cli.py      # OpenClaw CLI transport
+│   ├── vad/
+│   │   ├── base.py              # Voice activity interface
+│   │   └── silence.py           # Silence-stop detector
+│   └── wakeword/
+│       ├── base.py              # Wake-word interface
+│       └── openwakeword.py      # openWakeWord backend
+└── tests/
+    ├── test_cli.py
+    ├── test_config.py
+    ├── test_devices.py
+    ├── test_doctor.py
+    ├── test_listener.py
+    ├── test_mic_tool.py
+    ├── test_mic_tool_setup.py
+    ├── test_openclaw_session.py
+    ├── test_openclaw_setup.py
+    ├── test_recorder.py
+    ├── test_stt_gemini.py
+    ├── test_stt_whisper_cpp.py
+    ├── test_system_info.py
+    ├── test_transport_openclaw.py
+    ├── test_vad.py
+    ├── test_voiceinput.py
+    ├── test_voiceinput_tool.py
+    └── test_wakeword.py
 ```
 
-What this is doing:
+---
 
-- `git`: lets you clone code from GitHub
-- `build-essential`, `cmake`, `pkg-config`: needed to build `whisper.cpp`
-- `libportaudio2`, `portaudio19-dev`: needed so the microphone backend can open audio devices
-- `python3-dev`: useful for Python package builds on Raspberry Pi
+## Installation
 
-What you should expect:
+This section is the complete standalone installation path for Raspberry Pi 5.
+All standalone examples below assume your working folder is `~/pi5mic`.
 
-- the install finishes without errors
-- after this step, the common error `PortAudio library not found` should be avoided
+If your copy lives somewhere else, replace `~/pi5mic` with your real folder
+path in each command.
 
-### Step 2. Open your standalone `pi5mic` folder
+### Prerequisites
+
+Before you start, make sure you have:
+
+1. A **Raspberry Pi 5** with Raspberry Pi OS Bookworm or newer
+2. A **USB microphone or microphone module** that already appears in the system
+3. An **internet connection** for the first installation
+4. A terminal window with permission to run `sudo`
+
+### Step 1. Prepare the standalone `pi5mic` folder
+
+If you already have a standalone `pi5mic` folder, just move into it:
 
 ```bash
 cd ~/pi5mic
 ```
 
-What this is doing:
+If you do not have it yet, create it from the repository:
 
-- moves you into the standalone `pi5mic` folder
-- makes sure later commands write `mic.json` and `.venv` in the standalone
-  location instead of the larger NinjaClawBot workspace
+```bash
+cd ~
+git clone https://github.com/Nilcreator/NinjaClawBot.git
+cp -R ~/NinjaClawBot/pi5mic ~/pi5mic
+cd ~/pi5mic
+```
+
+What this does:
+
+- downloads the project source code
+- creates a standalone `~/pi5mic` working folder
+- keeps your microphone config and virtual environment separate from the larger
+  NinjaClawBot workspace
 
 What you should expect:
 
-- your terminal is now inside `~/pi5mic`
+- your terminal ends inside `~/pi5mic`
+- later commands create `mic.json` and `.venv` in this standalone folder
 
-### Step 3. Install the Python workspace
-
-Normal install:
+### Step 2. Install `uv`
 
 ```bash
-uv sync --extra dev
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.zshrc
 ```
 
-If you want the optional always-on wake-word feature too, use:
+What this does:
+
+- installs `uv`, the tool this project uses to create a virtual environment,
+  install Python packages, and run commands
+
+What you should expect:
+
+- the installer finishes without errors
+- `uv --version` works in a new shell
+
+If your shell is not `zsh`, open a new terminal window or load the correct
+shell profile for your shell.
+
+### Step 3. Install Raspberry Pi system packages
 
 ```bash
+sudo apt update
+sudo apt install -y \
+  git \
+  build-essential \
+  cmake \
+  pkg-config \
+  curl \
+  ca-certificates \
+  libportaudio2 \
+  portaudio19-dev \
+  python3-dev
+```
+
+What this does:
+
+- installs build tools needed for `whisper.cpp`
+- installs PortAudio so Python can open your microphone
+- installs common system packages used during setup
+
+What you should expect:
+
+- the install finishes without errors
+- the common microphone error `PortAudio library not found` should no longer
+  appear
+
+### Step 4. Install the Python environment
+
+For the full `pi5mic` feature set, including always-on wake-word listening, use:
+
+```bash
+cd ~/pi5mic
 uv sync --extra dev --extra voiceinput
 ```
 
-What this is doing:
+What this does:
 
-- installs all Python packages in the workspace
-- includes `pi5mic`
-- also includes the Gemini SDK that `pi5mic` uses for the optional cloud backend
-- if you use the `voiceinput` extra, it also installs `openWakeWord` and its
-  local inference runtime packages
+- creates the local `.venv` environment
+- installs `pi5mic`
+- installs the Gemini SDK used by the optional Gemini backend
+- installs `openWakeWord` and its local runtime packages for always-on voice
+  input
 
 What you should expect:
 
 - the command finishes successfully
-- you can now run `uv run pi5mic --help`
+- `uv run pi5mic --help` works afterward
 
-### Step 4. Confirm `pi5mic` is installed
+### Step 5. Confirm the command-line tools are available
 
 ```bash
+cd ~/pi5mic
 uv run pi5mic --help
 ```
 
-What this is doing:
+What this does:
 
-- checks that the `pi5mic` command is available
+- confirms that the package installed correctly
 
 What you should expect:
 
-- a help screen showing commands such as:
-  - `devices`
-  - `doctor`
-  - `install`
-  - `mic-tool`
-- `record`
-- `run`
-- `setup`
-- `status`
-- `transcribe`
-- `voiceinput-tool`
+- a help screen that lists commands such as `mic-tool`, `voiceinput-tool`,
+  `setup`, `doctor`, `run`, `record`, and `transcribe`
 
-## 2. Install the Default STT Backend: `whisper.cpp`
-
-`pi5mic` uses `whisper.cpp` as the default speech-to-text backend.
-
-### Step 5. Download and build `whisper.cpp`
+### Step 6. Install the default speech-to-text backend: `whisper.cpp`
 
 ```bash
 cd ~
 git clone https://github.com/ggml-org/whisper.cpp.git
-cd whisper.cpp
+cd ~/whisper.cpp
 sh ./models/download-ggml-model.sh base
 cmake -B build
 cmake --build build -j
 ```
 
-What this is doing:
+What this does:
 
-- downloads the `whisper.cpp` source code
+- downloads `whisper.cpp`
 - downloads the multilingual `base` model
-- builds the `whisper-cli` program
+- builds the `whisper-cli` program used by `pi5mic`
 
 What you should expect:
 
-- model file: `~/whisper.cpp/models/ggml-base.bin`
-- program path: usually `~/whisper.cpp/build/bin/whisper-cli`
+- a command path like `~/whisper.cpp/build/bin/whisper-cli`
+- a model path like `~/whisper.cpp/models/ggml-base.bin`
 
-If your build puts `whisper-cli` somewhere slightly different, that is okay. You just need the real path.
-
-### Step 6. Register `whisper.cpp` with `pi5mic`
+### Step 7. Register `whisper.cpp` with `pi5mic`
 
 ```bash
 cd ~/pi5mic
@@ -171,453 +324,316 @@ uv run pi5mic install whispercpp \
   --model-path ~/whisper.cpp/models/ggml-base.bin
 ```
 
-What this is doing:
+What this does:
 
-- tells `pi5mic` where the `whisper.cpp` command lives
-- tells `pi5mic` where the model file lives
-- saves both paths into `mic.json`
+- tells `pi5mic` where `whisper-cli` lives
+- tells `pi5mic` where the `ggml-base.bin` model lives
+- saves those paths into `mic.json`
 
 What you should expect:
 
-- the terminal prints the resolved command path
-- the terminal prints the resolved model path
-- settings are saved successfully
+- the resolved command and model paths are printed
+- `pi5mic` confirms the settings were saved
 
-## 3. First-Time Setup With `pi5mic setup`
+### Step 8. Optional: prepare a Gemini API key
 
-This is the command-line wizard.
+You only need this step if you want to use Gemini instead of `whisper.cpp`.
 
-### Step 7. Start the setup wizard
+What a Gemini API key is:
+
+- a private secret, similar to a password
+- it allows `pi5mic` to send audio to Google’s Gemini API for transcription
+- if you do not want cloud transcription, you can skip this section
+
+How to get one:
+
+1. Open [Google AI Studio](https://aistudio.google.com/)
+2. Sign in with your Google account
+3. Open the API Keys page
+4. Create a new Gemini API key or copy an existing one
+
+How to make it available in your current shell:
+
+```bash
+export GEMINI_API_KEY="your_key_here"
+```
+
+What you should expect:
+
+- there is usually no output
+- `pi5mic doctor` can then detect the key
+
+Security note:
+
+- never paste your Gemini API key into Git, GitHub, or `mic.json`
+- keep it in your shell environment only
+
+### Step 9. Optional: prepare a custom wake-word model for always-on voice input
+
+You only need this step if you want the always-on listener.
+
+What the wake-word model is:
+
+- a small local AI model file that recognizes the wake phrase, such as
+  `hey Ninja`
+- this model does **not** transcribe the full command
+- it only decides when `pi5mic` should start recording the real voice request
+
+How to get one:
+
+1. Open the official [openWakeWord repository](https://github.com/dscripka/openWakeWord)
+2. Go to the `Training New Models` section
+3. Use the simple Google Colab notebook if you want the easiest starting path
+4. Train or export a custom model for the phrase `hey Ninja`
+5. Save the exported file as either `.onnx` or `.tflite`
+
+Recommended standalone folder:
+
+```bash
+mkdir -p ~/pi5mic/voiceinput
+```
+
+Recommended saved model path:
+
+- `~/pi5mic/voiceinput/hey_Ninja.onnx`
+- or `~/pi5mic/voiceinput/hey_Ninja.tflite`
+
+What `.onnx` and `.tflite` mean:
+
+- `.onnx`: a portable AI model format commonly used with ONNX Runtime
+- `.tflite`: a portable AI model format commonly used with LiteRT / TensorFlow Lite
+- `pi5mic` can use either one
+- if you are not sure which to choose, use whichever format your export step
+  already created
+
+### Step 10. Register the wake-word model with `pi5mic`
+
+Example with `.onnx`:
 
 ```bash
 cd ~/pi5mic
-uv run pi5mic setup
+uv run pi5mic install openwakeword \
+  --model-path ~/pi5mic/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
 ```
 
-What this is doing:
+Example with `.tflite`:
 
-- creates or updates `mic.json`
-- asks you which profile, microphone, and STT backend you want
-- asks for a sample rate that matches your selected microphone
-- can also prepare the optional always-on wake-word listener
-- if you choose `Profile: openclaw`, `pi5mic` now tries to detect your local
-  OpenClaw settings automatically and then runs a safe readiness check
+```bash
+cd ~/pi5mic
+uv run pi5mic install openwakeword \
+  --model-path ~/pi5mic/voiceinput/hey_Ninja.tflite \
+  --keyword "hey Ninja"
+```
 
-### Recommended choices for standalone testing
+What this does:
 
-Choose:
-
-- `Profile`: `standalone`
-- `Input device`: your microphone number, name, or `default`
-- `Sample rate (Hz)`: accept the recommended value shown by `pi5mic`
-- `STT backend`: `whisper_cpp`
-- `whisper.cpp command path`: your `whisper-cli` path
-- `whisper.cpp model path`: your `ggml-base.bin` path
-- `whisper.cpp threads`: accept the suggested value on Raspberry Pi, usually `2`
-- `Maximum clip length`: start with `8`, `10`, or `12`
-- `Prepare always-on voice input now?`: choose `y` only if you want the manual wake-word listener
-- if you enable always-on voice input:
-  - `Wake word`: keep `ninja` unless you trained a different keyword
-  - `openWakeWord model path`: point to your custom `Ninja` `.onnx` or `.tflite` model
-  - `Wake-word detection threshold`: keep `0.5` for the first test
-  - `Wake-word VAD threshold`: keep `0` unless you need stronger false-trigger filtering
-  - `Enable openWakeWord noise suppression?`: usually `n` for the first test
-  - `openWakeWord inference framework`: keep `auto`
-  - `Silence stop timeout`: keep `3`
-  - `Maximum recorded command length`: keep `10`
-  - `Cooldown`: keep `1.5`
-
-Important note about sample rate:
-
-- many Raspberry Pi USB microphones do not accept `16000` Hz directly
-- they often work best at `44100` Hz or `48000` Hz
-- `pi5mic` now tries to recommend the device's own default sample rate during setup
-- for most users, the safest choice is to accept the recommended value
-
-Important note about Raspberry Pi safety defaults:
-
-- `pi5mic` now normalizes recorded WAV clips to `16000` Hz mono before sending
-  them to `whisper.cpp`
-- if you leave the thread setting blank, `pi5mic` now uses a safer default on
-  Raspberry Pi instead of letting `whisper.cpp` spike to the platform default
-- the default max clip length is now shorter because the current preview path
-  still records the full clip before transcription
-
-### What the always-on setup options mean
-
-- `Wake word`: the word you say to wake the listener. In this project, that is
-  usually `Ninja`.
-- `openWakeWord model path`: the exact file path to the wake-word model file
-  that teaches `pi5mic` how `Ninja` sounds. Example:
-  `~/pi5mic/voiceinput/ninja.tflite`.
-- `.onnx` and `.tflite`: both are local AI model file formats. `.onnx` usually
-  runs through ONNX Runtime. `.tflite` usually runs through LiteRT / TensorFlow
-  Lite. `pi5mic` can use either format.
-- `How to get the model file`: create or download a custom `Ninja` model by
-  following the official `openWakeWord` training/export guide, save the file in
-  a stable folder, then point both `pi5mic install openwakeword --model-path`
-  and the setup wizard to that same file.
-- `Wake-word detection threshold`: how sure the detector must be before it
-  decides it heard `Ninja`. Higher means fewer false triggers but stricter
-  matching. Lower means easier triggering but more risk of mistakes.
-- `Wake-word VAD threshold`: an extra speech check that helps ignore
-  non-speech noise. `0` turns this extra check off.
-- `Enable openWakeWord noise suppression?`: reduces steady background noise
-  before wake-word detection. Start with `n`, then turn it on later only if
-  your room is noisy.
-- `openWakeWord inference framework`: tells `pi5mic` which runtime should load
-  the model file. Keep `auto` unless you are troubleshooting a runtime issue.
-- `Silence stop timeout`: how long `pi5mic` waits for silence before it stops
-  recording the command.
-- `Maximum recorded command length`: the hard limit for one spoken command,
-  even if the user keeps talking.
-- `Cooldown`: a short pause after one command so the listener does not trigger
-  again too quickly.
+- saves the wake-word model path into `mic.json`
+- saves the friendly wake-word label shown in `status` output
+- downloads shared `openWakeWord` runtime assets if needed
 
 What you should expect:
 
-- a file named `mic.json` is created in the current folder
-- if the backend is ready, you should see:
-  - `Configured STT backend looks ready.`
-- if you enabled always-on voice input, setup also reminds you to run `uv run pi5mic doctor`
-  before starting `voiceinput-tool`
+- `pi5mic` prints the chosen model path
+- `pi5mic` prints which inference framework will be used
 
-If you still see a warning:
+## Getting Started
 
-- read the warning carefully
-- it should tell you exactly what is still missing
+This section gives the shortest beginner-friendly test path. Use `mic-tool`
+first, then move into `voiceinput-tool` after the one-shot recording test
+works.
 
-## 4. Full Function Explanation And Setup With `mic-tool`
-
-`mic-tool` is the easiest path for non-programmers.
-
-### Step 8. Start `mic-tool`
+### Step 1. Open `mic-tool`
 
 ```bash
+cd ~/pi5mic
 uv run pi5mic mic-tool
 ```
 
-What this is doing:
+What this does:
 
-- opens a simple text menu
-- lets you use the most common actions without remembering command names
+- opens the guided `pi5mic` menu
+- helps you configure and test `pi5mic` without remembering command names
 
 What you should expect:
 
-- you will see these menu items:
-  - `1. Run setup wizard`
-  - `2. Register whisper.cpp`
-  - `3. Run doctor`
-  - `4. Show status`
-  - `5. Run one capture cycle`
-  - `6. Open voiceinput-tool`
-  - `7. Exit`
+- a menu with options such as:
+  - `Run setup wizard`
+  - `Register whisper.cpp`
+  - `Run doctor`
+  - `Show status`
+  - `Run one capture cycle`
+  - `Open voiceinput-tool`
 
-### What each menu item does
+### Step 2. Run the setup wizard from `mic-tool`
 
-#### 1. Run setup wizard
+Choose:
 
-What it does:
+- `1. Run setup wizard`
 
-- same as `uv run pi5mic setup`
+Recommended choices for the first standalone test:
 
-What to expect:
+- `Profile`: `standalone`
+- `Input device`: your USB microphone or `default`
+- `Sample rate (Hz)`: accept the recommended value
+- `STT backend`: `whisper_cpp`
+- `whisper.cpp command path`: your `whisper-cli` path
+- `whisper.cpp model path`: your `ggml-base.bin` path
+- `Maximum clip length`: start with `8`, `10`, or `12`
 
-- asks for your profile, microphone, backend, and paths
-- saves your settings into `mic.json`
+If you also want to prepare the always-on listener during setup:
 
-#### 2. Register whisper.cpp
+- `Prepare always-on voice input now?`: `y`
+- `Wake word`: `hey Ninja`
+- `openWakeWord model path`: your real `.onnx` or `.tflite` model path
+- `Wake-word detection threshold`: `0.5`
+- `Wake-word VAD threshold`: `0`
+- `Enable openWakeWord noise suppression?`: `n` for the first test
+- `openWakeWord inference framework`: `auto`
+- `Silence stop timeout`: `3`
+- `Maximum recorded command length`: `10`
+- `Cooldown`: `1.5`
 
-What it does:
+What this does:
 
-- same as `uv run pi5mic install whispercpp`
+- creates or updates `mic.json`
+- saves your microphone, backend, and optional always-on settings
 
-What to expect:
+What you should expect:
 
-- saves the command path and model path if they are valid
+- `Configured STT backend looks ready.`
+- if always-on is enabled, setup reminds you to run `doctor` before starting
+  `voiceinput-tool`
 
-#### 3. Run doctor
+### Step 3. Run `doctor`
 
-What it does:
+Choose:
 
-- checks whether your config, microphone setup, and backend are ready
+- `3. Run doctor`
 
-What to expect:
+What this does:
 
-- lines starting with `OK`
-- then:
+- checks your config
+- checks microphone access
+- checks `whisper.cpp` or Gemini readiness
+- checks always-on wake-word readiness if you enabled it
+
+What you should expect:
+
+- many lines starting with `OK`
+- then either:
   - `pi5mic doctor passed.`
+  - or `pi5mic doctor passed with warnings.`
 
-Sometimes you may see:
+If you see warnings:
 
-- `pi5mic doctor passed with warnings.`
+- read them carefully
+- common warnings are usually sample-rate suggestions or Raspberry Pi power and
+  thermal notes
 
-This usually means:
+### Step 4. Run one capture cycle
 
-- your saved sample rate does not match what the microphone accepts
-- `pi5mic` found a safer working rate, such as `48000` Hz
-- or `pi5mic` detected Raspberry Pi power, thermal, or memory pressure that may
-  affect local Whisper transcription
+Choose:
 
-If that happens:
+- `5. Run one capture cycle`
 
-- rerun `uv run pi5mic setup`
-- keep the same microphone
-- accept the recommended sample rate
+What this does:
 
-If something is wrong:
-
-- it prints a failure list
-- fix those items before going further
-
-#### 4. Show status
-
-What it does:
-
-- shows the current profile and local readiness summary
-
-What to expect:
-
-- values such as:
-  - config file path
-  - profile
-  - input device
-  - sample rate
-  - STT backend
-  - Whisper runtime or Gemini auth status
-  - number of detected input devices
-
-#### 5. Run one capture cycle
-
-What it does:
-
-- records one temporary audio clip
+- records one short clip
 - transcribes it
-- prints the text result
+- prints the recognized text
 
-What to expect:
+What you should expect:
 
 - `Recording...`
-- `Recorded X.XXs of audio.`
+- `Recorded ...`
 - `Transcript:`
-- your recognized words
-- backend information
+- your spoken sentence
 
-What `pi5mic` now does automatically for local Whisper on Raspberry Pi:
+This is the first proof that your microphone, backend, and config all work
+together.
 
-- keeps a safer default thread count when you leave the setting blank
-- converts WAV clips to `16000` Hz mono before transcription
-- keeps the default clip shorter so the preview path does less work per cycle
+### Step 5. Check the current status
 
-This is the simplest way to test whether the whole standalone microphone flow works.
+Choose:
 
-#### 6. Open voiceinput-tool
+- `4. Show status`
 
-What it does:
+What this does:
 
-- opens the dedicated always-on listener control menu
-- lets you start, stop, inspect, and debug the manual wake-word service
-
-What to expect:
-
-- a second menu with:
-  - `Show voice input status`
-  - `Start background listener`
-  - `Stop background listener`
-  - `Run listener in foreground`
-  - `Show recent voice input logs`
-
-#### 7. Exit
-
-What it does:
-
-- closes the menu
-
-What to expect:
-
-- `Leaving pi5mic mic-tool.`
-
-## 5. Full Function Explanation And Setup With Direct Command Line
-
-If you prefer direct commands, use this section.
-
-### Step 9. List available microphones
-
-```bash
-uv run pi5mic devices
-```
-
-What this is doing:
-
-- shows all input devices that support recording
+- shows the current profile, device, sample rate, backend, and service state
 
 What you should expect:
 
-- a numbered list like:
-  - `[1] USB Mic`
-  - `[2] Desk Mic`
+- a short status summary
+- if always-on mode is enabled, you should also see the wake word and listener
+  service paths
 
-### Step 10. Show the current config
+### Step 6. Open `voiceinput-tool`
 
-```bash
-uv run pi5mic config show
-```
+Choose:
 
-What this is doing:
+- `6. Open voiceinput-tool`
 
-- prints the active `mic.json`
+What this does:
 
-What you should expect:
-
-- readable JSON with sections like:
-  - `profile`
-  - `audio`
-  - `stt`
-  - `integration`
-  - `retention`
-
-### Step 11. Show a short readiness summary
-
-```bash
-uv run pi5mic status
-```
-
-What this is doing:
-
-- prints the most important current settings
+- opens the always-on voice input control menu
 
 What you should expect:
 
-- profile
-- input device
-- sample rate
-- STT backend
-- audio device count
-- if always-on voice input is enabled:
-  - wake word
-  - session strategy
-  - service state
-  - state-file and log-file paths
+- options to show status, start the background listener, stop it, run it in the
+  foreground, and view recent logs
 
-### Step 12. Run the health check
+### Step 7. Test always-on voice input safely in foreground mode
 
-```bash
-uv run pi5mic doctor
-```
+Inside `voiceinput-tool`, choose:
 
-What this is doing:
+- `4. Run listener in foreground`
 
-- checks that your setup is usable
+What this does:
+
+- starts the wake-word listener in the current terminal
+- waits for the wake phrase
+- after wake-word detection, records one spoken command
+- stops recording after 3 seconds of silence or the maximum command length
 
 What you should expect:
 
-- success messages for:
-  - config
-  - audio device discovery
-- `whisper.cpp` command
-- model file
+- `Starting always-on voice input loop.`
+- `Voice input armed ...`
+- after you say `hey Ninja`, the terminal should show:
+  - `Wake word detected; recording voice command.`
+  - `Wake-word capture complete; starting transcription.`
+  - `Transcript: ...`
 
-If the sample rate is not ideal for the selected microphone, `doctor` may still succeed but show a warning with a better rate to use.
+This is the safest first always-on test because you can see the live messages
+and stop it with `Ctrl+C`.
 
-If always-on voice input is enabled, `doctor` also checks:
+### Step 8. Test the background listener
 
-- whether `openWakeWord` is installed
-- whether the custom `.onnx` or `.tflite` wake-word model exists
-- whether the shared `openWakeWord` runtime assets are available
-- which inference framework will be used
-- whether the background listener is running or stopped
+Inside `voiceinput-tool`, choose these in order:
 
-### Step 13. Test recording only
+1. `2. Start background listener`
+2. `1. Show voice input status`
+3. `5. Show recent voice input logs`
+4. `3. Stop background listener`
 
-```bash
-uv run pi5mic record --duration 3 --output mic-test.wav
-```
+What this does:
 
-What this is doing:
-
-- records a 3-second WAV file
-- does not run speech-to-text yet
-
-What you should expect:
-
-- a file named `mic-test.wav`
-- metadata such as duration, frames, and bytes
-
-This is a good test when you want to confirm the microphone works before testing transcription.
-
-If this command reports `Invalid sample rate`, rerun `uv run pi5mic setup` and accept the sample rate recommended by the wizard.
-
-### Step 14. Test transcription on the saved WAV file
-
-```bash
-uv run pi5mic transcribe mic-test.wav
-```
-
-What this is doing:
-
-- runs your saved WAV file through the configured STT backend
+- starts the listener in the background
+- confirms it is running
+- shows the recent log lines
+- stops it cleanly when you are done
 
 What you should expect:
 
-- the recognized text
-- backend name
-- model name
-- sometimes a language value
+- the background listener reports `running`
+- the logs show wake-word and transcription events
+- the stop action shuts it down cleanly
 
-### Step 15. Test the full standalone flow
+## Always-On Voice Input
 
-```bash
-uv run pi5mic run --once
-```
-
-What this is doing:
-
-- records one temporary clip
-- transcribes it
-- prints the final result
-- deletes the temporary audio file by default
-
-What you should expect:
-
-- `Profile: standalone`
-- `STT: whisper_cpp`
-- `Recording...`
-- a transcript result
-
-### Step 16. Keep the temporary audio file for debugging if needed
-
-```bash
-uv run pi5mic run --once --keep-audio
-```
-
-What this is doing:
-
-- same as the previous step
-- keeps the recorded WAV file instead of deleting it
-
-What you should expect:
-
-- everything from the normal `run --once`
-- plus a final line showing where the audio file was saved
-
-### Step 17. Test transcription without recording live audio
-
-```bash
-uv run pi5mic run --once --audio-file ./mic-test.wav
-```
-
-What this is doing:
-
-- skips live microphone recording
-- uses an existing WAV file
-
-What you should expect:
-
-- transcript output only
-
-## 6. Manual Always-On Voice Input
-
-This section is for the optional wake-word listener.
+The always-on listener is optional and manual by design.
 
 Important safety and privacy rule:
 
@@ -625,179 +641,109 @@ Important safety and privacy rule:
 - you must start it yourself
 - you can stop it yourself at any time
 
-### Step 18. Confirm the wake-word dependency is installed
+How the always-on loop works:
 
-```bash
-cd ~/pi5mic
-uv sync --extra dev --extra voiceinput
-```
+1. it waits quietly for the wake phrase, such as `hey Ninja`
+2. when it hears the wake phrase, it starts recording the command
+3. it stops recording after 3 seconds of silence or the maximum command length
+4. it transcribes the command with `whisper.cpp` or Gemini
+5. in OpenClaw mode, it sends the original-language transcript to the agent
+6. it waits for the reply, cools down briefly, and re-arms itself
 
-What this is doing:
-
-- installs `openWakeWord` and its local runtime libraries for wake-word detection
-
-What you should expect:
-
-- the command completes without errors
-
-### Step 19. Create or download a custom `Ninja` wake-word model
-
-`openWakeWord` does not need an access key, but it does need a model file for
-the word `Ninja`.
-
-Recommended path:
-
-- open the official [openWakeWord GitHub repository](https://github.com/dscripka/openWakeWord)
-- read the `Training New Models` section
-- use the simple Google Colab notebook if you want the easiest first pass
-- export or download a `Ninja` model as `.onnx` or `.tflite`
-- save it somewhere stable, for example `~/pi5mic/voiceinput/ninja.tflite`
-
-What these file types mean:
-
-- `.onnx`: a common local AI model format that usually runs with ONNX Runtime
-- `.tflite`: a common local AI model format that usually runs with LiteRT /
-  TensorFlow Lite
-- if you are unsure which one to use, use whichever file your training/export
-  step gave you and keep the setup option `openWakeWord inference framework` at
-  `auto`
-- do not enter only `.onnx` or `.tflite` in setup; `pi5mic` needs the full
-  real file path, such as `~/pi5mic/voiceinput/hey_ninja.tflite`
-
-### Step 20. Register the custom model
-
-```bash
-cd ~/pi5mic
-uv run pi5mic install openwakeword \
-  --model-path ~/pi5mic/voiceinput/ninja.tflite
-```
-
-What this is doing:
-
-- validates the model path
-- downloads the shared `openWakeWord` runtime assets
-- saves the wake-word settings into `mic.json`
-
-What you should expect:
-
-- the command prints the detected model path and framework
-- it either downloads runtime assets or says they are already present
-
-### Step 21. Validate the always-on config
-
-```bash
-cd ~/pi5mic
-uv run pi5mic doctor
-```
-
-What this is doing:
-
-- checks STT, microphone access, and wake-word readiness together
-
-What you should expect:
-
-- `INFO always-on voice input: enabled`
-- `OK   wake-word detector: openwakeword ...`
-- `OK   wake model: ...`
-- `OK   wake framework: ...`
-- if OpenClaw presence updates are slow or unavailable, `doctor` may now show a
-  warning about degraded presence support without treating the whole voice
-  handoff path as broken
-
-### Step 22. Start the listener in the background
-
-```bash
-cd ~/pi5mic
-uv run pi5mic voiceinput-tool start
-```
-
-What this is doing:
-
-- starts the manual wake-word listener in the background
-- waits for the wake word
-- after wake-word detection, records until 3 seconds of silence or 10 seconds max
-
-What you should expect:
-
-- `Started the always-on voice input listener in the background.`
-- the microphone stays idle until it hears the wake word
-
-### Step 23. Check its status
-
-```bash
-cd ~/pi5mic
-uv run pi5mic voiceinput-tool status
-```
-
-What this is doing:
-
-- shows whether the background listener is running
-- shows the wake word, session strategy, and the state/log file paths
-
-### Step 24. Stop it manually
-
-```bash
-cd ~/pi5mic
-uv run pi5mic voiceinput-tool stop
-```
-
-What this is doing:
-
-- stops the background wake-word listener
-
-What you should expect:
-
-- `Stopped the always-on voice input listener.`
-
-### Step 25. Use the foreground mode when debugging
+### Foreground mode
 
 ```bash
 cd ~/pi5mic
 uv run pi5mic voiceinput-tool foreground
 ```
 
-What this is doing:
+What this does:
 
-- runs the same listener in the current terminal
-- prints live status messages and the recognized transcript so you can debug
-  setup problems
-- pauses the microphone stream while Whisper is transcribing, then re-arms it
-  cleanly for the next wake word
+- starts the always-on listener in the current terminal
+- shows live wake-word, recording, transcription, and recovery messages
 
 What you should expect:
 
-- `Starting voice input in the foreground.`
-- `Press Ctrl+C to stop it.`
-- after a successful wake-word cycle, the terminal should print
-  `Transcript: ...`
-- if you are using the OpenClaw profile, the listener intentionally ignores new
-  wake-word hits while the previous request is still being transcribed,
-  dispatched, or waiting for the OpenClaw reply
-- once the OpenClaw reply finishes, the listener should say it is waiting for
-  the next wake word again
-- if the wake word fired but you did not say a real command, the listener
-  should say that no spoken command was detected and then re-arm instead of
-  crashing
-- if repeated audio overflow is detected, `pi5mic` now recreates the live
-  microphone stream automatically and keeps listening instead of leaving the
-  old stream in a bad state
+- the listener waits for `hey Ninja`
+- after detection, it records one command and prints `Transcript: ...`
+- you can stop it with `Ctrl+C`
 
-## Optional OpenClaw Mode Inside NinjaClawBot
+### Background mode
 
-Use this after the standalone path already works.
+Start it:
 
-### Step 18. Start from the NinjaClawBot root
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool start
+```
+
+Check status:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool status
+```
+
+Show recent logs:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool logs
+```
+
+Stop it:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool stop
+```
+
+What this does:
+
+- starts and stops the manual always-on service
+- lets you inspect whether it is armed and where the log file lives
+
+What you should expect:
+
+- the service reports `running` or `stopped`
+- the log command shows recent wake-word and transcription events
+
+## OpenClaw Mode Testing
+
+Use this section only after the standalone path already works.
+
+### Step 1. Move to the NinjaClawBot workspace
 
 ```bash
 cd ~/NinjaClawBot
 ```
 
-What this is doing:
+What this does:
 
-- makes sure `mic.json` is written into the NinjaClawBot project folder
-- lets `pi5mic` reuse the same OpenClaw installation and Python environment
+- makes `mic.json` live inside the NinjaClawBot project folder
+- lets `pi5mic` reuse the same Python environment and local OpenClaw install
 
-### Step 19. Run the setup wizard or `mic-tool`
+### Step 2. Install the Python environment with voice input support
+
+```bash
+uv sync --extra dev --extra voiceinput
+```
+
+What this does:
+
+- installs `pi5mic`, Gemini support, and `openWakeWord` inside the full
+  NinjaClawBot workspace
+
+### Step 3. Make sure OpenClaw is running
+
+Start the OpenClaw services you normally use, especially the gateway.
+
+What you should expect:
+
+- the OpenClaw CLI works
+- the gateway is reachable from the same user account that runs `pi5mic`
+
+### Step 4. Run the guided setup in OpenClaw mode
 
 ```bash
 uv run pi5mic mic-tool
@@ -807,374 +753,489 @@ Then choose:
 
 - `1. Run setup wizard`
 
-Recommended OpenClaw choices:
+Recommended choices:
 
 - `Profile`: `openclaw`
 - `Input device`: your USB microphone or `default`
 - `Sample rate (Hz)`: accept the recommended value
 - `STT backend`: `whisper_cpp` or `gemini`
-- `Maximum clip length`: start with `8`, `10`, or `12`
+- `Voice-input OpenClaw session strategy`: `agent_main`
+- `Prepare always-on voice input now?`: `y` if you want the wake-word listener
 
-What `pi5mic` now does automatically in OpenClaw mode:
+Why `agent_main` is recommended:
 
-- finds the local `openclaw` CLI when possible
-- reads the local OpenClaw config file when available
-- fills in the gateway URL, agent id, and session key automatically
-- automatically repairs the old legacy value `voice:local-mic` to the current
-  safe OpenClaw session id `voice-local-mic`
-- checks whether OpenClaw Telegram is enabled
-- looks for the most recent Telegram chat or topic target from OpenClaw session
-  data when Telegram is enabled
-- asks whether you want each voice turn to reply both locally and in Telegram
-- saves the detected Telegram reply target if you answer `y`
-- explains whether the NinjaClawBot plugin looks ready
-- runs a safe readiness check after saving the config
+- it sends voice requests into the agent’s normal conversation
+- it usually gives the most natural OpenClaw behavior for everyday use
 
-What you should expect:
+What `pi5mic` now tries to do automatically in OpenClaw mode:
 
-- a summary of the detected OpenClaw settings
-- if OpenClaw already knows a recent Telegram route, the wizard shows it and
-  asks whether it should mirror replies there too
-- `Configured STT backend looks ready.` if the selected STT backend is usable
-- then either:
-  - `OpenClaw voice handoff is ready.`
-  - or a warning that explains what still needs attention
+- find the local OpenClaw CLI
+- read the local OpenClaw config file
+- fill in the gateway URL, agent id, and session details
+- detect whether Telegram delivery is configured
+- suggest local plus Telegram reply delivery when a Telegram target is known
+- repair older session-id values automatically
+- run a readiness check after saving the config
 
-### Step 20. If the wizard says OpenClaw needs one-time pairing approval
+### Step 5. If `pi5mic` asks about pairing approval
 
 Sometimes OpenClaw may say `pairing required`.
 
 What this means:
 
-- your microphone and STT backend may already be fine
-- OpenClaw created a local device request, but it has not been approved yet
+- the microphone setup may already be correct
+- OpenClaw created a local device request that still needs approval
 
-What `pi5mic` does now:
+What to do:
 
-- explains the problem in plain language
-- asks whether it should approve the newest local request for you
-- retries the readiness check automatically if you say yes
+- answer `y` if you trust this local Raspberry Pi session
+- `pi5mic` then tries to approve the newest local request automatically
 
-What you should expect:
-
-- a prompt such as:
-  - `Approve the newest local OpenClaw device request now?`
-- if you answer `y`, `pi5mic` tries:
-  - `openclaw devices approve --latest`
-- if approval works, the wizard prints:
-  - `OpenClaw voice handoff is ready.`
-
-### Step 21. Verify the OpenClaw path
+### Step 6. Run the OpenClaw health test
 
 ```bash
 uv run pi5mic doctor
+```
+
+What this does:
+
+- checks the microphone and STT path
+- checks the OpenClaw command and config path
+- checks whether replies are local only or local plus Telegram
+
+What you should expect:
+
+- `OK` lines for the OpenClaw command and config
+- `OK` or `INFO` lines for Telegram routing if available
+- sometimes a warning about degraded presence support; that warning does not
+  always mean voice handoff is broken
+
+### Step 7. Test one OpenClaw voice turn
+
+```bash
 uv run pi5mic run --once
 ```
 
-What this is doing:
+What this does:
 
-- checks the saved OpenClaw profile
-- confirms the gateway is reachable
-- confirms the voice handoff path is ready
-- shows whether replies are local only or local plus Telegram
-- records one clip, transcribes it, and sends the transcript into OpenClaw
+- records one clip
+- transcribes it
+- sends it to the OpenClaw agent
 
 What you should expect:
 
-- `doctor` shows the OpenClaw command, config file, delivery mode, and readiness
-  result
-- `run --once` shows the transcript and, in OpenClaw mode, the OpenClaw reply
-  text
-- if you enabled Telegram mirroring during setup, the same voice turn should
-  also appear in the detected Telegram chat or topic
+- the recognized transcript is printed
+- the OpenClaw reply is printed
+- if Telegram mirroring is enabled, the same reply should also appear in the
+  configured Telegram chat or topic
 
-## 6. Optional Gemini Setup
-
-Gemini is optional. Only use this if you want to test the alternative cloud backend.
-
-### Step 22. No extra Gemini package install is needed
+### Step 8. Test always-on OpenClaw listening
 
 ```bash
-cd ~/NinjaClawBot
-uv sync --extra dev
+uv run pi5mic voiceinput-tool foreground
 ```
 
-What this is doing:
+What this does:
 
-- confirms the normal NinjaClawBot workspace install is present
-- this already includes the Google Gemini SDK used by `pi5mic`
+- starts the wake-word listener while still using the OpenClaw profile
+- after `hey Ninja`, it records and sends the spoken request to OpenClaw
 
 What you should expect:
 
-- the command finishes without errors
-- after this, `pi5mic` can use Gemini if the API key is present
+- one request is processed at a time
+- while OpenClaw is still replying, new wake-word hits are ignored on purpose
+- after the reply finishes, the listener re-arms itself for the next wake word
 
-### Step 23. Set your Gemini API key
+## Gemini Backend
+
+Gemini is the optional cloud speech-to-text backend.
+
+Use Gemini when:
+
+- you want cloud transcription instead of `whisper.cpp`
+- you already have a Gemini API key
+- your network connection is stable
+
+Keep `whisper.cpp` when:
+
+- you want local offline transcription
+- you do not want to depend on a cloud API
+- you want the simplest Raspberry Pi setup
+
+### Switch `pi5mic` to Gemini
 
 ```bash
-export GOOGLE_API_KEY="your_key_here"
-```
-
-or:
-
-```bash
+cd ~/pi5mic
 export GEMINI_API_KEY="your_key_here"
-```
-
-What this is doing:
-
-- gives the current shell permission to call the Gemini Developer API
-
-What you should expect:
-
-- there is usually no output
-- the key only exists in the current shell unless you also add it to your shell
-  profile
-- if both variables are set, the Google SDK uses `GOOGLE_API_KEY` first
-
-### Step 24. Switch the backend in setup
-
-```bash
 uv run pi5mic setup
 ```
 
 Choose:
 
 - `STT backend`: `gemini`
-- `Gemini model id`: keep `gemini-2.5-flash` unless you have a reason to change it
-- `Gemini request timeout (seconds)`: keep the default to start
-- `Gemini retry limit`: keep the default to start
+- `Gemini model id`: keep the suggested default unless you have a reason to change it
+- `Gemini timeout` and `retry limit`: keep the suggested defaults for the first test
 
-What you should expect:
-
-- the wizard reminds you that Gemini needs an environment variable
-- it also tells you which export command format to use
-
-### Step 25. Verify Gemini with doctor
+### Verify the Gemini path
 
 ```bash
+cd ~/pi5mic
 uv run pi5mic doctor
 ```
 
 What you should expect:
 
 - `INFO active STT backend: gemini`
-- `OK   Gemini credentials found in environment (GEMINI_API_KEY)` or
-  `OK   Gemini credentials found in environment (GOOGLE_API_KEY)`
-- if the Gemini SDK is somehow missing, `doctor` now reports that cleanly
-  instead of crashing
+- `OK   Gemini credentials found in environment (...)`
 
-## Common Problem: `SyntaxError: unterminated string literal` when starting `setup` or `mic-tool`
+## Full Command-Line Reference
 
-If you see an error like this:
+This section shows the direct command-line version of each main function.
 
-```text
-SyntaxError: unterminated string literal
-```
-
-it means:
-
-- you are still running an older `pi5mic` source file
-- the crash happens before microphone setup starts
-- this is a code version problem, not a microphone hardware problem
-
-Fix it with:
+### Setup and status
 
 ```bash
-cd ~/NinjaClawBot
-git pull
-uv sync --extra dev
-uv run pi5mic --help
-```
-
-Then rerun:
-
-```bash
+cd ~/pi5mic
 uv run pi5mic setup
 ```
 
-What you should expect:
-
-- `uv run pi5mic --help` prints the command list normally
-- `setup` opens instead of crashing
-- `mic-tool` opens instead of crashing
-
-## 7. Common Problem: `PortAudio library not found`
-
-If you see this error:
-
-```text
-OSError: PortAudio library not found
-```
-
-it means:
-
-- the Python package `sounddevice` is installed
-- but the Raspberry Pi is missing the system PortAudio library
-
-Fix it with:
+Runs the guided setup wizard and writes `mic.json`.
 
 ```bash
-sudo apt update
-sudo apt install -y libportaudio2 portaudio19-dev
+cd ~/pi5mic
+uv run pi5mic mic-tool
 ```
 
-Then rerun:
+Opens the beginner-friendly menu for setup and first testing.
 
 ```bash
+cd ~/pi5mic
+uv run pi5mic status
+```
+
+Shows the current profile, device, backend, and always-on service state.
+
+```bash
+cd ~/pi5mic
 uv run pi5mic doctor
 ```
 
-You should now get a friendly setup result instead of a crash.
+Checks microphone readiness, backend readiness, and optional OpenClaw readiness.
 
-## 8. Common Problem: `Gemini credentials are not configured in the environment`
-
-If you see an error like this:
-
-```text
-Gemini credentials are not configured in the environment.
-```
-
-it means:
-
-- `pi5mic` is configured to use the Gemini backend
-- but the current shell does not have `GOOGLE_API_KEY` or `GEMINI_API_KEY`
-
-Fix it with one of these:
+### Device discovery and recording
 
 ```bash
-export GEMINI_API_KEY="your_key_here"
+cd ~/pi5mic
+uv run pi5mic devices
 ```
 
-or:
+Lists the available microphone devices.
 
 ```bash
-export GOOGLE_API_KEY="your_key_here"
+cd ~/pi5mic
+uv run pi5mic record --duration 3 --output mic-test.wav
 ```
 
-Then rerun:
+Records a 3-second WAV file without transcription.
 
 ```bash
-uv run pi5mic doctor
-```
-
-What you should expect:
-
-- doctor should stop failing on Gemini credentials
-- it should tell you which environment variable it found
-
-## 9. Common Problem: OpenClaw says `pairing required`
-
-If you see an error like this:
-
-```text
-pairing required
-```
-
-it means:
-
-- `pi5mic` already reached the OpenClaw CLI
-- but the OpenClaw gateway still wants a one-time local device approval before
-  it will accept the request
-
-The easiest fix is:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-```
-
-Then:
-
-- choose `Profile: openclaw`
-- let the wizard detect your OpenClaw settings automatically
-- answer `y` if it asks to approve the newest local OpenClaw device request
-
-Manual fallback:
-
-```bash
-openclaw devices approve --latest
-uv run pi5mic doctor
-```
-
-What you should expect after the fix:
-
-- `pi5mic doctor` should stop failing on pairing
-- `uv run pi5mic run --once` should record, transcribe, and print the OpenClaw
-  reply text
-
-### OpenClaw reply stays local instead of Telegram
-
-If `pi5mic` records correctly and OpenClaw replies in the terminal, but nothing
-appears in Telegram, it usually means:
-
-- OpenClaw Telegram is enabled, but `pi5mic` does not yet have a concrete
-  Telegram reply target saved
-- or the saved Telegram target is stale and points at an older chat or topic
-
-The easiest recovery path is:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-```
-
-Then:
-
-- choose `Profile: openclaw`
-- if you want a specific Telegram chat or forum topic, send one short message
-  to your OpenClaw bot there first
-- answer `y` when setup asks:
-  - `Ask OpenClaw to reply both here and in Telegram?`
-
-What you should expect after the fix:
-
-- `pi5mic status` shows a `Reply target:` line
-- `pi5mic doctor` shows either the detected Telegram target or a clear warning
-  about why it could not be found
-- `uv run pi5mic run --once` shows the OpenClaw reply locally and the same turn
-  should also appear in Telegram
-
-## 10. Common Problem: OpenClaw says `Invalid session ID`
-
-If you see an error like this:
-
-```text
-Invalid session ID
-```
-
-it means:
-
-- recording and transcription already worked
-- the failure happened only when `pi5mic` handed the text to OpenClaw
-- the old legacy session value used colons, which newer OpenClaw builds reject
-  for `--session-id`
-
-What `pi5mic` now does automatically:
-
-- changes the old value `voice:local-mic` into `voice-local-mic`
-- uses the repaired value when loading `mic.json`
-- saves the repaired value the next time setup or another save path runs
-
-The easiest recovery path is:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
-uv run pi5mic doctor
+cd ~/pi5mic
 uv run pi5mic run --once
 ```
 
-What you should expect:
+Runs one full live capture and transcription cycle.
 
-- setup shows the detected OpenClaw settings
-- `doctor` should stop failing on `Invalid session ID`
-- `run --once` should print the OpenClaw reply instead of stopping after
-  transcription
+```bash
+cd ~/pi5mic
+uv run pi5mic run --once --keep-audio
+```
 
-## 11. What Counts As A Successful Standalone Test
+Runs one full live capture and keeps the temporary WAV file for debugging.
 
-You have tested the current standalone `pi5mic` build successfully if all of these work:
+```bash
+cd ~/pi5mic
+uv run pi5mic run --once --audio-file ./mic-test.wav
+```
+
+Skips the microphone and transcribes an existing WAV file instead.
+
+### Speech-to-text backends
+
+```bash
+cd ~/pi5mic
+uv run pi5mic transcribe mic-test.wav
+```
+
+Transcribes an existing WAV file through the configured backend.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic transcribe --backend whisper_cpp mic-test.wav
+```
+
+Forces `whisper.cpp` for this transcription only.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic transcribe --backend gemini mic-test.wav
+```
+
+Forces Gemini for this transcription only.
+
+### Install or register backend assets
+
+```bash
+cd ~/pi5mic
+uv run pi5mic install whispercpp \
+  --command ~/whisper.cpp/build/bin/whisper-cli \
+  --model-path ~/whisper.cpp/models/ggml-base.bin
+```
+
+Registers the local `whisper.cpp` command and model.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic install openwakeword \
+  --model-path ~/pi5mic/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
+```
+
+Registers the wake-word model and optional runtime assets.
+
+### Config file management
+
+```bash
+cd ~/pi5mic
+uv run pi5mic config show
+```
+
+Prints the current `mic.json`.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic config export ./mic-backup.json
+```
+
+Saves a backup copy of the current config.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic config import ./mic-backup.json
+```
+
+Loads a saved config file back into the active config path.
+
+### Always-on voice input control
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool foreground
+```
+
+Runs the always-on listener in the current terminal for debugging.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool start
+```
+
+Starts the always-on listener in the background.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool status
+```
+
+Shows whether the background listener is running and where its files live.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool logs
+```
+
+Shows recent log lines from the background listener.
+
+```bash
+cd ~/pi5mic
+uv run pi5mic voiceinput-tool stop
+```
+
+Stops the background listener.
+
+## Appendix
+
+Use this appendix when you want more detail behind the setup steps above.
+
+### Appendix Contents
+
+- [Problem Solving](#problem-solving)
+- [Successful Standalone Checklist](#successful-standalone-checklist)
+- [What Is a Gemini API Key?](#what-is-a-gemini-api-key)
+- [What Is the `openWakeWord` API?](#what-is-the-openwakeword-api)
+- [What Does `whisper.cpp` Do?](#what-does-whispercpp-do)
+- [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files)
+- [How to Create a Custom `hey Ninja` Wake-Word Model](#how-to-create-a-custom-hey-ninja-wake-word-model)
+- [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
+- [Developer Validation Commands](#developer-validation-commands)
+
+### Problem Solving
+
+#### `PortAudio library not found`
+
+Cause:
+
+- the Raspberry Pi system audio libraries are missing
+
+Fix:
+
+```bash
+sudo apt update
+sudo apt install -y libportaudio2 portaudio19-dev python3-dev
+```
+
+#### `Invalid sample rate`
+
+Cause:
+
+- your microphone does not accept the saved sample rate
+
+Fix:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic setup
+```
+
+Then keep the same microphone and accept the sample rate recommended by the
+wizard.
+
+#### `openWakeWord model file not found`
+
+Cause:
+
+- the saved wake-word model path is wrong
+- or the file was moved or deleted
+
+Fix:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic install openwakeword \
+  --model-path ~/pi5mic/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
+```
+
+Use the full real file path. Do not enter only `.onnx` or `.tflite`.
+
+#### `Gemini credentials are not configured`
+
+Cause:
+
+- the Gemini API key is missing from the current shell
+
+Fix:
+
+```bash
+export GEMINI_API_KEY="your_key_here"
+cd ~/pi5mic
+uv run pi5mic doctor
+```
+
+#### `pairing required` in OpenClaw mode
+
+Cause:
+
+- OpenClaw created a local device request that still needs approval
+
+Fix:
+
+- rerun `pi5mic setup` or `pi5mic mic-tool`
+- approve the newest local request if `pi5mic` asks
+
+#### OpenClaw replies stay local instead of Telegram
+
+Cause:
+
+- OpenClaw voice handoff is working, but no usable Telegram reply target is
+  saved yet
+
+Fix:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+```
+
+Then:
+
+- choose `Profile: openclaw`
+- send one short message to your OpenClaw bot in the Telegram chat or topic you
+  want to use
+- answer `y` if setup asks whether it should reply both locally and in Telegram
+
+#### `Invalid session ID` in OpenClaw mode
+
+Cause:
+
+- an older config or older OpenClaw session value is being used
+
+What `pi5mic` does now:
+
+- it repairs older session values automatically during setup and config save paths
+
+What to do:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic setup
+uv run pi5mic doctor
+```
+
+Then rerun your OpenClaw test.
+
+#### Raspberry Pi powers off or reboots during local Whisper transcription
+
+Cause:
+
+- the Raspberry Pi may be hitting a power, temperature, or memory limit
+
+What to do:
+
+```bash
+cd ~/pi5mic
+uv run pi5mic doctor
+vcgencmd get_throttled
+vcgencmd measure_temp
+```
+
+Then:
+
+- use a known-good Raspberry Pi 5 power supply
+- improve cooling
+- shorten the maximum clip length
+- lower `whisper.cpp` thread count
+- or switch to Gemini if local transcription is too heavy for your hardware
+
+#### audio overflow warnings during foreground listening
+
+What it means:
+
+- the microphone stream fell behind briefly
+
+What `pi5mic` does now:
+
+- it tries to recover automatically
+- if overflow repeats, it recreates the monitoring stream and keeps listening
+
+What you can still do:
+
+- keep the first test command short
+- raise the wake-word threshold slightly if false triggers are common
+- use foreground mode first when tuning a new microphone
+
+### Successful Standalone Checklist
+
+Your standalone setup is in good shape if all of these work:
 
 1. `uv run pi5mic --help`
 2. `uv run pi5mic devices`
@@ -1182,118 +1243,114 @@ You have tested the current standalone `pi5mic` build successfully if all of the
 4. `uv run pi5mic record --duration 3 --output mic-test.wav`
 5. `uv run pi5mic transcribe mic-test.wav`
 6. `uv run pi5mic run --once`
-7. `uv run pi5mic mic-tool`
+7. `uv run pi5mic voiceinput-tool foreground`
 
-## 12. Common Problem: `Invalid sample rate`
+### What Is a Gemini API Key?
 
-If you see an error like this:
+Related setup step:
 
-```text
-Error opening RawInputStream: Invalid sample rate [PaErrorCode -9997]
-```
+- [Installation > Step 8](#step-8-optional-prepare-a-gemini-api-key)
 
-it usually means:
+A Gemini API key is a secret string that allows your Raspberry Pi to call the
+Gemini Developer API. `pi5mic` only needs it when you choose the Gemini backend.
 
-- the microphone was found correctly
-- but the saved sample rate in `mic.json` does not match what that microphone supports
+Think of it like this:
 
-The easiest fix is:
+- `whisper.cpp` works with local files on your Raspberry Pi
+- Gemini works by sending audio to Google’s cloud API
+- the API key proves that your request belongs to your Google account
+
+### What Is the `openWakeWord` API?
+
+Related setup step:
+
+- [Installation > Step 9](#step-9-optional-prepare-a-custom-wake-word-model-for-always-on-voice-input)
+
+`openWakeWord` is the wake-word engine used by the current `pi5mic` always-on
+listener.
+
+In simple terms:
+
+- it listens to short pieces of microphone audio
+- it compares those short audio pieces against a wake-word model
+- when the score is high enough, it tells `pi5mic` that the wake phrase was detected
+
+In the Python API, the main object is the `Model` class. `pi5mic` loads your
+custom model file and feeds it `16 kHz` audio frames until it detects the wake
+phrase.
+
+Important difference:
+
+- `openWakeWord` decides **when to start recording**
+- it does **not** turn the full spoken command into text
+- `whisper.cpp` or Gemini still do the real transcription afterward
+
+### What Does `whisper.cpp` Do?
+
+Related setup steps:
+
+- [Installation > Step 6](#step-6-install-the-default-speech-to-text-backend-whispercpp)
+- [Installation > Step 7](#step-7-register-whispercpp-with-pi5mic)
+
+`whisper.cpp` is the default local speech-to-text engine used by `pi5mic`.
+
+In simple terms:
+
+- `pi5mic` records your speech into a WAV file
+- `whisper.cpp` reads that WAV file
+- it returns the recognized text
+
+Why it is the default:
+
+- it works offline
+- it does not require a cloud API key
+- it is practical on Raspberry Pi 5 with the `base` model
+
+### What Are `.onnx` and `.tflite` Files?
+
+Related setup step:
+
+- [Installation > Step 9](#step-9-optional-prepare-a-custom-wake-word-model-for-always-on-voice-input)
+
+These are both file formats for local AI models.
+
+Simple explanation:
+
+- `.onnx` is a common model format often used with ONNX Runtime
+- `.tflite` is a common model format often used with LiteRT / TensorFlow Lite
+
+For `pi5mic`, the practical rule is:
+
+- use the real file that your `openWakeWord` training or export step gave you
+- keep the `openWakeWord inference framework` option at `auto` unless you are
+  troubleshooting a runtime problem
+
+### How to Create a Custom `hey Ninja` Wake-Word Model
+
+Related setup steps:
+
+- [Installation > Step 9](#step-9-optional-prepare-a-custom-wake-word-model-for-always-on-voice-input)
+- [Installation > Step 10](#step-10-register-the-wake-word-model-with-pi5mic)
+
+Recommended beginner path:
+
+1. Open the official [openWakeWord repository](https://github.com/dscripka/openWakeWord)
+2. Open the `Training New Models` section
+3. Launch the recommended Google Colab notebook
+4. Set the target phrase to `hey Ninja`
+5. Run the notebook until it exports a model file
+6. Download the exported `.onnx` or `.tflite` file
+7. Copy that file into `~/pi5mic/voiceinput/`
+8. Register it with:
 
 ```bash
-cd ~/NinjaClawBot
-uv run pi5mic setup
+cd ~/pi5mic
+uv run pi5mic install openwakeword \
+  --model-path ~/pi5mic/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
 ```
 
-Then:
-
-- keep the same microphone
-- accept the sample rate recommended by the wizard
-- run `uv run pi5mic doctor` again
-- run `uv run pi5mic run --once` again
-
-Why this happens:
-
-- many Raspberry Pi microphones prefer their hardware default rate
-- this is often `44100` Hz or `48000` Hz, not `16000` Hz
-
-## 13. Common Problem: Raspberry Pi powers off, reboots, or suddenly goes dark after recording
-
-If the Raspberry Pi itself powers off or reboots after the `Recording...` step,
-that is usually different from a normal Python error.
-
-What this often means:
-
-- the board hit a power or thermal problem while local Whisper transcription was
-  starting
-- or the board was already under memory pressure before `whisper.cpp` launched
-
-What `pi5mic` now does to reduce that risk:
-
-- shorter default clip length
-- safer automatic Whisper thread limit on Raspberry Pi when you leave threads blank
-- WAV normalization to `16000` Hz mono before Whisper
-- Raspberry Pi `doctor` warnings for:
-  - temperature
-  - historic or current throttling
-  - historic or current undervoltage
-  - low available memory
-
-Check it with:
-
-```bash
-uv run pi5mic doctor
-vcgencmd get_throttled
-vcgencmd measure_temp
-```
-
-If you see warnings about undervoltage, throttling, or high temperature:
-
-- use a stronger, known-good Raspberry Pi 5 power supply
-- add active cooling or improve airflow
-- lower `Maximum clip length` in `pi5mic setup` to `8` or `10`
-- set `whisper.cpp threads` to `1` or `2`
-- if local Whisper is still too heavy for your Pi setup, switch to Gemini
-
-If `doctor` does not show hardware warnings but the Pi still shuts down:
-
-- retest with `uv run pi5mic run --once --audio-file ./mic-test.wav`
-- if file transcription is stable but live recording is not, focus on the mic,
-  USB power, or other connected peripherals
-
-## 14. Common Problem: `voiceinput-tool foreground` shows audio overflow or says no spoken command was detected
-
-If you see messages like these:
-
-```text
-WARNING audio overflow detected while monitoring the microphone.
-No spoken command was detected after the wake word.
-```
-
-this usually means:
-
-- the wake word worked
-- but the spoken command was too short, too quiet, or too delayed after the
-  wake word
-- or the room noise made the wake-word cycle harder to separate from the real
-  command
-- or the Raspberry Pi microphone stream fell behind briefly and dropped some
-  audio before the next read
-
-What `pi5mic` now does automatically:
-
-- pauses the live microphone stream while Whisper is transcribing so stale audio
-  is less likely to pile up
-- treats an empty Whisper result as a recoverable no-speech cycle instead of a
-  hard failure
-- re-arms the listener after the cooldown instead of crashing
-- recreates the live microphone stream after repeated overflow so the listener
-  can keep running instead of getting stuck on a degraded stream
-- runs OpenClaw presence updates in the background so a slow `idle` update does
-  not block the next wake-word cycle
-- disables further OpenClaw presence updates for the rest of the listener
-  session after the first hard presence failure so the mic loop can stay alive
-
-What to try next:
+After that, run:
 
 ```bash
 cd ~/pi5mic
@@ -1301,25 +1358,35 @@ uv run pi5mic doctor
 uv run pi5mic voiceinput-tool foreground
 ```
 
-Then:
+### How `pi5mic` Processes a Voice Request
 
-- say the wake phrase clearly
-- start the real command immediately after the wake phrase
-- keep the command short for the first tests
-- in OpenClaw mode, wait for the reply to finish before expecting the next wake
-  word to fire; the listener ignores overlapping requests on purpose
-- if `doctor` warns that presence is degraded but the gateway and agent path are
-  otherwise healthy, you can still test voice handoff; that warning only means
-  robot presence changes such as `idle` or `thinking` may be skipped
-- if false triggers continue, raise `Wake-word detection threshold` slightly in
-  `uv run pi5mic setup`
-- if the wake word is fine but the command is often missed, lower the threshold
-  slightly or move the microphone closer
+There are two main flows:
 
-## 15. Validation Commands For Developers
+#### One-time recording
+
+1. you start `run --once` or choose `Run one capture cycle`
+2. `pi5mic` records one short clip
+3. `whisper.cpp` or Gemini transcribes it
+4. the text is printed locally
+5. in OpenClaw mode, the text is also sent to the OpenClaw agent
+
+#### Always-on listening
+
+1. you start `voiceinput-tool`
+2. `openWakeWord` watches for `hey Ninja`
+3. once detected, `pi5mic` records the spoken command
+4. silence detection decides when the command ends
+5. `whisper.cpp` or Gemini transcribes the command
+6. if the profile is `openclaw`, `pi5mic` sends the original-language text to OpenClaw
+7. `pi5mic` waits for the reply, cools down briefly, and re-arms itself
+
+### Developer Validation Commands
+
+These commands are mainly for contributors, but they are also useful when you
+want to confirm the package still passes its local checks after an update.
 
 ```bash
-cd /Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code\ library/NinjaClawbot/pi5mic
+cd ~/pi5mic
 uv run --extra dev python -m compileall src tests
 uv run --extra dev ruff check src tests
 uv run --extra dev ruff format --check src tests

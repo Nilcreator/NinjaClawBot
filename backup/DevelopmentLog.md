@@ -3054,3 +3054,57 @@ Notes:
 
 - if `doctor` now warns that presence is degraded, voice handoff can still be
   tested as long as the gateway and agent path are otherwise healthy
+
+## 2026-03-22 - `pi5mic` package license and README overhaul
+
+Summary:
+
+- added the missing standalone package `LICENSE` file for `pi5mic`
+- rewrote the `pi5mic` README to match the structure and tone of the other
+  `pi5*` libraries while keeping the newer microphone, OpenClaw, Gemini, and
+  always-on voice-input workflows understandable for non-developers
+
+Implementation changes:
+
+- added [pi5mic/LICENSE](../pi5mic/LICENSE) using the same MIT template as the
+  sibling `pi5*` packages
+- reorganized [pi5mic/README.md](../pi5mic/README.md) into a clearer package
+  guide with:
+  - a consistent header and links block
+  - a table of contents
+  - a full feature summary
+  - an architecture/file-tree section
+  - a from-scratch Raspberry Pi standalone installation path
+  - a shorter beginner-friendly `mic-tool` and `voiceinput-tool` testing flow
+  - dedicated OpenClaw mode testing steps
+  - a fuller direct command-line reference
+  - an appendix for troubleshooting and concept explanations
+- corrected the standalone working-directory examples so they use `~/pi5mic`
+  instead of `~/NinjaClawBot`
+- added plain-language explanations for:
+  - what a Gemini API key is and when it is needed
+  - what the wake-word model file is
+  - what `.onnx` and `.tflite` files are
+  - how to create or obtain a custom `hey Ninja` wake-word model
+
+Documentation updates:
+
+- updated [pi5mic/README.md](../pi5mic/README.md)
+
+Validation:
+
+- `git diff --check -- pi5mic/LICENSE pi5mic/README.md backup/DevelopmentLog.md`
+- `cd pi5mic && uv run pi5mic --help`
+- `cd pi5mic && uv run pi5mic mic-tool --help`
+- `cd pi5mic && uv run pi5mic voiceinput-tool --help`
+
+Raspberry Pi validation status:
+
+- not required for this pass because the change is documentation and packaging
+  metadata only
+
+Follow-up:
+
+- if the main project docs need the same wording cleanup later, mirror the
+  strongest beginner-facing sections from `pi5mic/README.md` into
+  `InstallationGuide.md` and the root `README.md`
