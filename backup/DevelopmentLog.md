@@ -3108,3 +3108,30 @@ Follow-up:
 - if the main project docs need the same wording cleanup later, mirror the
   strongest beginner-facing sections from `pi5mic/README.md` into
   `InstallationGuide.md` and the root `README.md`
+
+## 2026-03-22 - `pi5mic` README appendix quick-link refinement
+
+Summary:
+
+- refined the `pi5mic` README so the setup and testing steps now point directly
+  to the matching appendix explanations when a user wants more detail
+
+Implementation changes:
+
+- added `Need more detail?` quick-link blocks to the most common question
+  points in the standalone setup, always-on setup, Gemini setup, and OpenClaw
+  setup flow
+- refined the appendix contents list so each appendix item now explains which
+  setup or testing steps it supports
+
+Documentation updates:
+
+- updated [pi5mic/README.md](../pi5mic/README.md)
+
+Validation:
+
+- `git diff --check -- pi5mic/README.md backup/DevelopmentLog.md`
+
+Raspberry Pi validation status:
+
+- not required for this pass because the change is documentation only

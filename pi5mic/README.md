@@ -255,6 +255,11 @@ What you should expect:
 - the common microphone error `PortAudio library not found` should no longer
   appear
 
+Need more detail?
+
+- See [Problem Solving](#problem-solving) if you still get audio-library or
+  sample-rate errors later
+
 ### Step 4. Install the Python environment
 
 For the full `pi5mic` feature set, including always-on wake-word listening, use:
@@ -315,6 +320,10 @@ What you should expect:
 - a command path like `~/whisper.cpp/build/bin/whisper-cli`
 - a model path like `~/whisper.cpp/models/ggml-base.bin`
 
+Need more detail?
+
+- See [What Does `whisper.cpp` Do?](#what-does-whispercpp-do)
+
 ### Step 7. Register `whisper.cpp` with `pi5mic`
 
 ```bash
@@ -334,6 +343,10 @@ What you should expect:
 
 - the resolved command and model paths are printed
 - `pi5mic` confirms the settings were saved
+
+Need more detail?
+
+- See [What Does `whisper.cpp` Do?](#what-does-whispercpp-do)
 
 ### Step 8. Optional: prepare a Gemini API key
 
@@ -367,6 +380,10 @@ Security note:
 
 - never paste your Gemini API key into Git, GitHub, or `mic.json`
 - keep it in your shell environment only
+
+Need more detail?
+
+- See [What Is a Gemini API Key?](#what-is-a-gemini-api-key)
 
 ### Step 9. Optional: prepare a custom wake-word model for always-on voice input
 
@@ -406,6 +423,12 @@ What `.onnx` and `.tflite` mean:
 - if you are not sure which to choose, use whichever format your export step
   already created
 
+Need more detail?
+
+- See [What Is the `openWakeWord` API?](#what-is-the-openwakeword-api)
+- See [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files)
+- See [How to Create a Custom `hey Ninja` Wake-Word Model](#how-to-create-a-custom-hey-ninja-wake-word-model)
+
 ### Step 10. Register the wake-word model with `pi5mic`
 
 Example with `.onnx`:
@@ -436,6 +459,11 @@ What you should expect:
 
 - `pi5mic` prints the chosen model path
 - `pi5mic` prints which inference framework will be used
+
+Need more detail?
+
+- See [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files)
+- See [How to Create a Custom `hey Ninja` Wake-Word Model](#how-to-create-a-custom-hey-ninja-wake-word-model)
 
 ## Getting Started
 
@@ -504,6 +532,12 @@ What you should expect:
 - `Configured STT backend looks ready.`
 - if always-on is enabled, setup reminds you to run `doctor` before starting
   `voiceinput-tool`
+
+Need more detail?
+
+- See [What Does `whisper.cpp` Do?](#what-does-whispercpp-do)
+- See [What Is the `openWakeWord` API?](#what-is-the-openwakeword-api)
+- See [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files)
 
 ### Step 3. Run `doctor`
 
@@ -609,6 +643,12 @@ What you should expect:
 This is the safest first always-on test because you can see the live messages
 and stop it with `Ctrl+C`.
 
+Need more detail?
+
+- See [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
+- See [Problem Solving](#problem-solving) if foreground mode shows overflow,
+  missing transcripts, or model-path errors
+
 ### Step 8. Test the background listener
 
 Inside `voiceinput-tool`, choose these in order:
@@ -667,6 +707,10 @@ What you should expect:
 - the listener waits for `hey Ninja`
 - after detection, it records one command and prints `Transcript: ...`
 - you can stop it with `Ctrl+C`
+
+Need more detail?
+
+- See [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
 
 ### Background mode
 
@@ -777,6 +821,12 @@ What `pi5mic` now tries to do automatically in OpenClaw mode:
 - repair older session-id values automatically
 - run a readiness check after saving the config
 
+Need more detail?
+
+- See [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
+- See [Problem Solving](#problem-solving) if OpenClaw later reports pairing,
+  session-id, or Telegram delivery problems
+
 ### Step 5. If `pi5mic` asks about pairing approval
 
 Sometimes OpenClaw may say `pairing required`.
@@ -809,6 +859,10 @@ What you should expect:
 - `OK` or `INFO` lines for Telegram routing if available
 - sometimes a warning about degraded presence support; that warning does not
   always mean voice handoff is broken
+
+Need more detail?
+
+- See [Problem Solving](#problem-solving)
 
 ### Step 7. Test one OpenClaw voice turn
 
@@ -846,6 +900,11 @@ What you should expect:
 - while OpenClaw is still replying, new wake-word hits are ignored on purpose
 - after the reply finishes, the listener re-arms itself for the next wake word
 
+Need more detail?
+
+- See [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
+- See [Problem Solving](#problem-solving)
+
 ## Gemini Backend
 
 Gemini is the optional cloud speech-to-text backend.
@@ -875,6 +934,10 @@ Choose:
 - `STT backend`: `gemini`
 - `Gemini model id`: keep the suggested default unless you have a reason to change it
 - `Gemini timeout` and `retry limit`: keep the suggested defaults for the first test
+
+Need more detail?
+
+- See [What Is a Gemini API Key?](#what-is-a-gemini-api-key)
 
 ### Verify the Gemini path
 
@@ -1068,15 +1131,19 @@ Use this appendix when you want more detail behind the setup steps above.
 
 ### Appendix Contents
 
-- [Problem Solving](#problem-solving)
+- Use these links when you want more explanation while following the setup and
+  testing steps above.
+
+- [Problem Solving](#problem-solving) - use this when a setup or test step shows an error
 - [Successful Standalone Checklist](#successful-standalone-checklist)
-- [What Is a Gemini API Key?](#what-is-a-gemini-api-key)
-- [What Is the `openWakeWord` API?](#what-is-the-openwakeword-api)
-- [What Does `whisper.cpp` Do?](#what-does-whispercpp-do)
-- [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files)
-- [How to Create a Custom `hey Ninja` Wake-Word Model](#how-to-create-a-custom-hey-ninja-wake-word-model)
-- [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request)
-- [Developer Validation Commands](#developer-validation-commands)
+- [Successful Standalone Checklist](#successful-standalone-checklist) - use this after the first standalone test flow
+- [What Is a Gemini API Key?](#what-is-a-gemini-api-key) - supports Installation Step 8 and Gemini Backend
+- [What Is the `openWakeWord` API?](#what-is-the-openwakeword-api) - supports Installation Steps 9-10 and always-on setup
+- [What Does `whisper.cpp` Do?](#what-does-whispercpp-do) - supports Installation Steps 6-7 and one-shot transcription
+- [What Are `.onnx` and `.tflite` Files?](#what-are-onnx-and-tflite-files) - supports Installation Steps 9-10 and wake-word model setup
+- [How to Create a Custom `hey Ninja` Wake-Word Model](#how-to-create-a-custom-hey-ninja-wake-word-model) - supports Installation Steps 9-10
+- [How `pi5mic` Processes a Voice Request](#how-pi5mic-processes-a-voice-request) - supports always-on testing and OpenClaw mode
+- [Developer Validation Commands](#developer-validation-commands) - for contributors and local package verification
 
 ### Problem Solving
 
