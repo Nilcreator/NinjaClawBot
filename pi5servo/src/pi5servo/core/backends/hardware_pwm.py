@@ -12,6 +12,7 @@ from ..endpoint import parse_servo_endpoint
 
 DEFAULT_SERVO_FREQUENCY_HZ = 50
 DEFAULT_PWM_CHIP = 0
+SYSFS_REQUIRED_CONTROLS = ("period", "duty_cycle", "enable")
 SYSFS_RELEASE_TIMEOUT_S = 0.5
 PI5_HEADER_PWM_CHANNELS = {
     12: 0,
@@ -79,19 +80,34 @@ class HardwarePWMServoBackend:
         duty = (pulse_width_us / self._period_us()) * 100.0
         return max(0.0, min(100.0, duty))
 
-    def _best_effort_unexport(self, pwm: Any) -> None:
-        chippath = getattr(pwm, "chippath", None)
-        pwm_channel = getattr(pwm, "pwm_channel", None)
-        pwm_dir = getattr(pwm, "pwm_dir", None)
-        if not isinstance(chippath, str) or not isinstance(pwm_channel, int):
-            return
+    def _channel_paths(self, pwm_channel: int) -> tuple[str, str, str]:
+        chippath = f"/sys/class/pwm/pwmchip{self._chip}"
+        pwm_dir = os.path.join(chippath, f"pwm{pwm_channel}")
+        return chippath, pwm_dir, os.path.join(chippath, "unexport")
 
-        unexport_path = os.path.join(chippath, "unexport")
+    @staticmethod
+    def _controls_writable(pwm_dir: str) -> bool:
+        return os.path.isdir(pwm_dir) and all(
+            os.path.exists(os.path.join(pwm_dir, control))
+            and os.access(os.path.join(pwm_dir, control), os.W_OK)
+            for control in SYSFS_REQUIRED_CONTROLS
+        )
+
+    def _best_effort_unexport_channel(
+        self,
+        pwm_channel: int,
+        *,
+        chippath: str | None = None,
+        pwm_dir: str | None = None,
+        unexport_path: str | None = None,
+        echo: Any | None = None,
+    ) -> None:
+        if chippath is None or pwm_dir is None or unexport_path is None:
+            chippath, pwm_dir, unexport_path = self._channel_paths(pwm_channel)
         if not os.path.exists(unexport_path) or not os.access(unexport_path, os.W_OK):
             return
 
         try:
-            echo = getattr(pwm, "echo", None)
             if callable(echo):
                 echo(pwm_channel, unexport_path)
             else:
@@ -100,23 +116,58 @@ class HardwarePWMServoBackend:
         except OSError:
             return
 
-        if not isinstance(pwm_dir, str) or not pwm_dir:
+        if not pwm_dir:
             return
 
         deadline = monotonic() + SYSFS_RELEASE_TIMEOUT_S
         while os.path.exists(pwm_dir) and monotonic() < deadline:
             sleep(0.01)
 
+    def _best_effort_unexport(self, pwm: Any) -> None:
+        chippath = getattr(pwm, "chippath", None)
+        pwm_channel = getattr(pwm, "pwm_channel", None)
+        pwm_dir = getattr(pwm, "pwm_dir", None)
+        if not isinstance(chippath, str) or not isinstance(pwm_channel, int):
+            return
+
+        self._best_effort_unexport_channel(
+            pwm_channel,
+            chippath=chippath,
+            pwm_dir=pwm_dir if isinstance(pwm_dir, str) else None,
+            unexport_path=os.path.join(chippath, "unexport"),
+            echo=getattr(pwm, "echo", None),
+        )
+
+    def _prepare_channel_for_claim(self, pwm_channel: int) -> None:
+        chippath, pwm_dir, unexport_path = self._channel_paths(pwm_channel)
+        if os.path.isdir(pwm_dir) and not self._controls_writable(pwm_dir):
+            self._best_effort_unexport_channel(
+                pwm_channel,
+                chippath=chippath,
+                pwm_dir=pwm_dir,
+                unexport_path=unexport_path,
+            )
+
     def claim(self, identifier: int | str) -> None:
         identifier = self._normalize_pin(identifier)
         if identifier in self._pwms:
             return
         pwm_channel = self._validate_pin(identifier)
-        self._pwms[identifier] = self._pwm_cls(
-            pwm_channel=pwm_channel,
-            hz=self._frequency_hz,
-            chip=self._chip,
-        )
+        self._prepare_channel_for_claim(pwm_channel)
+        try:
+            pwm = self._pwm_cls(
+                pwm_channel=pwm_channel,
+                hz=self._frequency_hz,
+                chip=self._chip,
+            )
+        except PermissionError:
+            self._best_effort_unexport_channel(pwm_channel)
+            pwm = self._pwm_cls(
+                pwm_channel=pwm_channel,
+                hz=self._frequency_hz,
+                chip=self._chip,
+            )
+        self._pwms[identifier] = pwm
         self._current_pulses.setdefault(identifier, 0)
 
     def set_pulse_us(self, identifier: int | str, pulse_width_us: int) -> None:

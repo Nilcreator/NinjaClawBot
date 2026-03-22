@@ -596,6 +596,10 @@ rebuilding it.
 
 Current expected behavior:
 
+- if a stale `pwm0` or `pwm1` sysfs node is present, the RP1 hardware PWM
+  backend now best-effort unexports that node and retries the claim once
+- if a multi-servo startup claims one channel and then fails on a later channel,
+  the already-claimed earlier channels are now released during rollback
 - if `gpio13` is already part of the live `servo.json` session, `servo-tool`
   now reuses that existing live servo for `Single Move` and `Calibrate`
 - if the endpoint is not already in the live session, `servo-tool` falls back
@@ -624,6 +628,8 @@ If it still fails, check:
 - `/boot/firmware/config.txt` still contains `dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4`
 - `servo.json` still points at the intended backend and pin-channel map
 - a standalone direct script can still drive GPIO13 before changing calibration data
+- if both `gpio12` and `gpio13` suddenly fail after one bad run, reboot once to
+  clear any kernel-level sysfs PWM state before continuing the audit
 
 ### Voice listener works once but does not re-arm well
 

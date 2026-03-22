@@ -64,18 +64,32 @@ class ServoGroup:
 
         self._servos: dict[int | str, Servo] = {}
         calibrations = calibrations or {}
-        for pin in self._pins:
-            endpoint = parse_servo_endpoint(pin)
-            cal = calibrations.get(pin)
-            if cal is None:
-                cal = calibrations.get(endpoint.identifier)
-            self._servos[pin] = Servo(
-                pi,
-                pin,
-                cal,
-                backend=self._backend,
-                owns_backend=False,
-            )
+        try:
+            for pin in self._pins:
+                endpoint = parse_servo_endpoint(pin)
+                cal = calibrations.get(pin)
+                if cal is None:
+                    cal = calibrations.get(endpoint.identifier)
+                self._servos[pin] = Servo(
+                    pi,
+                    pin,
+                    cal,
+                    backend=self._backend,
+                    owns_backend=False,
+                )
+        except Exception:
+            for servo in list(self._servos.values()):
+                try:
+                    servo.close()
+                except Exception:
+                    pass
+            self._servos.clear()
+            if self._owns_backend:
+                try:
+                    self._backend.close()
+                except Exception:
+                    pass
+            raise
 
     @staticmethod
     def _resolve_backend(

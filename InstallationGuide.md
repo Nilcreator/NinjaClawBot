@@ -1397,6 +1397,10 @@ uv run ninjaclawbot health-check
   - if you are testing an unconfigured endpoint, retry once after confirming the
     latest build is installed because the fallback path now unexports the sysfs
     PWM channel before rebuilds
+  - if a failed run suddenly makes both `gpio12` and `gpio13` unusable, reboot
+    once to clear stale kernel sysfs PWM state, then test again with the latest
+    build because current `pi5servo` now retries stale-channel claims and rolls
+    back partial multi-servo startup claims
 - `expression-tool` opens but faces look wrong:
   - export display config again to root `display.json`
 - `movement-tool` opens but movement is risky:

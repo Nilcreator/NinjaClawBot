@@ -2,6 +2,64 @@
 
 ## 2026-03-23
 
+### pi5servo Stale PWM Claim Recovery And Partial Startup Rollback
+
+Summary:
+
+- re-audited the new report where a clean reinstall could still write
+  calibration data, but then failed while quitting or starting later runs with:
+  - `Unable to create/write to /sys/class/pwm/pwmchip0/pwm0`
+  - `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1`
+- confirmed the next root cause was lower than the interactive menu flow:
+  - stale sysfs PWM nodes could survive a failed run and break the next claim
+  - `ServoGroup` startup could claim one channel successfully and then fail on a
+    later channel without releasing the earlier one
+- hardened the RP1 hardware PWM backend so `claim()` now:
+  - pre-checks for an unwritable existing `pwm0`/`pwm1` node
+  - best-effort unexports that stale node before trying to claim it
+  - retries once after a `PermissionError` from `rpi_hardware_pwm`
+- fixed `ServoGroup` initialization so partial startup failures now roll back
+  already-created servos and release already-claimed channels instead of leaving
+  earlier pins stuck for later runs
+- added regression coverage to prove:
+  - native hardware PWM claim retries once after a stale-node `PermissionError`
+  - an unwritable pre-existing sysfs node is cleaned before claim
+  - `ServoGroup` releases earlier claimed pins if a later claim fails
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/InstallationGuide.md)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/core/backends/hardware_pwm.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/core/backends/hardware_pwm.py)
+- [pi5servo/src/pi5servo/core/multi_servos.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/core/multi_servos.py)
+- [pi5servo/tests/test_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_backend.py)
+- [pi5servo/tests/test_core.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_core.py)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/backup/DevelopmentLog.md)
+
+Why:
+
+- the previous interactive fix removed one duplicate-open path, but your new
+  traceback showed stale PWM sysfs state and partial group-creation leaks could
+  still poison later runs after a failure
+- that is why both standalone `pi5servo calib` and later `servo-tool` startup
+  could fail even after a clean reinstall
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff check pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff format --check pi5servo/src pi5servo/tests`
+- `uv run --extra dev pytest -q pi5servo/tests`
+- `uv run --extra dev ruff check .`
+- `uv run --extra dev ruff format --check .`
+- attempted workspace-wide `uv run --extra dev pytest -q`
+- result: `132 passed`
+- result: repository-wide Ruff checks passed
+- result: workspace-wide root pytest still fails during collection with the same
+  pre-existing sibling-package import-path issues outside `pi5servo`
+
 ### pi5servo GPIO13 Calibration Reopen Fix And PWM Release Hardening
 
 Summary:

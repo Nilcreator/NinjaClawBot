@@ -45,6 +45,20 @@ class RecordingBackend:
         self.closed = True
 
 
+class FailingClaimBackend(RecordingBackend):
+    """Backend fake that fails while claiming a specific identifier."""
+
+    def __init__(self, *, fail_on: int | str) -> None:
+        super().__init__()
+        self.fail_on = fail_on
+
+    def claim(self, identifier: int | str) -> None:
+        self.claimed.append(identifier)
+        if identifier == self.fail_on:
+            raise PermissionError(f"stale sysfs node for {identifier}")
+        self.pulses.setdefault(identifier, 0)
+
+
 class TestServoCalibration:
     """Test ServoCalibration dataclass."""
 
@@ -264,6 +278,17 @@ class TestServoGroup:
         assert group.get_servo(12) is not None
         assert group.get_servo("hat_pwm1") is not None
         assert group.pins == [12, "hat_pwm1"]
+
+    def test_group_init_rolls_back_claimed_pins_after_partial_failure(self):
+        """A failed later claim should release pins already claimed earlier."""
+        backend = FailingClaimBackend(fail_on=13)
+
+        with pytest.raises(PermissionError, match="stale sysfs node"):
+            ServoGroup(backend, pins=[12, 13])
+
+        assert backend.claimed == [12, 13]
+        assert backend.released == [12]
+        assert 12 not in backend.pulses
 
 
 class TestServoGroupMovement:

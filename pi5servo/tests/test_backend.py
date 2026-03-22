@@ -168,6 +168,59 @@ def test_hardware_pwm_backend_sets_pulse_and_off() -> None:
     assert backend.get_pulse_us(12) == 0
 
 
+def test_hardware_pwm_backend_claim_retries_after_permission_error(monkeypatch) -> None:
+    """A stale sysfs node should be cleaned up and retried once on claim."""
+
+    class FlakyHardwarePWM(FakeHardwarePWM):
+        attempts = 0
+
+        def __init__(self, pwm_channel: int, hz: int, chip: int) -> None:
+            type(self).attempts += 1
+            if type(self).attempts == 1:
+                raise PermissionError("Unable to create/write to pwm0")
+            super().__init__(pwm_channel, hz, chip)
+
+    backend = HardwarePWMServoBackend(pwm_cls=FlakyHardwarePWM)
+    recovered_channels: list[int] = []
+
+    monkeypatch.setattr(backend, "_prepare_channel_for_claim", lambda _channel: None)
+    monkeypatch.setattr(
+        backend,
+        "_best_effort_unexport_channel",
+        lambda channel, **_kwargs: recovered_channels.append(channel),
+    )
+
+    backend.claim(12)
+
+    assert FlakyHardwarePWM.attempts == 2
+    assert recovered_channels == [0]
+    assert 12 in backend._pwms
+
+
+def test_hardware_pwm_backend_claim_preemptively_cleans_unwritable_sysfs_channel(
+    monkeypatch,
+) -> None:
+    """Pre-existing unwritable sysfs nodes should be unexported before claim."""
+    backend = HardwarePWMServoBackend(pwm_cls=FakeHardwarePWM)
+    recovered_channels: list[int] = []
+
+    monkeypatch.setattr(backend, "_channel_paths", lambda _channel: ("chip", "pwm0", "unexport"))
+    monkeypatch.setattr(
+        "pi5servo.core.backends.hardware_pwm.os.path.isdir", lambda path: path == "pwm0"
+    )
+    monkeypatch.setattr(backend, "_controls_writable", lambda _path: False)
+    monkeypatch.setattr(
+        backend,
+        "_best_effort_unexport_channel",
+        lambda channel, **_kwargs: recovered_channels.append(channel),
+    )
+
+    backend.claim(12)
+
+    assert recovered_channels == [0]
+    assert 12 in backend._pwms
+
+
 def test_hardware_pwm_backend_release_unexports_sysfs_channel(tmp_path) -> None:
     """Releasing a hardware PWM channel should best-effort unexport the sysfs node."""
     chippath = tmp_path / "pwmchip0"
