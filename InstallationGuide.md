@@ -1391,7 +1391,12 @@ uv run ninjaclawbot health-check
   - rerun `uv sync --extra dev`
   - reopen `uv run pi5servo servo-tool`
   - try calibration again from option `3`
+  - if `gpio13` is already listed in `servo.json`, the tool should now reuse
+    the live servo instead of reopening `pwm1`
   - if it still fails, recheck the PWM overlay line in `/boot/firmware/config.txt`
+  - if you are testing an unconfigured endpoint, retry once after confirming the
+    latest build is installed because the fallback path now unexports the sysfs
+    PWM channel before rebuilds
 - `expression-tool` opens but faces look wrong:
   - export display config again to root `display.json`
 - `movement-tool` opens but movement is risky:

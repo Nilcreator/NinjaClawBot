@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from importlib import import_module
+from time import monotonic, sleep
 from typing import Any
 
 from ..backend_errors import BackendConfigurationError, BackendUnavailableError
@@ -10,6 +12,7 @@ from ..endpoint import parse_servo_endpoint
 
 DEFAULT_SERVO_FREQUENCY_HZ = 50
 DEFAULT_PWM_CHIP = 0
+SYSFS_RELEASE_TIMEOUT_S = 0.5
 PI5_HEADER_PWM_CHANNELS = {
     12: 0,
     13: 1,
@@ -76,6 +79,34 @@ class HardwarePWMServoBackend:
         duty = (pulse_width_us / self._period_us()) * 100.0
         return max(0.0, min(100.0, duty))
 
+    def _best_effort_unexport(self, pwm: Any) -> None:
+        chippath = getattr(pwm, "chippath", None)
+        pwm_channel = getattr(pwm, "pwm_channel", None)
+        pwm_dir = getattr(pwm, "pwm_dir", None)
+        if not isinstance(chippath, str) or not isinstance(pwm_channel, int):
+            return
+
+        unexport_path = os.path.join(chippath, "unexport")
+        if not os.path.exists(unexport_path) or not os.access(unexport_path, os.W_OK):
+            return
+
+        try:
+            echo = getattr(pwm, "echo", None)
+            if callable(echo):
+                echo(pwm_channel, unexport_path)
+            else:
+                with open(unexport_path, "w", encoding="ascii") as handle:
+                    handle.write(f"{pwm_channel}\n")
+        except OSError:
+            return
+
+        if not isinstance(pwm_dir, str) or not pwm_dir:
+            return
+
+        deadline = monotonic() + SYSFS_RELEASE_TIMEOUT_S
+        while os.path.exists(pwm_dir) and monotonic() < deadline:
+            sleep(0.01)
+
     def claim(self, identifier: int | str) -> None:
         identifier = self._normalize_pin(identifier)
         if identifier in self._pwms:
@@ -124,8 +155,11 @@ class HardwarePWMServoBackend:
         identifier = self._normalize_pin(identifier)
         if identifier not in self._pwms:
             return
+        pwm = self._pwms[identifier]
         self.off(identifier)
+        self._best_effort_unexport(pwm)
         self._pwms.pop(identifier, None)
+        self._active.discard(identifier)
         self._current_pulses.pop(identifier, None)
 
     def close(self) -> None:

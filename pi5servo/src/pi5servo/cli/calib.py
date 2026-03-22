@@ -40,12 +40,14 @@ class CalibApp:
         config_path: str,
         manager: ConfigManager,
         debug: bool = False,
+        owns_servo: bool = True,
     ) -> None:
         self.servo = servo
         self.pin = pin
         self.endpoint_label = format_endpoint_label(pin)
         self.config_path = config_path
         self.debug = debug
+        self.owns_servo = owns_servo
         self.manager = manager
         self.calibration = self.manager.get_calibration(pin)
 
@@ -253,7 +255,8 @@ Misc:
         """Cleanup on exit."""
         self.servo.off()
         self.show()
-        self.servo.close()
+        if self.owns_servo:
+            self.servo.close()
 
 
 @click.command("calib")

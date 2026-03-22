@@ -189,6 +189,11 @@ def servo_tool(
             None,
         )
 
+    def get_persistent_servo(pin: int | str) -> Servo | None:
+        if persistent_group is None:
+            return None
+        return persistent_group.get_servo(pin)
+
     def run_with_isolated_temp_servo(
         pin: int | str,
         callback: Callable[[Servo], None],
@@ -336,7 +341,14 @@ def servo_tool(
                         servo.set_angle(angle)
                         click.echo(term.green(f"✓ {format_endpoint_label(pin)} → {angle}°"))
 
-                run_with_isolated_temp_servo(pin, move_session)
+                borrowed_servo = get_persistent_servo(pin)
+                if borrowed_servo is not None:
+                    try:
+                        move_session(borrowed_servo)
+                    finally:
+                        borrowed_servo.off()
+                else:
+                    run_with_isolated_temp_servo(pin, move_session)
             except Exception as exc:
                 click.echo(term.red(f"✗ Error: {exc}"))
                 input("\nPress Enter to continue...")
@@ -352,15 +364,30 @@ def servo_tool(
                 return
 
             try:
+                borrowed_servo = get_persistent_servo(pin)
 
-                def calibrate_session(servo: Servo) -> None:
-                    app = CalibApp(servo, pin, config_path, manager)
+                def calibrate_session(servo: Servo, *, owns_servo: bool) -> None:
+                    app = CalibApp(
+                        servo,
+                        pin,
+                        config_path,
+                        manager,
+                        owns_servo=owns_servo,
+                    )
                     try:
                         app.main()
                     finally:
                         app.end()
 
-                run_with_isolated_temp_servo(pin, calibrate_session)
+                if borrowed_servo is not None:
+                    calibrate_session(borrowed_servo, owns_servo=False)
+                    manager.load()
+                    persistent_group.update_calibration(pin, manager.get_calibration(pin))
+                else:
+                    run_with_isolated_temp_servo(
+                        pin,
+                        lambda servo: calibrate_session(servo, owns_servo=True),
+                    )
             except Exception as exc:
                 click.echo(term.red(f"✗ Error: {exc}"))
                 input("\nPress Enter to continue...")

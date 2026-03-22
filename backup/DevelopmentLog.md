@@ -1,5 +1,93 @@
 # Development Log
 
+## 2026-03-23
+
+### pi5servo GPIO13 Calibration Reopen Fix And PWM Release Hardening
+
+Summary:
+
+- re-audited the reported Raspberry Pi 5 `gpio13` calibration failure after the
+  earlier session-isolation fix was installed and tested on-device
+- confirmed the remaining root issue was not the overlay and not
+  `ninjaclawbot`; it was the `pi5servo servo-tool` calibration lifecycle still
+  reopening `pwm1` for configured native endpoints inside the same interactive
+  session
+- confirmed the installed `rpi_hardware_pwm` dependency disables PWM with
+  `stop()` but does not unexport the sysfs PWM node on release, which left the
+  temporary reopen path brittle on real Pi hardware
+- changed `servo-tool` so configured native endpoints now:
+  - reuse the already-open live `ServoGroup` servo for `Single Move`
+  - reuse the already-open live `ServoGroup` servo for `Calibrate`
+  - keep the live group active during those borrowed sessions instead of
+    destroying and recreating it
+- updated the calibration TUI so it no longer closes a borrowed live servo when
+  the app did not create that servo itself
+- hardened the RP1 hardware PWM backend so release/close now:
+  - stop the channel
+  - best-effort unexport the sysfs PWM node
+  - wait briefly for the sysfs node to settle before later rebuilds
+- added regression coverage for both layers:
+  - configured native calibration reuses the live servo and does not create a
+    temporary replacement
+  - configured native single-move reuses the live servo and keeps the live
+    session alive during the move
+  - unconfigured native endpoints still use the isolated fallback path
+  - hardware PWM release now writes `unexport` for sysfs cleanup
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/InstallationGuide.md)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/cli/calib.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/cli/calib.py)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/src/pi5servo/core/backends/hardware_pwm.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/core/backends/hardware_pwm.py)
+- [pi5servo/tests/test_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_backend.py)
+- [pi5servo/tests/test_servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_servo_tool.py)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/backup/DevelopmentLog.md)
+
+Why:
+
+- the first fix removed one duplicate-open path, but your Pi result showed the
+  configured `gpio13` interactive flow was still reopening `pwm1`
+- a one-off standalone script worked because it opened GPIO13 once and kept
+  using that one controller object
+- the robust fix therefore had two parts:
+  - stop reopening native PWM for configured live endpoints
+  - make the fallback release path relinquish sysfs PWM channels more fully
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff check pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff format --check pi5servo/src pi5servo/tests`
+- `uv run --extra dev pytest -q pi5servo/tests`
+- `uv run --extra dev ruff check .`
+- `uv run --extra dev ruff format --check .`
+- attempted workspace-wide `uv run --extra dev pytest -q`
+- result: `129 passed`
+- result: repository-wide Ruff checks passed
+- result: workspace-wide root pytest still fails during collection with the same
+  pre-existing sibling-package import-path issues outside `pi5servo`
+
+Raspberry Pi validation status:
+
+- local code validation passed
+- Raspberry Pi follow-up still required:
+  - `cd ~/NinjaClawBot`
+  - `git pull`
+  - `uv sync --extra dev`
+  - `uv run pi5servo servo-tool`
+  - choose `2. Single Move` and test `gpio13` or `13`
+  - choose `3. Calibrate` and test `gpio13` or `13`
+  - confirm the calibration view opens without the old `pwm1` write error
+  - confirm `gpio13` still responds in the same session after quitting the
+    calibration screen
+  - run a small Quick Move command such as `F_gpio13:0`
+  - if you test an endpoint not already in `servo.json`, repeat once to confirm
+    the temporary fallback path also rebuilds cleanly
+
 ## 2026-03-22
 
 ### pi5servo Native PWM Calibration Session Isolation Fix

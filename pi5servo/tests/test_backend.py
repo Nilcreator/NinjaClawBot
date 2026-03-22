@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shutil
 from unittest.mock import MagicMock
 
 import pytest
@@ -25,6 +26,8 @@ class FakeHardwarePWM:
         self.pwm_channel = pwm_channel
         self.hz = hz
         self.chip = chip
+        self.chippath = ""
+        self.pwm_dir = ""
         self.started_with: list[float] = []
         self.duty_history: list[float] = []
         self.frequency_history: list[int] = []
@@ -41,6 +44,12 @@ class FakeHardwarePWM:
 
     def stop(self) -> None:
         self.stop_calls += 1
+
+    def echo(self, message: int, file: str) -> None:
+        with open(file, "w", encoding="ascii") as handle:
+            handle.write(f"{message}\n")
+        if file.endswith("/unexport") and self.pwm_dir:
+            shutil.rmtree(self.pwm_dir, ignore_errors=True)
 
 
 class FakeChannel:
@@ -157,6 +166,28 @@ def test_hardware_pwm_backend_sets_pulse_and_off() -> None:
     backend.off(12)
     assert pwm.stop_calls == 1
     assert backend.get_pulse_us(12) == 0
+
+
+def test_hardware_pwm_backend_release_unexports_sysfs_channel(tmp_path) -> None:
+    """Releasing a hardware PWM channel should best-effort unexport the sysfs node."""
+    chippath = tmp_path / "pwmchip0"
+    chippath.mkdir()
+    unexport_path = chippath / "unexport"
+    unexport_path.write_text("", encoding="ascii")
+    pwm_dir = chippath / "pwm0"
+    pwm_dir.mkdir()
+
+    backend = HardwarePWMServoBackend(pwm_cls=FakeHardwarePWM)
+    backend.set_pulse_us(12, 1500)
+    pwm = backend._pwms[12]
+    pwm.chippath = str(chippath)
+    pwm.pwm_dir = str(pwm_dir)
+
+    backend.release(12)
+
+    assert unexport_path.read_text(encoding="ascii") == "0\n"
+    assert not pwm_dir.exists()
+    assert 12 not in backend._pwms
 
 
 def test_pca9685_backend_sets_frequency_and_duty() -> None:
