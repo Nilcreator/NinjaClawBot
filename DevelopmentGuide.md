@@ -588,6 +588,36 @@ uv run pi5mic doctor
 uv run pi5mic run --once
 ```
 
+### `pi5servo servo-tool` says `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1`
+
+This error usually means the interactive tool tried to open the same native PWM channel twice in one session.
+
+Current expected behavior:
+
+- `servo-tool` now suspends its live servo group before `Single Move` or `Calibrate`
+- after the temporary action finishes, it rebuilds the live group from `servo.json`
+
+Safest recovery:
+
+```bash
+cd ~/NinjaClawBot
+git pull
+uv sync --extra dev
+uv run pi5servo servo-tool
+```
+
+Then:
+
+- choose `3. Calibrate` for `gpio13` or `13`
+- confirm the calibration view opens normally
+- return to the main menu and run a small Quick Move command such as `F_gpio13:0`
+
+If it still fails, check:
+
+- `/boot/firmware/config.txt` still contains `dtoverlay=pwm-2chan,pin=12,func=4,pin2=13,func2=4`
+- `servo.json` still points at the intended backend and pin-channel map
+- a standalone direct script can still drive GPIO13 before changing calibration data
+
 ### Voice listener works once but does not re-arm well
 
 Check:

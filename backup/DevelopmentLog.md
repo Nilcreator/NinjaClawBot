@@ -1,5 +1,79 @@
 # Development Log
 
+## 2026-03-22
+
+### pi5servo Native PWM Calibration Session Isolation Fix
+
+Summary:
+
+- audited the reported Raspberry Pi 5 failure where `pi5servo servo-tool`
+  could calibrate GPIO12 but failed on GPIO13 with:
+  - `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1 (period, duty_cycle, enable)`
+- reviewed both `pi5servo` and `ninjaclawbot` servo integration paths and
+  confirmed the root cause lived in the standalone `pi5servo` interactive tool,
+  not in the integrated `ninjaclawbot` runtime
+- confirmed that `servo-tool` kept a live persistent `ServoGroup` open for the
+  whole session, then created a second temporary native PWM servo for
+  `Single Move` and `Calibrate`
+- fixed `servo-tool` so temporary single-servo sessions now:
+  - release the live persistent group first
+  - open the dedicated temporary servo only after the old group is closed
+  - rebuild the live group after the temporary action ends
+- preserved the existing same-session behavior by rebuilding the interactive
+  group automatically after `Single Move` and `Calibrate`
+- added regression coverage to prove:
+  - native calibration closes the live group before the temporary servo is
+    created
+  - `Single Move` follows the same safe lifecycle
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/InstallationGuide.md)
+- [pi5servo/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/README.md)
+- [pi5servo/src/pi5servo/cli/servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/src/pi5servo/cli/servo_tool.py)
+- [pi5servo/tests/test_servo_tool.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/pi5servo/tests/test_servo_tool.py)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawBot/backup/DevelopmentLog.md)
+
+Why:
+
+- the reported failure only appeared inside the interactive project workflow and
+  not in a standalone one-off script because the script opened GPIO13 only once
+- the interactive tool previously held one live native PWM backend open and then
+  attempted to create a second controller on the same native channel
+- on Raspberry Pi 5 this could fail specifically on GPIO13 / `pwm1`, so the
+  correct fix was to repair the session lifecycle instead of asking the user to
+  change the overlay or avoid the interactive tool
+
+Lint and test results:
+
+- `uv run --extra dev python -m compileall pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff check pi5servo/src pi5servo/tests`
+- `uv run --extra dev ruff format --check pi5servo/src pi5servo/tests`
+- `uv run --extra dev pytest -q pi5servo/tests`
+- `uv run --extra dev ruff check .`
+- `uv run --extra dev ruff format --check .`
+- attempted workspace-wide `uv run --extra dev pytest -q`
+- result: `pi5servo` package validation passed with `126 passed`
+- result: workspace-wide root pytest still fails during collection with
+  pre-existing sibling-package import-path issues, so the package-specific
+  pytest gate remains the stable validated path for this repo
+
+Raspberry Pi validation status:
+
+- local code validation passed
+- Raspberry Pi follow-up still required:
+  - `cd ~/NinjaClawBot`
+  - `git pull`
+  - `uv sync --extra dev`
+  - `uv run pi5servo servo-tool`
+  - choose `2. Single Move` and test `gpio13` or `13`
+  - return to the menu and choose `3. Calibrate` for `gpio13` or `13`
+  - confirm the calibration view opens without the old `pwm1` write error
+  - return to the menu and run a small Quick Move command such as `F_gpio13:0`
+  - confirm the same session still works after calibration without restarting
+
 ## 2026-03-20
 
 ### MicDevelopment.md Audit Consolidation And Always-On Voice Planning Refresh

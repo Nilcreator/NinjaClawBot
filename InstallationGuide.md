@@ -1386,6 +1386,12 @@ uv run ninjaclawbot health-check
 - servo behaves dangerously:
   - stop immediately
   - recalibrate with `servo-tool`
+- `servo-tool` says `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1` during GPIO13 calibration:
+  - update the workspace with `git pull`
+  - rerun `uv sync --extra dev`
+  - reopen `uv run pi5servo servo-tool`
+  - try calibration again from option `3`
+  - if it still fails, recheck the PWM overlay line in `/boot/firmware/config.txt`
 - `expression-tool` opens but faces look wrong:
   - export display config again to root `display.json`
 - `movement-tool` opens but movement is risky:

@@ -374,6 +374,8 @@ Quick Move is the best way to send direct operator commands like `F_gpio12:0/gpi
 
 After you save calibration data, `servo-tool` now reloads the config and rebuilds its live servo group in the same session. That means you can go straight into Quick Move and test the calibrated servo without exiting and restarting the tool first.
 
+For native GPIO endpoints, `servo-tool` now also releases its live background servo group before opening `Single Move` or `Calibrate`, then rebuilds that group afterward. This avoids duplicate RP1/sysfs PWM claims on channels such as GPIO13 / `pwm1` while keeping the same-session workflow intact.
+
 For a DFR0566 servo on the HAT's physical `PWM0` connector, enter `hat_pwm1`.
 For a DFR0566 servo on the HAT's physical `PWM1` connector, enter `hat_pwm2`.
 
@@ -460,6 +462,9 @@ uv run pi5servo config import backup.json
 
 > [!NOTE]
 > `uv run pi5servo calib ...` only drives the live servo calibration TUI when the optional `blessed` terminal library is installed. If `blessed` is missing, the command falls back to a simple read-only view and the servo will not move.
+
+> [!TIP]
+> If an older build showed `Unable to create/write to /sys/class/pwm/pwmchip0/pwm1 (period, duty_cycle, enable)` while calibrating GPIO13 from `servo-tool`, update to the latest `pi5servo`. The interactive tool now suspends its live native GPIO group before opening temporary `Single Move` or `Calibrate` sessions.
 
 ### Advanced Backend Examples
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 
 import click
 
@@ -118,6 +119,18 @@ def servo_tool(
             labels = ", ".join(format_endpoint_label(pin) for pin in known_pins)
             click.echo(term.green(f"✓ All servos centered (0°): {labels}"))
 
+    def release_persistent_group() -> None:
+        nonlocal persistent_group, runtime
+
+        old_group = persistent_group
+        old_runtime = runtime
+        persistent_group = None
+        runtime = None
+
+        if old_group is not None:
+            old_group.close()
+        close_runtime_handle(old_runtime)
+
     def _build_backend_group(pins: list[int | str]) -> tuple[ServoGroup, object | None]:
         if resolved_backend in LEGACY_BACKENDS:
             group, _, temp_runtime, _, _ = create_group_from_config(
@@ -175,6 +188,24 @@ def servo_tool(
             ),
             None,
         )
+
+    def run_with_isolated_temp_servo(
+        pin: int | str,
+        callback: Callable[[Servo], None],
+    ) -> None:
+        """Run a temporary single-servo session without overlapping live backends."""
+        servo = None
+        temp_runtime = None
+
+        release_persistent_group()
+        try:
+            servo, temp_runtime = build_temp_servo(pin)
+            callback(servo)
+        finally:
+            if servo is not None:
+                servo.close()
+            close_runtime_handle(temp_runtime)
+            refresh_persistent_group(center_on_load=False)
 
     try:
         refresh_persistent_group(center_on_load=True)
@@ -279,39 +310,37 @@ def servo_tool(
                 "Enter angle or 'min'/'center'/'max'. Type 'q' to return.\n"
             )
             try:
-                servo, temp_runtime = build_temp_servo(pin)
+
+                def move_session(servo: Servo) -> None:
+                    while True:
+                        angle_str = input("> ").strip().lower()
+                        if angle_str in ("q", "b", "quit", "back"):
+                            break
+                        if not angle_str:
+                            continue
+
+                        cal = manager.get_calibration(pin)
+                        if angle_str == "min":
+                            angle = cal.angle_min
+                        elif angle_str == "center":
+                            angle = cal.angle_center
+                        elif angle_str == "max":
+                            angle = cal.angle_max
+                        else:
+                            try:
+                                angle = float(angle_str)
+                            except ValueError:
+                                click.echo(term.red("Invalid angle"))
+                                continue
+
+                        servo.set_angle(angle)
+                        click.echo(term.green(f"✓ {format_endpoint_label(pin)} → {angle}°"))
+
+                run_with_isolated_temp_servo(pin, move_session)
             except Exception as exc:
                 click.echo(term.red(f"✗ Error: {exc}"))
                 input("\nPress Enter to continue...")
                 return
-
-            try:
-                while True:
-                    angle_str = input("> ").strip().lower()
-                    if angle_str in ("q", "b", "quit", "back"):
-                        break
-                    if not angle_str:
-                        continue
-
-                    cal = manager.get_calibration(pin)
-                    if angle_str == "min":
-                        angle = cal.angle_min
-                    elif angle_str == "center":
-                        angle = cal.angle_center
-                    elif angle_str == "max":
-                        angle = cal.angle_max
-                    else:
-                        try:
-                            angle = float(angle_str)
-                        except ValueError:
-                            click.echo(term.red("Invalid angle"))
-                            continue
-
-                    servo.set_angle(angle)
-                    click.echo(term.green(f"✓ {format_endpoint_label(pin)} → {angle}°"))
-            finally:
-                servo.close()
-                close_runtime_handle(temp_runtime)
 
         def calibrate_servo() -> None:
             click.echo("\n" + term.yellow("Enter servo endpoint to calibrate:"))
@@ -323,18 +352,19 @@ def servo_tool(
                 return
 
             try:
-                servo, temp_runtime = build_temp_servo(pin)
-                app = CalibApp(servo, pin, config_path, manager)
-                try:
-                    app.main()
-                finally:
-                    app.end()
-                    close_runtime_handle(temp_runtime)
+
+                def calibrate_session(servo: Servo) -> None:
+                    app = CalibApp(servo, pin, config_path, manager)
+                    try:
+                        app.main()
+                    finally:
+                        app.end()
+
+                run_with_isolated_temp_servo(pin, calibrate_session)
             except Exception as exc:
                 click.echo(term.red(f"✗ Error: {exc}"))
                 input("\nPress Enter to continue...")
                 return
-            refresh_persistent_group(center_on_load=False)
             click.echo(term.green("✓ Config reloaded"))
 
         def set_speed() -> None:

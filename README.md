@@ -184,6 +184,7 @@ Current highlights:
 - validated startup greeting, idle, thinking, reply, and sleepy lifecycle
 - Telegram text replies plus robot reactions on the validated OpenClaw path
 - `ninjaclawbot_diagnostics` for deployment and readiness checks
+- `pi5servo servo-tool` now isolates temporary native GPIO calibration and single-move sessions so GPIO13 / `pwm1` setup does not collide with the live session backend
 - `pi5mic` available as a standalone package and as an optional part of the full build
 - manual always-on voice input preview available through `voiceinput-tool`
 

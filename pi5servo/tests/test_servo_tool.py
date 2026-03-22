@@ -183,6 +183,7 @@ def test_servo_tool_uses_isolated_backend_for_native_calibration(monkeypatch, tm
             captured["pin"] = self.pin
             captured["backend"] = self.backend
             captured["backend_kwargs"] = self.backend_kwargs
+            captured["persistent_group_closed_before_servo"] = persistent_group.closed
 
     monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
     monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
@@ -204,6 +205,7 @@ def test_servo_tool_uses_isolated_backend_for_native_calibration(monkeypatch, tm
     assert captured["pin"] == 12
     assert captured["backend"] == "auto"
     assert captured["backend_kwargs"] == {}
+    assert captured["persistent_group_closed_before_servo"] is True
     assert persistent_group.closed is True
 
 
@@ -329,3 +331,54 @@ def test_servo_tool_rebuilds_persistent_group_after_calibration(monkeypatch, tmp
     assert first_group.closed is True
     assert first_group.execute_calls == []
     assert second_group.execute_calls == [("F_12:0/13:0", True)]
+
+
+def test_servo_tool_single_move_releases_persistent_group_before_servo_creation(
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """Single Move should suspend the live group before opening a temporary servo."""
+    config_path = tmp_path / "servo.json"
+    manager = ConfigManager(config_path)
+    manager.set_calibration(12, ServoCalibration())
+    manager.save()
+    manager.load()
+
+    first_group = FakePersistentGroup(pins=[12], backend=object())
+    second_group = FakePersistentGroup(pins=[12], backend=object())
+    groups = iter(
+        [
+            (first_group, manager, None, "auto", {}),
+            (second_group, manager, None, "auto", {}),
+        ]
+    )
+    captured: dict[str, object] = {}
+
+    class CapturingServo(FakeTransientServo):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            captured["pin"] = self.pin
+            captured["persistent_group_closed_before_servo"] = first_group.closed
+
+    monkeypatch.setattr(servo_tool_module, "HAS_BLESSED", True)
+    monkeypatch.setattr(servo_tool_module, "Terminal", FakeTerminal)
+    monkeypatch.setattr(servo_tool_module, "Servo", CapturingServo)
+    monkeypatch.setattr(servo_tool_module.time, "sleep", lambda _: None)
+    monkeypatch.setattr(
+        servo_tool_module,
+        "create_group_from_config",
+        lambda **_kwargs: next(groups),
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(
+        servo_tool_module.servo_tool,
+        ["--config", str(config_path)],
+        input="2\n12\ncenter\nq\nq\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["pin"] == 12
+    assert captured["persistent_group_closed_before_servo"] is True
+    assert first_group.closed is True
+    assert second_group.move_calls == [([0.0], "M", True)]
