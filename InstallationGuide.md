@@ -99,7 +99,7 @@ Required software and tools:
 
 - a terminal with `sudo` access
 - `uv` for the Python workspace
-- OpenClaw
+- OpenClaw Installation (https://github.com/Nilcreator/NinjaClawAgent).
 
 Optional accounts or secrets:
 
