@@ -8,6 +8,7 @@ from typing import Any
 
 from ninjaclawbot.adapters import (
     BuzzerAdapter,
+    CameraAdapter,
     DeviceHealth,
     DisplayAdapter,
     DistanceAdapter,
@@ -99,6 +100,7 @@ class NinjaClawbotRuntime:
         self._buzzer = BuzzerAdapter(self.config)
         self._display = DisplayAdapter(self.config)
         self._distance = DistanceAdapter(self.config)
+        self._camera = CameraAdapter(self.config)
         self._expressions: ExpressionPlayer | None = None
         self._closed = False
 
@@ -121,6 +123,10 @@ class NinjaClawbotRuntime:
     @property
     def distance(self) -> DistanceAdapter:
         return self._distance
+
+    @property
+    def camera(self) -> CameraAdapter:
+        return self._camera
 
     @property
     def expressions(self) -> ExpressionPlayer:
@@ -186,6 +192,21 @@ class NinjaClawbotRuntime:
     def read_distance(self) -> dict[str, Any]:
         return self.distance.read_data()
 
+    def capture_photo(self, *, output_path: str | None = None) -> dict[str, Any]:
+        return self.camera.capture_photo(output_path=output_path)
+
+    def recognize_faces(self, *, image_path: str | None = None) -> dict[str, Any]:
+        return self.camera.recognize_faces(image_path=image_path)
+
+    def enroll_pending_face(
+        self, *, recognition_id: str, face_id: str, name: str
+    ) -> dict[str, Any]:
+        return self.camera.enroll_pending_face(
+            recognition_id=recognition_id,
+            face_id=face_id,
+            name=name,
+        )
+
     def perform_expression(self, definition: dict[str, Any]) -> dict[str, Any]:
         return self.expressions.perform(definition)
 
@@ -211,6 +232,7 @@ class NinjaClawbotRuntime:
             "buzzer": ("buzzer", self.buzzer.health_check),
             "display": ("display", self.display.health_check),
             "distance": ("distance", self.distance.health_check),
+            "camera": ("camera", self.camera.health_check),
         }
         for name, (_device, callback) in checks.items():
             try:

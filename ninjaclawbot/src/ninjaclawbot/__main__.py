@@ -102,6 +102,42 @@ def openclaw_serve(ctx: click.Context) -> None:
 
 
 @cli.command(
+    "camera-tool",
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
+)
+@click.pass_context
+def camera_tool_proxy(ctx: click.Context) -> None:
+    """Open the pi5camera camera-tool using this project root."""
+    root_dir = Path(str(ctx.obj["root_dir"])).expanduser().resolve()
+    config = NinjaClawbotConfig(root_dir=root_dir)
+    camera_config_path = config.camera_config_path
+
+    try:
+        import pi5camera  # noqa: F401
+    except ImportError as exc:
+        raise click.ClickException(
+            "pi5camera is not installed in this NinjaClawBot environment yet. "
+            "Install it with `uv sync --extra dev` from the project root before using the camera tool."
+        ) from exc
+
+    command = [
+        sys.executable,
+        "-m",
+        "pi5camera",
+        "--config-file",
+        str(camera_config_path),
+        "camera-tool",
+        *list(ctx.args),
+    ]
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        raise click.ClickException(
+            "pi5camera camera-tool exited with a non-zero status. "
+            "Review the output above for the exact reason."
+        )
+
+
+@cli.command(
     "voiceinput-tool",
     context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
 )
@@ -154,6 +190,70 @@ def move_servos(ctx: click.Context, command: str) -> None:
                 "targets": targets,
                 "speed_mode": speed_mode,
                 "per_servo_speeds": per_servo_speeds,
+            },
+        },
+    )
+
+
+@cli.command("capture-photo")
+@click.option(
+    "--output-path",
+    default=None,
+    help="Optional absolute file path or directory where the captured photo should be saved.",
+)
+@click.pass_context
+def capture_photo(ctx: click.Context, output_path: str | None) -> None:
+    """Take a normal camera photo and return the saved absolute path."""
+
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {
+            "action": "capture_photo",
+            "parameters": {"output_path": output_path} if output_path else {},
+        },
+    )
+
+
+@cli.command("recognize-faces")
+@click.option(
+    "--image-file",
+    default=None,
+    help="Optional existing image to recognize instead of taking a fresh photo.",
+)
+@click.pass_context
+def recognize_faces(ctx: click.Context, image_file: str | None) -> None:
+    """Recognize faces from a live capture or an existing image file."""
+
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {
+            "action": "recognize_faces",
+            "parameters": {"image_path": image_file} if image_file else {},
+        },
+    )
+
+
+@cli.command("enroll-pending-face")
+@click.option("--recognition-id", required=True, help="Pending recognition id returned earlier.")
+@click.option("--face-id", required=True, help="Face id returned earlier, such as face-1.")
+@click.argument("name")
+@click.pass_context
+def enroll_pending_face(
+    ctx: click.Context,
+    recognition_id: str,
+    face_id: str,
+    name: str,
+) -> None:
+    """Save a user-provided name for a previously unknown recognized face."""
+
+    _execute_and_print(
+        ctx.obj["root_dir"],
+        {
+            "action": "enroll_pending_face",
+            "parameters": {
+                "recognition_id": recognition_id,
+                "face_id": face_id,
+                "name": name,
             },
         },
     )

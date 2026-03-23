@@ -83,7 +83,11 @@ class ActionExecutor:
     def _dispatch(self, request: ActionRequest) -> tuple[dict[str, Any], list[str], list[str]]:
         params = request.parameters
         if request.action == ActionType.HEALTH_CHECK:
-            return self.runtime.health_check(), ["servo", "buzzer", "display", "distance"], []
+            return (
+                self.runtime.health_check(),
+                ["servo", "buzzer", "display", "distance", "camera"],
+                [],
+            )
         if request.action == ActionType.LIST_CAPABILITIES:
             return (
                 {
@@ -193,6 +197,28 @@ class ActionExecutor:
             return self.runtime.shutdown_sequence(), ["display", "buzzer", "servo"], []
         if request.action == ActionType.READ_DISTANCE:
             return self.runtime.read_distance(), ["distance"], []
+        if request.action == ActionType.CAPTURE_PHOTO:
+            result = self.runtime.capture_photo(output_path=params.get("output_path"))
+            return result, ["camera"], []
+        if request.action == ActionType.RECOGNIZE_FACES:
+            result = self.runtime.recognize_faces(image_path=params.get("image_path"))
+            warnings: list[str] = []
+            if result.get("needs_enrollment"):
+                warnings.append(
+                    "Unknown faces detected. Ask the user for a name, then call enroll_pending_face."
+                )
+            if result.get("requires_disambiguation"):
+                warnings.append(
+                    "Multiple unknown faces were detected. Use the returned face_id values to select one."
+                )
+            return result, ["camera"], warnings
+        if request.action == ActionType.ENROLL_PENDING_FACE:
+            result = self.runtime.enroll_pending_face(
+                recognition_id=str(params["recognition_id"]),
+                face_id=str(params["face_id"]),
+                name=str(params["name"]),
+            )
+            return result, ["camera"], []
         if request.action == ActionType.LIST_ASSETS:
             asset_type = str(params.get("asset_type", "all"))
             return (

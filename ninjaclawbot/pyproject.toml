@@ -7,6 +7,7 @@ authors = [
 ]
 dependencies = [
     "click>=8.1",
+    "pi5camera",
     "pi5buzzer[pi]",
     "pi5servo[pi]",
     "pi5disp[pi]",
@@ -25,6 +26,7 @@ voiceinput = [
 ]
 
 [tool.uv.sources]
+pi5camera = { path = "../pi5camera", editable = true }
 pi5buzzer = { path = "../pi5buzzer", editable = true }
 pi5servo = { path = "../pi5servo", editable = true }
 pi5disp = { path = "../pi5disp", editable = true }

@@ -25,6 +25,7 @@
   - [DevelopmentGuide.md](DevelopmentGuide.md)
 - Package guides:
   - [ninjaclawbot](ninjaclawbot/README.md)
+  - [pi5camera](pi5camera/README.md)
   - [pi5servo](pi5servo/README.md)
   - [pi5disp](pi5disp/README.md)
   - [pi5buzzer](pi5buzzer/README.md)
@@ -82,6 +83,7 @@ The current validated OpenClaw build supports this flow:
 | Part | Current validated direction |
 | --- | --- |
 | Brain | Raspberry Pi 5 |
+| Camera | Raspberry Pi camera module through `pi5camera` |
 | Display | SPI display supported by `pi5disp` |
 | Microphone | USB microphone or mic module through `pi5mic` |
 | Sound | Passive buzzer supported by `pi5buzzer` |
@@ -106,16 +108,17 @@ The current validated OpenClaw build supports this flow:
 | `pi5servo` | Servo calibration, movement control, motion assets | `servo-tool` |
 | `pi5disp` | Display initialization, rendering, brightness, rotation | `display-tool` |
 | `pi5buzzer` | Tones, emotion sounds, buzzer config | `buzzer-tool` |
+| `pi5camera` | Normal photo capture, face recognition, and face enrollment | `camera-tool` |
 | `pi5mic` | Recording, STT, OpenClaw handoff, optional always-on listening | `mic-tool`, `voiceinput-tool` |
 | `pi5vl53l0x` | Distance sensor setup and testing | `sensor-tool` |
-| `ninjaclawbot` | Integrated robot actions, expressions, movement playback | `expression-tool`, `movement-tool` |
+| `ninjaclawbot` | Integrated robot actions, expressions, movement playback, and camera wrappers | `camera-tool`, `expression-tool`, `movement-tool` |
 
 ## Choose Your Path
 
 Choose the path that matches what you want to do:
 
 1. **I only want to test one hardware module.**
-   Open the matching package guide in `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, or `pi5vl53l0x`.
+   Open the matching package guide in `pi5camera`, `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, or `pi5vl53l0x`.
 
 2. **I want to build the full robot locally first.**
    Start with [InstallationGuide.md](InstallationGuide.md), wire the hardware, and run the interactive tools one by one.
@@ -135,6 +138,7 @@ git clone https://github.com/Nilcreator/NinjaClawBot.git
 cd NinjaClawBot
 uv sync --extra dev
 uv run ninjaclawbot health-check
+uv run pi5camera camera-tool
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
@@ -167,6 +171,7 @@ What to do next:
 | [InstallationGuide.md](InstallationGuide.md) | Full Raspberry Pi 5 install, OpenClaw setup, Telegram validation, and voice integration |
 | [DevelopmentGuide.md](DevelopmentGuide.md) | Developer reference, architecture, package ownership, validation workflow, and troubleshooting |
 | [ninjaclawbot/README.md](ninjaclawbot/README.md) | Integrated robot runtime, expressions, movements, and main CLI |
+| [pi5camera/README.md](pi5camera/README.md) | Camera setup, normal photo capture, face recognition, and enrollment |
 | [pi5servo/README.md](pi5servo/README.md) | Servo wiring, calibration, and safe movement testing |
 | [pi5disp/README.md](pi5disp/README.md) | Display wiring, display config, and display testing |
 | [pi5buzzer/README.md](pi5buzzer/README.md) | Buzzer setup and sound playback |
@@ -184,6 +189,9 @@ Current highlights:
 - validated startup greeting, idle, thinking, reply, and sleepy lifecycle
 - Telegram text replies plus robot reactions on the validated OpenClaw path
 - `ninjaclawbot_diagnostics` for deployment and readiness checks
+- `pi5camera` available as a standalone package with guided setup, normal photo capture, local face recognition, and second-step face enrollment
+- `ninjaclawbot` now exposes `camera-tool`, `capture-photo`, `recognize-faces`, and `enroll-pending-face`
+- the OpenClaw plugin now exposes `ninjaclawbot_capture_photo`, `ninjaclawbot_recognize_faces`, and `ninjaclawbot_enroll_pending_face`
 - `pi5servo` now reuses configured live native GPIO servos in `servo-tool`, keeps healthy PWM channels exported across normal reloads, repairs stale `pwmchip0/pwm0|pwm1` sysfs nodes on claim, and rolls back partial startup claims so one bad PWM channel does not poison the other
 - `pi5mic` available as a standalone package and as an optional part of the full build
 - manual always-on voice input preview available through `voiceinput-tool`

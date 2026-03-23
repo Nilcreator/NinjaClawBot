@@ -48,6 +48,9 @@ test("plugin registers lifecycle hooks when api.registerHook is available", () =
   assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_diagnostics"));
   assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_voiceinput_status"));
   assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_stop_all"));
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_capture_photo"));
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_recognize_faces"));
+  assert.ok(tools.some((tool) => tool.name === "ninjaclawbot_enroll_pending_face"));
   assert.deepEqual(gatewayMethods, ["ninjaclawbot.presence.set"]);
 });
 

@@ -64,6 +64,7 @@ At the end of this guide, you should have:
 
 - a Raspberry Pi 5 with the full NinjaClawBot workspace installed
 - working standalone hardware drivers for:
+  - `pi5camera`
   - `pi5servo`
   - `pi5buzzer`
   - `pi5disp`
@@ -93,6 +94,7 @@ Required hardware:
 
 Optional but strongly recommended hardware:
 
+- Raspberry Pi camera module if you want local photos or face recognition
 - USB microphone or microphone module if you may want voice input later
 
 Required software and tools:
@@ -169,6 +171,7 @@ sudo apt install -y \
   pkg-config \
   swig \
   i2c-tools \
+  python3-picamera2 \
   libportaudio2 \
   portaudio19-dev
 ```
@@ -177,6 +180,7 @@ What this does:
 
 - installs the base build tools
 - installs I2C test tools
+- installs the Raspberry Pi camera stack used by `pi5camera`
 - installs the PortAudio system libraries used by `pi5mic`
 - installs common headers needed by Python and native extensions
 
@@ -293,8 +297,9 @@ Why the first command is recommended:
 
 ```bash
 cd ~/NinjaClawBot
-uv run python -c "import ninjaclawbot, pi5buzzer, pi5servo, pi5disp, pi5mic, pi5vl53l0x; print('imports-ok')"
+uv run python -c "import ninjaclawbot, pi5camera, pi5buzzer, pi5servo, pi5disp, pi5mic, pi5vl53l0x; print('imports-ok')"
 uv run ninjaclawbot --help
+uv run pi5camera --help
 uv run pi5servo --help
 uv run pi5disp --help
 uv run pi5buzzer --help
@@ -317,6 +322,7 @@ Purpose:
 
 Use these library guides for wiring details:
 
+- Camera: [pi5camera/README.md](pi5camera/README.md)
 - Servo: [pi5servo/README.md](pi5servo/README.md)
 - Display: [pi5disp/README.md](pi5disp/README.md)
 - Buzzer: [pi5buzzer/README.md](pi5buzzer/README.md)
@@ -328,6 +334,8 @@ Quick notes:
 - direct servo testing is easiest on GPIO 12 or GPIO 13
 - the VL53L0X usually appears on I2C address `0x29`
 - some servo-controller HATs appear on I2C address `0x10`
+- if you plan to use the camera, connect the ribbon cable now and make sure the
+  module is seated correctly before power-on
 - if you plan to use voice input, plug the USB microphone in now so it is
   visible during `pi5mic` setup
 
@@ -440,6 +448,37 @@ Expected result:
 
 - the sensor returns readings
 - `vl53l0x.json` is created if you save calibration
+
+### 7.5 Camera setup
+
+First confirm the Raspberry Pi camera stack can see the module:
+
+```bash
+rpicam-hello --list-cameras
+```
+
+Then run the guided tool:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera camera-tool
+```
+
+Inside the tool:
+
+1. run setup
+2. keep the default photo directory as `~/NinjaClawBot/photo` unless you have a
+   better absolute path already prepared
+3. run doctor
+4. take one normal photo
+5. test one face-recognition cycle
+
+Expected result:
+
+- `camera.json` is created
+- the default photo directory is saved as an absolute path
+- a captured photo is written under `~/NinjaClawBot/photo/`
+- unknown faces can be named and saved for later recognition
 
 Need help later?
 - [Appendix B. Hardware and local test help](#appendix-b-hardware-and-local-test-help)
@@ -696,6 +735,7 @@ Purpose:
 ```bash
 cd ~/NinjaClawBot
 uv run ninjaclawbot health-check
+uv run ninjaclawbot capture-photo
 uv run ninjaclawbot perform-expression greeting
 uv run ninjaclawbot perform-reply --reply-state greeting "Hello"
 uv run ninjaclawbot set-idle
@@ -737,6 +777,7 @@ uv run ninjaclawbot health-check | grep -iE '"config_path"|"using_root_config"' 
 Expected result:
 
 - expressions show correctly on the display
+- `capture-photo` saves a normal photo into the configured photo directory
 - `movement-tool` opens normally
 - `using_root_config` is `true`
 

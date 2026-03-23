@@ -1,5 +1,123 @@
 # Development Log
 
+## 2026-03-24
+
+### pi5camera Standalone Library, NinjaClawBot Integration, And OpenClaw Camera Tools
+
+Summary:
+
+- implemented the first working `pi5camera` package for Raspberry Pi 5 camera
+  use in both standalone and integrated robot flows
+- added a guided `camera-tool` plus direct standalone commands for:
+  - setup
+  - doctor
+  - status
+  - one-shot photo capture
+  - face recognition
+  - face enrollment and known-face management
+- made the default photo directory root-aware so first-run setup now defaults to:
+  - `<active_root>/photo` for saved photos
+  - `<active_root>/camera_data` for face data and pending records
+- added local face-recognition support with persistent pending-recognition
+  records so unknown faces can be named in a second step later
+- integrated camera support into `ninjaclawbot` through typed actions and a thin
+  adapter layer instead of exposing raw camera logic directly
+- added new `ninjaclawbot` camera-facing commands:
+  - `camera-tool`
+  - `capture-photo`
+  - `recognize-faces`
+  - `enroll-pending-face`
+- extended the OpenClaw plugin so the agent now has day-one camera tools for:
+  - normal photo capture
+  - face recognition
+  - second-step pending-face enrollment
+- updated the root docs so the workspace install, setup flow, validation model,
+  and troubleshooting guidance now include camera support
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pyproject.toml)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [pi5camera/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/pyproject.toml)
+- [pi5camera/src/pi5camera](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera)
+- [pi5camera/tests](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests)
+- [ninjaclawbot/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/pyproject.toml)
+- [ninjaclawbot/src/ninjaclawbot/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/__main__.py)
+- [ninjaclawbot/src/ninjaclawbot/actions.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/actions.py)
+- [ninjaclawbot/src/ninjaclawbot/adapters.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/adapters.py)
+- [ninjaclawbot/src/ninjaclawbot/config.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/config.py)
+- [ninjaclawbot/src/ninjaclawbot/executor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/executor.py)
+- [ninjaclawbot/src/ninjaclawbot/runtime.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/src/ninjaclawbot/runtime.py)
+- [ninjaclawbot/tests](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/ninjaclawbot/tests)
+- [integrations/openclaw/ninjaclawbot-plugin/src/index.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/index.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts)
+- [integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/integrations/openclaw/ninjaclawbot-plugin/tests/index.test.ts)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the project already had a stable standalone-first pattern for Pi 5 hardware
+  libraries, but camera control and local face recognition were still missing
+- the user-approved design required the same camera stack to work in three
+  places without splitting behavior:
+  - standalone `pi5camera`
+  - integrated `ninjaclawbot`
+  - OpenClaw plugin tools
+- the OpenClaw flow also needed a safe second-step enrollment contract so
+  unknown faces can be named later without losing the original recognition
+  context
+
+Lint and test results:
+
+- `cd pi5camera && uv run --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --extra dev ruff check src tests`
+- `cd pi5camera && uv run --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `5 passed`
+- `cd ninjaclawbot && uv run --extra dev python -m compileall src tests`
+- `cd ninjaclawbot && uv run --extra dev ruff check src tests`
+- `cd ninjaclawbot && uv run --extra dev ruff format --check src tests`
+- `cd ninjaclawbot && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `78 passed`
+- `cd integrations/openclaw/ninjaclawbot-plugin && npm run typecheck`
+- `cd integrations/openclaw/ninjaclawbot-plugin && npm test`
+- result: `16 passed`
+
+Raspberry Pi validation status:
+
+- local code validation passed
+- Raspberry Pi follow-up still required:
+  - `cd ~/NinjaClawBot`
+  - `git pull`
+  - `uv sync --extra dev`
+  - `uv run pi5camera doctor`
+  - `uv run pi5camera camera-tool`
+  - run setup and confirm the default saved photo directory is
+    `~/NinjaClawBot/photo`
+  - take one normal photo and confirm the file lands in `~/NinjaClawBot/photo`
+  - run one recognition where the face is unknown and save the returned name
+    using the second-step enrollment path
+  - rerun recognition and confirm the saved face name is returned
+  - `uv run ninjaclawbot health-check`
+  - `uv run ninjaclawbot capture-photo`
+  - `uv run ninjaclawbot recognize-faces`
+  - if the face is unknown, run:
+    `uv run ninjaclawbot enroll-pending-face --recognition-id <id> --face-id <face-id> "<name>"`
+  - in OpenClaw, validate:
+    - `ninjaclawbot_capture_photo`
+    - `ninjaclawbot_recognize_faces`
+    - `ninjaclawbot_enroll_pending_face`
+
+Follow-up work:
+
+- add Raspberry Pi camera autofocus and metadata tuning notes after real-device
+  validation
+- document camera privacy and face-database backup guidance in `pi5camera`
+  package docs if the new workflow becomes part of the normal deployment path
+
 ## 2026-03-23
 
 ### pi5servo Healthy PWM Reuse On Calibration Exit

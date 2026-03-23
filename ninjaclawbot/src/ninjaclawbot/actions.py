@@ -30,6 +30,9 @@ class ActionType(StrEnum):
     STOP_EXPRESSION = "stop_expression"
     SHUTDOWN_SEQUENCE = "shutdown_sequence"
     READ_DISTANCE = "read_distance"
+    CAPTURE_PHOTO = "capture_photo"
+    RECOGNIZE_FACES = "recognize_faces"
+    ENROLL_PENDING_FACE = "enroll_pending_face"
     LIST_ASSETS = "list_assets"
     STOP_ALL = "stop_all"
 
@@ -49,6 +52,9 @@ _REQUIRED_PARAMETERS: dict[ActionType, tuple[str, ...]] = {
     ActionType.STOP_EXPRESSION: (),
     ActionType.SHUTDOWN_SEQUENCE: (),
     ActionType.READ_DISTANCE: (),
+    ActionType.CAPTURE_PHOTO: (),
+    ActionType.RECOGNIZE_FACES: (),
+    ActionType.ENROLL_PENDING_FACE: ("recognition_id", "face_id", "name"),
     ActionType.LIST_ASSETS: (),
     ActionType.STOP_ALL: (),
 }
@@ -82,6 +88,10 @@ class ActionRequest:
             self._validate_text()
         elif self.action == ActionType.SET_PRESENCE_MODE:
             self._validate_presence_mode()
+        elif self.action in {ActionType.CAPTURE_PHOTO, ActionType.RECOGNIZE_FACES}:
+            self._validate_optional_path_parameter()
+        elif self.action == ActionType.ENROLL_PENDING_FACE:
+            self._validate_pending_enrollment()
         elif self.action == ActionType.LIST_ASSETS:
             self._validate_asset_type()
 
@@ -146,6 +156,18 @@ class ActionRequest:
 
     def _validate_presence_mode(self) -> None:
         normalize_presence_mode(self.parameters.get("mode"))
+
+    def _validate_optional_path_parameter(self) -> None:
+        field_name = "image_path" if self.action == ActionType.RECOGNIZE_FACES else "output_path"
+        value = self.parameters.get(field_name)
+        if value is not None and (not isinstance(value, str) or not value.strip()):
+            raise ActionValidationError(f"{field_name} must be a non-empty string when provided.")
+
+    def _validate_pending_enrollment(self) -> None:
+        for field_name in ("recognition_id", "face_id", "name"):
+            value = self.parameters.get(field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ActionValidationError(f"{field_name} must be a non-empty string.")
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> "ActionRequest":

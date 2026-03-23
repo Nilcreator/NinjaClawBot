@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import logging
+import os
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +51,109 @@ class DeviceHealth:
 
     available: bool
     data: dict[str, Any]
+
+
+def _normalize_optional_path(path_value: str | None) -> Path | None:
+    if path_value is None:
+        return None
+    normalized = str(path_value).strip()
+    if not normalized:
+        return None
+    return Path(normalized).expanduser().resolve()
+
+
+def _is_writable_directory(path: Path) -> bool:
+    target = path if path.exists() else path.parent
+    return target.exists() and os.access(target, os.W_OK)
+
+
+class CameraAdapter:
+    """Adapter for the pi5camera standalone package."""
+
+    def __init__(self, config: NinjaClawbotConfig) -> None:
+        self.config = config
+
+    def _load_config(self) -> dict[str, Any]:
+        manager_module = _import_or_raise("pi5camera.config.config_manager")
+        manager = manager_module.CameraConfigManager(str(self.config.camera_config_path))
+        return dict(manager.load())
+
+    def capture_photo(self, *, output_path: str | None = None) -> dict[str, Any]:
+        camera_module = _import_or_raise("pi5camera")
+        result = camera_module.capture_photo(
+            self._load_config(),
+            output_path=_normalize_optional_path(output_path),
+        )
+        return {
+            "photo_path": str(result.path),
+            "photo_metadata": dict(result.metadata),
+        }
+
+    def recognize_faces(self, *, image_path: str | None = None) -> dict[str, Any]:
+        camera_module = _import_or_raise("pi5camera")
+        return dict(
+            camera_module.recognize_faces(
+                self._load_config(),
+                image_path=_normalize_optional_path(image_path),
+            )
+        )
+
+    def enroll_pending_face(
+        self, *, recognition_id: str, face_id: str, name: str
+    ) -> dict[str, Any]:
+        camera_module = _import_or_raise("pi5camera")
+        return dict(
+            camera_module.enroll_pending_face(
+                self._load_config(),
+                recognition_id=recognition_id,
+                face_id=face_id,
+                name=name,
+            )
+        )
+
+    def health_check(self) -> DeviceHealth:
+        config_path = self.config.camera_config_path.resolve()
+        summary: dict[str, Any] = {
+            "config_path": str(config_path),
+            "configured": config_path.exists(),
+            "camera_backend": "picamera2",
+            "recognition_backend": "face_recognition",
+        }
+
+        if importlib.util.find_spec("pi5camera") is None:
+            return DeviceHealth(
+                available=False,
+                data={
+                    **summary,
+                    "error": "pi5camera is not installed in the NinjaClawBot environment.",
+                },
+            )
+
+        try:
+            config = self._load_config()
+        except Exception as exc:
+            return DeviceHealth(available=False, data={**summary, "error": str(exc)})
+
+        paths = config.get("paths", {})
+        photo_dir = Path(str(paths.get("photo_dir", ""))).expanduser().resolve()
+        data_dir = Path(str(paths.get("data_dir", ""))).expanduser().resolve()
+        camera_backend_available = importlib.util.find_spec("picamera2") is not None
+        recognition_backend_available = importlib.util.find_spec("face_recognition") is not None
+        photo_dir_writable = _is_writable_directory(photo_dir)
+        data_dir_writable = _is_writable_directory(data_dir)
+
+        return DeviceHealth(
+            available=camera_backend_available and photo_dir_writable and data_dir_writable,
+            data={
+                **summary,
+                "photo_dir": str(photo_dir),
+                "data_dir": str(data_dir),
+                "camera_backend_available": camera_backend_available,
+                "recognition_backend_available": recognition_backend_available,
+                "photo_dir_writable": photo_dir_writable,
+                "data_dir_writable": data_dir_writable,
+            },
+        )
 
 
 class ServoAdapter:

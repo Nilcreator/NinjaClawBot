@@ -62,6 +62,33 @@ class FakeRuntime:
         self.calls.append(("read_distance",))
         return {"distance_mm": 120}
 
+    def capture_photo(self, *, output_path=None):
+        self.calls.append(("capture_photo", output_path))
+        return {"photo_path": output_path or "/tmp/photo.jpg", "photo_metadata": {"source": "fake"}}
+
+    def recognize_faces(self, *, image_path=None):
+        self.calls.append(("recognize_faces", image_path))
+        return {
+            "recognition_id": "rec-1",
+            "photo_path": image_path or "/tmp/recognized.jpg",
+            "face_count": 1,
+            "unknown_count": 1,
+            "recognized_names": [],
+            "needs_enrollment": True,
+            "requires_disambiguation": False,
+            "faces": [{"face_id": "face-1", "status": "unknown", "name": None}],
+        }
+
+    def enroll_pending_face(self, *, recognition_id, face_id, name):
+        self.calls.append(("enroll_pending_face", recognition_id, face_id, name))
+        return {
+            "recognition_id": recognition_id,
+            "face_id": face_id,
+            "name": name,
+            "saved_image_path": f"/tmp/{name}.jpg",
+            "pending_remaining": 0,
+        }
+
     def stop_all(self):
         self.calls.append(("stop_all",))
 
@@ -255,6 +282,53 @@ def test_executor_prefers_saved_expression_over_builtin_name(tmp_path) -> None:
     assert runtime.calls[0][0] == "perform_expression"
     assert runtime.calls[0][1]["display"]["text"] == "Saved wins"
     assert runtime.calls[0][1]["builtin"] == ""
+
+
+def test_executor_can_capture_photo() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute(
+        {"action": "capture_photo", "parameters": {"output_path": "/tmp/camera-output.jpg"}}
+    )
+
+    assert result.status.value == "success"
+    assert runtime.calls == [("capture_photo", "/tmp/camera-output.jpg")]
+    assert result.data["photo_path"] == "/tmp/camera-output.jpg"
+
+
+def test_executor_can_recognize_faces_and_return_enrollment_hint() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute({"action": "recognize_faces"})
+
+    assert result.status.value == "success"
+    assert runtime.calls == [("recognize_faces", None)]
+    assert result.data["recognition_id"] == "rec-1"
+    assert result.warnings == [
+        "Unknown faces detected. Ask the user for a name, then call enroll_pending_face."
+    ]
+
+
+def test_executor_can_enroll_pending_face() -> None:
+    runtime = FakeRuntime()
+    executor = ActionExecutor(runtime=runtime)
+
+    result = executor.execute(
+        {
+            "action": "enroll_pending_face",
+            "parameters": {
+                "recognition_id": "rec-1",
+                "face_id": "face-1",
+                "name": "Alice",
+            },
+        }
+    )
+
+    assert result.status.value == "success"
+    assert runtime.calls == [("enroll_pending_face", "rec-1", "face-1", "Alice")]
+    assert result.data["name"] == "Alice"
 
 
 def test_executor_rejects_unknown_expression_name() -> None:

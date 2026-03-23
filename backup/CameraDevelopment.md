@@ -36,8 +36,8 @@ The target product is:
 - a guided interactive setup and testing tool for users
 - a local face-recognition workflow built on a free open-source backend
 - a thin `ninjaclawbot` integration layer for AI-driven orchestration
-- an optional OpenClaw plugin surface that reuses `ninjaclawbot` actions rather
-  than calling raw camera code directly
+- an OpenClaw plugin surface that reuses `ninjaclawbot` actions rather than
+  calling raw camera code directly
 
 The long-term finished user experience should be:
 
@@ -49,8 +49,10 @@ The long-term finished user experience should be:
    enrollment
 6. if a face is already known, receive the stored name automatically
 7. optionally call the same camera capability through `ninjaclawbot`
-8. optionally let OpenClaw chain camera actions with robot actions such as
-   servo movement, expression playback, and status reporting
+8. let OpenClaw take a normal photo from day one
+9. let OpenClaw recognize faces from day one
+10. let OpenClaw chain camera actions with robot actions such as servo
+    movement, expression playback, and status reporting
 
 ## 3. Product Rules And User Clarifications
 
@@ -66,6 +68,13 @@ These are the locked product rules for the first build.
   - `cd pi5camera && uv sync --extra dev`
 - the primary interactive operator tool should be:
   - `uv run pi5camera camera-tool`
+- `camera-tool` setup must allow the user to choose the photo save directory as
+  an absolute path
+- default photo directory should depend on the active project root:
+  - standalone `pi5camera` use defaults to `<pi5camera_root>/photo`
+  - NinjaClawBot-root use defaults to `<NinjaClawBot_root>/photo`
+- both standalone use and OpenClaw-triggered photo capture should save into the
+  same configured directory unless a future explicit per-call override is added
 - the primary package CLI should follow the existing package pattern:
   - `setup`
   - `doctor`
@@ -80,8 +89,17 @@ These are the locked product rules for the first build.
 - local interactive recognition is allowed to prompt the user for names when an
   unknown face is found
 - non-interactive automation must never block on a local TTY prompt
+- normal still-photo capture must be a mandatory first-release feature for:
+  - standalone `pi5camera`
+  - `ninjaclawbot`
+  - OpenClaw through the plugin
 - `ninjaclawbot` and OpenClaw integrations must return structured unknown-face
   results instead of waiting for local keyboard input
+- the OpenClaw recognition path should support a first-step recognition action
+  that captures a fresh image internally when needed and returns either a known
+  name or an unknown-face result
+- pending unknown-face context must survive long enough for a follow-up chat
+  turn where the user later provides the name for saving
 - the default face-recognition path must be local and open-source
 - the first release should not depend on a paid or cloud face-recognition API
 - OpenClaw must not fail if `pi5camera` is missing, unconfigured, or the camera
@@ -206,6 +224,8 @@ Important current constraints:
 
 - the plugin should not own direct camera hardware setup
 - the plugin should not own local face enrollment prompting
+- the plugin should not call `camera-tool` directly because `camera-tool` is an
+  interactive human operator flow
 - if camera behavior is exposed to OpenClaw, it should happen only after the
   same behavior exists in `ninjaclawbot`
 
@@ -348,12 +368,15 @@ Recommended policy:
 Expected non-interactive behavior:
 
 - return:
+  - recognition session or result id
   - recognized names
   - unknown-face count
+  - per-face stable ids or tokens for follow-up enrollment
   - crop paths or capture paths
   - face locations
   - match distances when useful
-- allow a separate explicit enrollment action later if needed
+- require a separate explicit enrollment action for follow-up naming in
+  `ninjaclawbot` and OpenClaw
 
 ### 6.6 Multi-face policy
 
@@ -386,10 +409,19 @@ The first implementation should store face data locally in explicit files.
 Recommended layout:
 
 - `camera.json`
+- `photo/`
 - `camera_data/captures/`
 - `camera_data/known_faces/<person_name>/`
 - `camera_data/index/encodings.json`
 - optional `camera_data/faces/unknown/` for debug crops if enabled
+
+Recommended root-aware default behavior:
+
+- when setup runs from the NinjaClawBot project root, default photo storage
+  should be `<project_root>/photo`
+- when setup runs from a standalone `pi5camera` directory, default photo
+  storage should be `<package_root>/photo`
+- users must be able to replace that default with another absolute directory
 
 Recommended matching policy:
 
@@ -397,6 +429,8 @@ Recommended matching policy:
 - generate and store one encoding per enrollment image
 - compare against all stored encodings
 - return the best accepted match
+- persist temporary pending-recognition artifacts so a later follow-up
+  enrollment action can reuse the exact captured face
 
 This is more reliable than forcing a one-image-per-person rule forever.
 
@@ -423,14 +457,23 @@ Recommended integrated action surface:
 - `camera_health_check`
 - `capture_photo`
 - `recognize_faces`
+- `enroll_pending_face`
 - optional future:
-  - `enroll_face`
   - `list_known_faces`
+  - `discard_pending_recognition`
 
 Important design rule:
 
 - `ninjaclawbot` should expose typed camera actions
 - it should not recreate the full interactive enrollment wizard
+- the OpenClaw-facing recognition path should use `recognize_faces` as the
+  primary first-step recognition action
+- `recognize_faces` may capture a fresh image internally by default, but it is
+  not the same thing as a full recognize-and-save transaction
+- `capture_photo` is a mandatory first-release raw-photo action for both local
+  integration use and OpenClaw use
+- `capture_photo` should save to the configured photo directory and return the
+  absolute saved file path
 
 ### 6.10 Integration policy for OpenClaw
 
@@ -438,18 +481,51 @@ Recommended first plugin tools:
 
 - `ninjaclawbot_capture_photo`
 - `ninjaclawbot_recognize_faces`
+- `ninjaclawbot_enroll_pending_face`
 
 Optional later plugin tools:
 
 - `ninjaclawbot_list_known_faces`
-- `ninjaclawbot_enroll_face`
+- `ninjaclawbot_discard_pending_recognition`
 
 Important rule:
 
 - plugin tools should only expose actions that already exist in
   `ninjaclawbot`
-- unknown-face naming during chat should be a follow-up agent flow, not an
-  implicit local prompt
+- unknown-face naming during chat should be a later follow-up agent flow, not
+  an implicit local prompt
+
+### 6.11 Pending recognition context policy
+
+This is required for the OpenClaw follow-up enrollment use case.
+
+Recommended policy:
+
+- when `recognize_faces` finds one or more unknown faces in a non-interactive
+  flow, it should persist a short-lived pending recognition record
+- the result should include a stable `recognition_id`
+- each unknown face should also get a stable `face_id` or equivalent token
+- the later save-name action should consume:
+  - `recognition_id`
+  - `face_id` or face index
+  - target name
+
+Recommended storage direction:
+
+- `camera_data/pending/<recognition_id>/`
+- saved source capture
+- optional per-face crops
+- metadata with creation time and expiry time
+
+Recommended lifecycle:
+
+- auto-expire stale pending records after a configurable TTL
+- clear a pending record after successful enrollment unless unused faces still
+  remain
+- allow an explicit discard action later if needed
+
+This keeps the two-turn OpenClaw conversation robust even when the user answers
+on the next message instead of immediately.
 
 ## 7. Recommended Setup Flow
 
@@ -461,13 +537,16 @@ This is the recommended future setup order for the full project.
    - `rpicam-hello --list-cameras`
    - or `libcamera-hello --list-cameras` on older environments
 4. run `uv run pi5camera camera-tool`
-5. use `setup` to save camera defaults into `camera.json`
-6. capture one test image
-7. run one local face-recognition cycle
-8. enroll at least one known face
-9. if integrated robot use is needed, run `ninjaclawbot` health-check and
+5. use `setup` to save camera defaults into `camera.json`, including the photo
+   save directory
+6. accept or replace the root-aware default photo directory:
+   - `<active_root>/photo`
+7. capture one test image
+8. run one local face-recognition cycle
+9. enroll at least one known face
+10. if integrated robot use is needed, run `ninjaclawbot` health-check and
    camera-related actions next
-10. only after local validation, expose the camera surface through OpenClaw
+11. only after local validation, expose the camera surface through OpenClaw
 
 Important setup message to add later in docs:
 
@@ -475,6 +554,8 @@ Important setup message to add later in docs:
 - package-local standalone setup should still work with:
   - `cd /path/to/pi5camera`
   - `uv sync --extra dev`
+- the setup wizard should propose `<active_root>/photo` as the default photo
+  directory, where `active_root` is the current project root used by the tool
 - but users who plan to let OpenClaw use the camera should still validate local
   camera capture and recognition first
 
@@ -496,6 +577,8 @@ The first release should support:
 
 - JPEG still capture
 - configurable save directory
+- setup-time selection of an absolute photo directory
+- default photo directory of `<active_root>/photo`
 - timestamp-based default filenames
 - access to camera metadata
 - configurable preview or no-preview behavior when supported
@@ -504,6 +587,11 @@ The first release should support:
   - timeout/warm-up delay
   - autofocus mode where supported
   - exposure-related controls only if they can be kept simple and stable
+
+Expected save-path rule:
+
+- saved photos should return an absolute file path in both standalone and
+  OpenClaw-triggered flows
 
 ### 8.3 Recognition behavior
 
@@ -544,20 +632,63 @@ The non-interactive and agent flow should behave like this:
 - never prompt locally
 - never wait for terminal input
 - return structured output only
+- support a first-step recognition call for OpenClaw that can capture a fresh
+  image internally when needed
 
 Expected structured output fields:
 
+- `recognition_id`
 - capture path
+- absolute photo path
 - face count
 - `needs_enrollment`
+- `requires_disambiguation`
 - per-face result entries including:
   - face index
+  - stable `face_id`
   - bounding box
   - recognized name or `null`
   - accepted match distance if available
   - crop path if exported
 
-### 8.6 Skip behavior
+### 8.6 OpenClaw conversational enrollment behavior
+
+The OpenClaw flow for the approved use case should behave like this:
+
+1. the user asks OpenClaw to take a photo and recognize the face
+2. OpenClaw calls `ninjaclawbot_recognize_faces`
+3. that tool performs the first-step recognition flow and may capture a fresh
+   image internally
+4. if a face is known:
+   - the tool returns the recognized name
+   - OpenClaw answers the user directly
+5. if a face is unknown:
+   - the tool returns `recognition_id`, `face_id`, and unknown-face state
+   - OpenClaw tells the user it does not know the name
+6. later, if the user tells OpenClaw the name:
+   - OpenClaw calls `ninjaclawbot_enroll_pending_face`
+   - the tool saves that pending face into the known-face store
+7. OpenClaw confirms the saved name to the user
+
+If multiple unknown faces are detected:
+
+- the tool should return all unknown-face entries
+- if there is ambiguity, set `requires_disambiguation`
+- OpenClaw should ask which face the user wants to name before calling the
+  save-name function
+
+### 8.7 OpenClaw normal photo behavior
+
+The OpenClaw raw-photo flow should behave like this:
+
+1. the user asks OpenClaw to take a normal photo
+2. OpenClaw calls `ninjaclawbot_capture_photo`
+3. that tool captures one still image and saves it into the configured photo
+   directory
+4. the tool returns the absolute saved photo path and relevant metadata
+5. OpenClaw answers the user using that returned result
+
+### 8.8 Skip behavior
 
 If camera support is missing, the rest of the project should not crash.
 
@@ -593,6 +724,10 @@ The most important refined conclusions are:
 - `ninjaclawbot` should expose a thin reusable camera action layer
 - OpenClaw should call typed `ninjaclawbot_*` tools, not raw camera code
 - human naming prompts and agent-safe flows must be separated explicitly
+- normal photo capture is a mandatory day-one OpenClaw capability
+- the OpenClaw recognition path should be a first-step recognize call followed
+  by a later save-name call when needed
+- unknown-face follow-up naming needs a persisted pending-recognition record
 
 ## 10. What Still Needs Improvement
 
@@ -684,7 +819,7 @@ Likely files:
 Expected config direction:
 
 - `camera.json` should capture:
-  - capture directory
+  - photo directory
   - known-faces directory
   - backend selection
   - recognition tolerance
@@ -693,6 +828,16 @@ Expected config direction:
   - autofocus preference where supported
   - capture warm-up delay
   - retention/debug settings
+
+Photo-directory requirements:
+
+- the setup wizard must allow an absolute path
+- the default should be `<active_root>/photo`
+- the chosen directory should be reused by:
+  - standalone `capture`
+  - `camera-tool`
+  - `ninjaclawbot capture_photo`
+  - OpenClaw photo capture through the plugin
 
 Validation:
 
@@ -724,6 +869,7 @@ Implementation targets:
 
 - lazy import `Picamera2`
 - still-image capture to file
+- absolute output-path reporting
 - metadata collection
 - warm-up delay before capture
 - safe close/release behavior
@@ -765,6 +911,7 @@ Implementation targets:
 - encoding generation
 - deterministic per-face result ordering
 - local encoding persistence
+- pending-recognition artifact persistence with expiry
 - one or more images per known identity
 - configurable tolerance
 - clean rebuild of the encoding index
@@ -803,6 +950,7 @@ Likely files:
 Implementation targets:
 
 - setup wizard
+- photo-directory selection with root-aware default
 - one-shot photo capture
 - interactive recognition
 - unknown-face naming prompts
@@ -849,8 +997,9 @@ Implementation targets:
 
 - camera config discovery from the root workspace
 - optional camera health reporting
-- typed capture action
-- typed recognition action
+- typed raw-photo capture action
+- typed recognition action for the first-step recognize flow
+- typed pending-face enrollment action
 - structured unknown-face results
 - no local TTY prompt inside `ninjaclawbot`
 
@@ -885,8 +1034,10 @@ Implementation targets:
 - expose:
   - `ninjaclawbot_capture_photo`
   - `ninjaclawbot_recognize_faces`
+- `ninjaclawbot_enroll_pending_face`
 - keep tool responses structured and agent-friendly
 - never block on local naming prompts
+- support later save-name chat flows by passing `recognition_id` and `face_id`
 
 Validation:
 
@@ -955,8 +1106,8 @@ Validation targets:
   - multiple faces
   - repeated re-recognition after enrollment
 - integrated tests:
-  - `ninjaclawbot` camera action calls
-  - OpenClaw camera tool calls
+  - `ninjaclawbot` recognize-and-enroll action calls
+  - OpenClaw recognize, ask, enroll flow
   - sequence with another robot action
 - long-run tests:
   - repeated captures

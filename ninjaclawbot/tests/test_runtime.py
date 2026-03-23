@@ -95,6 +95,7 @@ def test_runtime_delegates_servo_moves_and_health_checks() -> None:
     runtime._buzzer = FakeDeviceAdapter("buzzer")
     runtime._display = FakeDeviceAdapter("display")
     runtime._distance = FakeDeviceAdapter("distance")
+    runtime._camera = FakeDeviceAdapter("camera")
 
     assert runtime.move_servos({"gpio12": 15.0}, per_servo_speeds={"gpio12": "S"}) is True
     health = runtime.health_check()
@@ -118,6 +119,7 @@ def test_runtime_health_check_catches_adapter_errors() -> None:
     runtime._buzzer = BrokenAdapter()
     runtime._display = BrokenAdapter()
     runtime._distance = BrokenAdapter()
+    runtime._camera = BrokenAdapter()
 
     health = runtime.health_check()
 
@@ -228,6 +230,7 @@ def test_runtime_health_check_includes_optional_voice_input_status(monkeypatch) 
     runtime._buzzer = FakeDeviceAdapter("buzzer")
     runtime._display = FakeDeviceAdapter("display")
     runtime._distance = FakeDeviceAdapter("distance")
+    runtime._camera = FakeDeviceAdapter("camera")
     monkeypatch.setattr(
         "ninjaclawbot.runtime._inspect_voice_input",
         lambda config: {
@@ -246,3 +249,43 @@ def test_runtime_health_check_includes_optional_voice_input_status(monkeypatch) 
 
     assert health["voice_input"]["status"] == "manual_start_required"
     assert health["voice_input"]["manual_start_required"] is True
+
+
+def test_runtime_camera_methods_delegate_to_adapter() -> None:
+    runtime = NinjaClawbotRuntime(NinjaClawbotConfig())
+    runtime._servo = FakeServoAdapter()
+    runtime._buzzer = FakeDeviceAdapter("buzzer")
+    runtime._display = FakeDeviceAdapter("display")
+    runtime._distance = FakeDeviceAdapter("distance")
+
+    class FakeCameraAdapter(FakeDeviceAdapter):
+        def __init__(self) -> None:
+            super().__init__("camera")
+            self.calls: list[tuple[str, object]] = []
+
+        def capture_photo(self, *, output_path=None):
+            self.calls.append(("capture_photo", output_path))
+            return {"photo_path": output_path or "/tmp/photo.jpg"}
+
+        def recognize_faces(self, *, image_path=None):
+            self.calls.append(("recognize_faces", image_path))
+            return {"recognition_id": "rec-1", "faces": []}
+
+        def enroll_pending_face(self, *, recognition_id, face_id, name):
+            self.calls.append(("enroll_pending_face", recognition_id, face_id, name))
+            return {"recognition_id": recognition_id, "face_id": face_id, "name": name}
+
+    runtime._camera = FakeCameraAdapter()
+
+    capture = runtime.capture_photo(output_path="/tmp/out.jpg")
+    recognize = runtime.recognize_faces(image_path="/tmp/in.jpg")
+    enroll = runtime.enroll_pending_face(recognition_id="rec-1", face_id="face-1", name="Bob")
+
+    assert capture["photo_path"] == "/tmp/out.jpg"
+    assert recognize["recognition_id"] == "rec-1"
+    assert enroll["name"] == "Bob"
+    assert runtime._camera.calls == [
+        ("capture_photo", "/tmp/out.jpg"),
+        ("recognize_faces", "/tmp/in.jpg"),
+        ("enroll_pending_face", "rec-1", "face-1", "Bob"),
+    ]

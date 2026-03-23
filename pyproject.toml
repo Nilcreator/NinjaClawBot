@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "google-genai>=1.33.0",
     "ninjaclawbot",
+    "pi5camera",
     "pi5buzzer[pi]",
     "pi5servo[pi]",
     "pi5disp[pi]",
@@ -28,6 +29,7 @@ voiceinput = [
 
 [tool.uv.sources]
 ninjaclawbot = { path = "./ninjaclawbot", editable = true }
+pi5camera = { path = "./pi5camera", editable = true }
 pi5buzzer = { path = "./pi5buzzer", editable = true }
 pi5servo = { path = "./pi5servo", editable = true }
 pi5disp = { path = "./pi5disp", editable = true }
@@ -56,6 +58,7 @@ exclude = [
 addopts = "--import-mode=importlib"
 pythonpath = [
     "ninjaclawbot/src",
+    "pi5camera/src",
     "pi5buzzer/src",
     "pi5servo/src",
     "pi5disp/src",
@@ -67,6 +70,7 @@ testpaths = [
     "pi5buzzer/tests",
     "pi5servo/tests",
     "pi5disp/tests",
+    "pi5camera/tests",
     "pi5mic/tests",
     "pi5vl53l0x/tests",
     "ninjaclawbot/tests",

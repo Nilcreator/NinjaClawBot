@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from ninjaclawbot.adapters import BuzzerAdapter, DisplayAdapter
+from ninjaclawbot.adapters import BuzzerAdapter, CameraAdapter, DisplayAdapter
 from ninjaclawbot.config import NinjaClawbotConfig
 
 
@@ -228,3 +228,101 @@ def test_display_adapter_falls_back_to_pi5disp_config_when_root_missing(
     assert health.data["using_root_config"] is False
     assert captured["driver_kwargs"]["rotation"] == 270
     assert captured["brightness"] == 40
+
+
+def test_camera_adapter_uses_root_level_camera_config(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeManager:
+        def __init__(self, config_path: str) -> None:
+            captured["config_path"] = config_path
+
+        def load(self) -> dict[str, object]:
+            return {
+                "paths": {
+                    "photo_dir": str(tmp_path / "photo"),
+                    "data_dir": str(tmp_path / "camera_data"),
+                }
+            }
+
+    class FakeCaptureResult:
+        def __init__(self) -> None:
+            self.path = tmp_path / "photo" / "captured.jpg"
+            self.metadata = {"mode": "still"}
+
+    def fake_capture_photo(config, output_path=None):
+        captured["output_path"] = output_path
+        return FakeCaptureResult()
+
+    def fake_import(module_name: str):
+        if module_name == "pi5camera.config.config_manager":
+            return SimpleNamespace(CameraConfigManager=FakeManager)
+        if module_name == "pi5camera":
+            return SimpleNamespace(
+                capture_photo=fake_capture_photo,
+                recognize_faces=lambda config, image_path=None: {
+                    "recognition_id": "rec-1",
+                    "image_path": str(image_path) if image_path else None,
+                },
+                enroll_pending_face=lambda config, recognition_id, face_id, name: {
+                    "recognition_id": recognition_id,
+                    "face_id": face_id,
+                    "name": name,
+                },
+            )
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr("ninjaclawbot.adapters._import_or_raise", fake_import)
+
+    config = NinjaClawbotConfig(root_dir=tmp_path)
+    adapter = CameraAdapter(config)
+    result = adapter.capture_photo(output_path=str(tmp_path / "exports"))
+
+    assert captured["config_path"] == str(config.camera_config_path)
+    assert result["photo_path"] == str(tmp_path / "photo" / "captured.jpg")
+    assert str(captured["output_path"]) == str((tmp_path / "exports").resolve())
+    assert (
+        adapter.recognize_faces(image_path=str(tmp_path / "incoming.jpg"))["recognition_id"]
+        == "rec-1"
+    )
+    assert (
+        adapter.enroll_pending_face(
+            recognition_id="rec-1",
+            face_id="face-1",
+            name="Alice",
+        )["name"]
+        == "Alice"
+    )
+
+
+def test_camera_adapter_health_reports_missing_camera_backend(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        "ninjaclawbot.adapters.importlib.util.find_spec",
+        lambda module_name: None if module_name == "picamera2" else object(),
+    )
+
+    class FakeManager:
+        def __init__(self, _config_path: str) -> None:
+            pass
+
+        def load(self) -> dict[str, object]:
+            return {
+                "paths": {
+                    "photo_dir": str(tmp_path / "photo"),
+                    "data_dir": str(tmp_path / "camera_data"),
+                }
+            }
+
+    def fake_import(module_name: str):
+        if module_name == "pi5camera.config.config_manager":
+            return SimpleNamespace(CameraConfigManager=FakeManager)
+        raise AssertionError(module_name)
+
+    monkeypatch.setattr("ninjaclawbot.adapters._import_or_raise", fake_import)
+
+    adapter = CameraAdapter(NinjaClawbotConfig(root_dir=tmp_path))
+    health = adapter.health_check()
+
+    assert health.available is False
+    assert health.data["camera_backend_available"] is False
+    assert health.data["config_path"] == str(tmp_path / "camera.json")

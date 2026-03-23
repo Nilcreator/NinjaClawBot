@@ -49,7 +49,7 @@ Use other docs when your goal is different:
 
 - start with [README.md](README.md) for a project introduction
 - start with [InstallationGuide.md](InstallationGuide.md) for a full Raspberry Pi build
-- start with the package README in `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x`, or `ninjaclawbot` if you are only touching one package
+- start with the package README in `pi5camera`, `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x`, or `ninjaclawbot` if you are only touching one package
 
 ## Project Specification
 
@@ -62,7 +62,7 @@ The current repository targets this validated direction:
 | Python | 3.11+ |
 | Workspace manager | `uv` |
 | Robot runtime | `ninjaclawbot` |
-| Hardware packages | `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x` |
+| Hardware packages | `pi5camera`, `pi5servo`, `pi5disp`, `pi5buzzer`, `pi5mic`, `pi5vl53l0x` |
 | Chat integration | OpenClaw plugin + workspace `BOOT.md` / `AGENTS.md` |
 | Voice input | `pi5mic`, manual start, optional always-on listener |
 
@@ -79,6 +79,7 @@ Important design rules:
 ```mermaid
 flowchart LR
     USER["User / Telegram / Local CLI"] --> OC["OpenClaw Gateway"]
+    USER --> CAMCLI["pi5camera CLI / camera-tool"]
     USER --> MIC["pi5mic CLI / voiceinput-tool"]
     MIC --> STT["STT backend<br/>whisper.cpp or Gemini"]
     STT --> OC
@@ -86,6 +87,7 @@ flowchart LR
     PLUGIN --> BRIDGE["Persistent bridge"]
     BRIDGE --> CORE["ninjaclawbot runtime"]
     CORE --> SERVO["pi5servo"]
+    CORE --> CAMERA["pi5camera"]
     CORE --> DISP["pi5disp"]
     CORE --> BUZZER["pi5buzzer"]
     CORE --> SENSOR["pi5vl53l0x"]
@@ -112,6 +114,7 @@ Think of the system as three layers:
 | `DevelopmentGuide.md` | Developer and maintainer reference | Architecture, validation, triage |
 | `backup/DevelopmentLog.md` | Chronological change archive | What changed and why |
 | `ninjaclawbot/` | Integrated robot runtime | Robot actions, expressions, assets |
+| `pi5camera/` | Camera package | Photo capture, recognition, enrollment |
 | `pi5servo/` | Servo driver package | Servo issues, calibration, motion |
 | `pi5disp/` | Display driver package | Display setup and rendering |
 | `pi5buzzer/` | Buzzer driver package | Sound and buzzer behavior |
@@ -150,6 +153,10 @@ NinjaClawBot/
 │   │   ├── cli/
 │   │   ├── expressions/
 │   │   └── openclaw/
+│   └── tests/
+├── pi5camera/
+│   ├── README.md
+│   ├── src/pi5camera/
 │   └── tests/
 ├── pi5servo/
 │   ├── README.md
@@ -195,6 +202,7 @@ NinjaClawBot/
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | `pi5servo` | Servo endpoints, calibration, movement hardware behavior | High-level robot conversation logic |
+| `pi5camera` | Still capture, recognition backend selection, pending unknown-face storage, local enrollment | Main text-chat bridge ownership |
 | `pi5disp` | Display driver, display config, display rendering | Reply policy or Telegram flow |
 | `pi5buzzer` | Tone generation and buzzer playback | OpenClaw bridge behavior |
 | `pi5vl53l0x` | Distance sensor access and sensor diagnostics | Robot expression policy |
@@ -258,6 +266,9 @@ Command source: `ninjaclawbot/src/ninjaclawbot/__main__.py`
 | `list-assets` | List saved movement and expression assets |
 | `list-capabilities` | Show supported actions, reply states, and asset types |
 | `run-action` | Execute a JSON action payload |
+| `capture-photo` | Take a normal camera photo and return the saved path |
+| `recognize-faces` | Recognize faces from a live capture or existing image |
+| `enroll-pending-face` | Save the user-provided name for a previously unknown face |
 | `move-servos` | Move servos using `movement-tool` style endpoint syntax |
 | `perform-movement` | Run a saved movement asset |
 | `perform-reply` | Run the built-in reply-emotion pipeline |
@@ -266,7 +277,23 @@ Command source: `ninjaclawbot/src/ninjaclawbot/__main__.py`
 | `stop-expression` | Stop the active expression loop |
 | `expression-tool` | Interactive expression creation and preview |
 | `movement-tool` | Interactive movement creation and preview |
+| `camera-tool` | Wrapper around `pi5camera camera-tool` using the root `camera.json` |
 | `voiceinput-tool` | Optional wrapper around `pi5mic voiceinput-tool` |
+
+### `pi5camera` CLI
+
+Command source: `pi5camera/src/pi5camera/__main__.py`
+
+| Command | Purpose |
+| --- | --- |
+| `setup` | Guided configuration wizard for camera, storage, and recognition |
+| `doctor` | Check config, writable directories, and camera/recognition backend readiness |
+| `status` | Show current config and readiness summary |
+| `capture` | Take one still photo |
+| `recognize` | Recognize faces from a fresh capture or existing image |
+| `enroll` | Save a known face from an image or a pending recognition |
+| `manage-faces` | List and remove enrolled faces |
+| `camera-tool` | Guided menu for setup, capture, recognition, and face management |
 
 ### `pi5mic` CLI
 
@@ -294,6 +321,7 @@ Command source: `pi5mic/src/pi5mic/__main__.py`
 | `pi5servo` | `servo-tool` | Servo setup, calibration, safe motion tests |
 | `pi5disp` | `display-tool` | Display setup, preview, and config export |
 | `pi5buzzer` | `buzzer-tool` | Tone and sound testing |
+| `pi5camera` | `camera-tool` | Camera setup, photo capture, face recognition, and enrollment |
 | `pi5vl53l0x` | `sensor-tool` | Distance sensor verification |
 
 ### Stable robot action surface
@@ -316,6 +344,9 @@ Stable action names:
 - `stop_expression`
 - `shutdown_sequence`
 - `read_distance`
+- `capture_photo`
+- `recognize_faces`
+- `enroll_pending_face`
 - `list_assets`
 - `stop_all`
 
@@ -329,6 +360,7 @@ Important required parameters:
 | `display_text` | `text` |
 | `perform_expression` | `name` |
 | `set_presence_mode` | `mode` |
+| `enroll_pending_face` | `recognition_id`, `face_id`, `name` |
 
 ### OpenClaw plugin tool surface
 
@@ -340,6 +372,9 @@ Tool source: `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
 | `ninjaclawbot_perform_expression` | Run a saved or built-in expression |
 | `ninjaclawbot_perform_movement` | Run a saved movement asset |
 | `ninjaclawbot_move_servos` | Move servos directly |
+| `ninjaclawbot_capture_photo` | Take a normal photo and return the absolute saved path |
+| `ninjaclawbot_recognize_faces` | Recognize faces and return pending ids for unknown faces |
+| `ninjaclawbot_enroll_pending_face` | Save the user-provided name for a previously unknown face |
 | `ninjaclawbot_read_distance` | Read the current distance value |
 | `ninjaclawbot_health` | Run a hardware health check |
 | `ninjaclawbot_voiceinput_status` | Report whether optional `pi5mic` voice input is installed and ready |
@@ -363,7 +398,10 @@ Also exposed:
 | `display.json` | root project | Display config used by `ninjaclawbot` |
 | `buzzer.json` | root project | Buzzer runtime config |
 | `vl53l0x.json` | root project | Distance sensor config |
+| `camera.json` | root project or standalone `pi5camera` directory | Camera, recognition, and storage config |
 | `mic.json` | root project or standalone `pi5mic` directory | Microphone, STT, OpenClaw, and voice-input config |
+| `photo/` | root project or standalone `pi5camera` directory | Default saved photo directory |
+| `camera_data/` | root project or standalone `pi5camera` directory | Known-face index, pending records, and crops |
 | `ninjaclawbot_data/movements/*.json` | root project | Saved motion assets |
 | `ninjaclawbot_data/expressions/*.json` | root project | Saved expression assets |
 | `BOOT.md` | root workspace | Startup greeting and session boot guidance |
@@ -402,6 +440,7 @@ Use this order for normal development work:
 | Display orientation, contrast, or config issue | `pi5disp` |
 | Buzzer playback issue | `pi5buzzer` |
 | VL53L0X or I2C issue | `pi5vl53l0x` |
+| Camera capture, storage, or recognition issue | `pi5camera` |
 | Microphone recording, STT, wake-word, or voice dispatch issue | `pi5mic` |
 | Expression policy or action orchestration issue | `ninjaclawbot` |
 | Chat-driven behavior differs from local behavior | OpenClaw plugin and deployment files |
@@ -420,6 +459,7 @@ uv run pytest -q pi5buzzer/tests -c pi5buzzer/pyproject.toml
 uv run pytest -q pi5servo/tests -c pi5servo/pyproject.toml
 uv run pytest -q pi5disp/tests -c pi5disp/pyproject.toml
 uv run pytest -q pi5vl53l0x/tests -c pi5vl53l0x/pyproject.toml
+uv run pytest -q pi5camera/tests -c pi5camera/pyproject.toml
 uv run pytest -q pi5mic/tests -c pi5mic/pyproject.toml
 uv run pytest -q ninjaclawbot/tests -c ninjaclawbot/pyproject.toml
 ```
@@ -458,6 +498,8 @@ Use these four buckets whenever hardware-facing behavior changes.
 ### Safe smoke tests
 
 - `uv run ninjaclawbot health-check`
+- `uv run pi5camera doctor`
+- `uv run ninjaclawbot capture-photo`
 - `uv run ninjaclawbot expression-tool`
 - `uv run pi5disp display-tool`
 - `uv run pi5vl53l0x sensor-tool`
@@ -466,6 +508,7 @@ Use these four buckets whenever hardware-facing behavior changes.
 ### Device communication tests
 
 - `i2cdetect -y 1`
+- `rpicam-hello --list-cameras`
 - microphone device listing
 - OpenClaw startup
 - `ninjaclawbot_diagnostics`
@@ -520,6 +563,7 @@ Use these four buckets whenever hardware-facing behavior changes.
 | --- | --- | --- |
 | Local hardware tool fails | matching package README and package tests | matching `pi5*` package |
 | `ninjaclawbot health-check` fails | root config files and adapters | `ninjaclawbot` |
+| Camera works in `pi5camera` but not through OpenClaw | `ninjaclawbot` camera actions and plugin tool mapping | `ninjaclawbot` + OpenClaw plugin |
 | Robot reacts locally but not through OpenClaw | plugin diagnostics, allowlist, skill, bridge | OpenClaw plugin |
 | Telegram text missing but robot motion/expression works | OpenClaw tool usage and reply path | OpenClaw deployment |
 | Voice capture works but chat handoff fails | `pi5mic doctor`, `status`, OpenClaw profile | `pi5mic` |
@@ -527,6 +571,21 @@ Use these four buckets whenever hardware-facing behavior changes.
 | Startup greeting missing | `BOOT.md`, `boot-md`, diagnostics | OpenClaw deployment + plugin |
 
 ## Troubleshooting Shortcuts
+
+### `pi5camera` says `Picamera2 is not importable`
+
+Install the Raspberry Pi camera stack first:
+
+```bash
+sudo apt update
+sudo apt install -y python3-picamera2
+```
+
+Then rerun:
+
+```bash
+uv run pi5camera doctor
+```
 
 ### `pi5mic` says `PortAudio library not found`
 

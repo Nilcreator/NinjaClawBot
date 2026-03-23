@@ -249,3 +249,81 @@ def test_voiceinput_tool_proxy_invokes_pi5mic_with_project_mic_config(
         "voiceinput-tool",
         "status",
     ]
+
+
+def test_camera_tool_proxy_invokes_pi5camera_with_project_camera_config(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    runner = CliRunner()
+    captured: dict[str, object] = {}
+
+    monkeypatch.setitem(sys.modules, "pi5camera", object())
+
+    def fake_run(command, check=False):
+        captured["command"] = command
+        captured["check"] = check
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr("ninjaclawbot.__main__.subprocess.run", fake_run)
+
+    result = runner.invoke(
+        cli,
+        [
+            "--root-dir",
+            str(tmp_path),
+            "camera-tool",
+            "status",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["command"] == [
+        sys.executable,
+        "-m",
+        "pi5camera",
+        "--config-file",
+        str(tmp_path / "camera.json"),
+        "camera-tool",
+        "status",
+    ]
+
+
+def test_capture_photo_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.__main__.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        ["--root-dir", str(tmp_path), "capture-photo", "--output-path", "/tmp/out.jpg"],
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.closed is True
+
+
+def test_recognize_faces_closes_executor_runtime(tmp_path: Path, monkeypatch) -> None:
+    runner = CliRunner()
+    created: list[FakeExecutor] = []
+
+    def factory(root_dir: Path) -> FakeExecutor:
+        executor = FakeExecutor(Path(root_dir))
+        created.append(executor)
+        return executor
+
+    monkeypatch.setattr("ninjaclawbot.__main__.create_executor", factory)
+    result = runner.invoke(
+        cli,
+        ["--root-dir", str(tmp_path), "recognize-faces", "--image-file", "/tmp/in.jpg"],
+    )
+
+    assert result.exit_code == 0
+    assert len(created) == 1
+    assert created[0].runtime.closed is True

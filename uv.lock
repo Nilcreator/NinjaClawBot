@@ -337,6 +337,34 @@ wheels = [
 ]
 
 [[package]]
+name = "dlib"
+version = "20.0.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/28/f4/f8949b18ec1df2ef05fc2ea1d1dd82ff2d050b8704b7d0d088017315c221/dlib-20.0.0.tar.gz", hash = "sha256:9ab6a6fe113cc36a20c3f611c57fa6a07f18d1169bd04efb85c32e21b23b7d2b", size = 3310015, upload-time = "2025-05-28T01:22:16.141Z" }
+
+[[package]]
+name = "face-recognition"
+version = "1.3.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "click" },
+    { name = "dlib" },
+    { name = "face-recognition-models" },
+    { name = "numpy" },
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/6c/49/75dda409b94841f01cbbc34114c9b67ec618265084e4d12d37ab838f4fd3/face_recognition-1.3.0.tar.gz", hash = "sha256:5e5efdd1686aa566af0d3cc1313b131e4b197657a8ffd03669e6d3fad92705ec", size = 3182249, upload-time = "2020-02-20T14:26:05.903Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1e/95/f6c9330f54ab07bfa032bf3715c12455a381083125d8880c43cbe76bb3d0/face_recognition-1.3.0-py2.py3-none-any.whl", hash = "sha256:c543e91c8cfbf24d19db04e511ebbddcb23894bcee510133729ee78e9f4b5e83", size = 15508, upload-time = "2020-02-20T14:26:01.282Z" },
+]
+
+[[package]]
+name = "face-recognition-models"
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/cf/3b/4fd8c534f6c0d1b80ce0973d01331525538045084c73c153ee6df20224cf/face_recognition_models-0.3.0.tar.gz", hash = "sha256:b79bd200a88c87c9a9d446c990ae71c5a626d1f3730174e6d570157ff1d896cf", size = 100149358, upload-time = "2017-09-28T22:53:52.516Z" }
+
+[[package]]
 name = "flatbuffers"
 version = "25.12.19"
 source = { registry = "https://pypi.org/simple" }
@@ -489,6 +517,7 @@ source = { editable = "ninjaclawbot" }
 dependencies = [
     { name = "click" },
     { name = "pi5buzzer", extra = ["pi"] },
+    { name = "pi5camera" },
     { name = "pi5disp", extra = ["pi"] },
     { name = "pi5servo", extra = ["pi"] },
     { name = "pi5vl53l0x" },
@@ -498,6 +527,7 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.1" },
     { name = "pi5buzzer", extras = ["pi"], editable = "pi5buzzer" },
+    { name = "pi5camera", editable = "pi5camera" },
     { name = "pi5disp", extras = ["pi"], editable = "pi5disp" },
     { name = "pi5mic", extras = ["voiceinput"], marker = "extra == 'voiceinput'", editable = "pi5mic" },
     { name = "pi5servo", extras = ["pi"], editable = "pi5servo" },
@@ -515,6 +545,7 @@ dependencies = [
     { name = "google-genai" },
     { name = "ninjaclawbot" },
     { name = "pi5buzzer", extra = ["pi"] },
+    { name = "pi5camera" },
     { name = "pi5disp", extra = ["pi"] },
     { name = "pi5mic" },
     { name = "pi5servo", extra = ["pi"] },
@@ -535,6 +566,7 @@ requires-dist = [
     { name = "google-genai", specifier = ">=1.33.0" },
     { name = "ninjaclawbot", editable = "ninjaclawbot" },
     { name = "pi5buzzer", extras = ["pi"], editable = "pi5buzzer" },
+    { name = "pi5camera", editable = "pi5camera" },
     { name = "pi5disp", extras = ["pi"], editable = "pi5disp" },
     { name = "pi5mic", editable = "pi5mic" },
     { name = "pi5mic", extras = ["voiceinput"], marker = "extra == 'voiceinput'", editable = "pi5mic" },
@@ -654,6 +686,28 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
 ]
 provides-extras = ["pi", "ninjarobot", "dev"]
+
+[[package]]
+name = "pi5camera"
+version = "0.1.0"
+source = { editable = "pi5camera" }
+dependencies = [
+    { name = "click" },
+    { name = "face-recognition", marker = "sys_platform == 'linux'" },
+    { name = "numpy" },
+    { name = "pillow" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1" },
+    { name = "face-recognition", marker = "sys_platform == 'linux'", specifier = ">=1.3" },
+    { name = "numpy", specifier = ">=1.24" },
+    { name = "pillow", specifier = ">=10.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
+    { name = "ruff", marker = "extra == 'dev'" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "pi5disp"

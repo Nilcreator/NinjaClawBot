@@ -86,3 +86,25 @@ def test_action_request_validates_presence_mode() -> None:
 def test_action_request_rejects_unknown_presence_mode() -> None:
     with pytest.raises(ActionValidationError, match="Unsupported presence mode"):
         ActionRequest.from_dict({"action": "set_presence_mode", "parameters": {"mode": "sleeping"}})
+
+
+def test_action_request_accepts_optional_camera_paths() -> None:
+    capture_request = ActionRequest.from_dict(
+        {"action": "capture_photo", "parameters": {"output_path": "/tmp/photo.jpg"}}
+    )
+    recognize_request = ActionRequest.from_dict(
+        {"action": "recognize_faces", "parameters": {"image_path": "/tmp/photo.jpg"}}
+    )
+
+    assert capture_request.action is ActionType.CAPTURE_PHOTO
+    assert recognize_request.action is ActionType.RECOGNIZE_FACES
+
+
+def test_action_request_requires_pending_enrollment_fields() -> None:
+    with pytest.raises(ActionValidationError, match="recognition_id"):
+        ActionRequest.from_dict(
+            {
+                "action": "enroll_pending_face",
+                "parameters": {"recognition_id": " ", "face_id": "face-1", "name": "Alice"},
+            }
+        )

@@ -60,6 +60,33 @@ export const moveServosSchema = {
   required: ["targets"],
 } as const;
 
+export const capturePhotoSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    output_path: { type: "string", minLength: 1 },
+  },
+} as const;
+
+export const recognizeFacesSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    image_path: { type: "string", minLength: 1 },
+  },
+} as const;
+
+export const enrollPendingFaceSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    recognition_id: { type: "string", minLength: 1 },
+    face_id: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1 },
+  },
+  required: ["recognition_id", "face_id", "name"],
+} as const;
+
 export const noArgsSchema = {
   type: "object",
   additionalProperties: false,

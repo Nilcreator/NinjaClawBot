@@ -1,4 +1,12 @@
-import { noArgsSchema, moveServosSchema, nameSchema, replySchema } from "./schemas.js";
+import {
+  capturePhotoSchema,
+  enrollPendingFaceSchema,
+  moveServosSchema,
+  nameSchema,
+  noArgsSchema,
+  recognizeFacesSchema,
+  replySchema,
+} from "./schemas.js";
 import {
   ensureBridge,
   runDiagnostics,
@@ -219,6 +227,27 @@ export default function registerNinjaClawbotPlugin(api: any) {
     "Move servos directly using structured endpoint targets.",
     moveServosSchema,
     "move_servos",
+  );
+  registerOptionalTool(
+    api,
+    "ninjaclawbot_capture_photo",
+    "Take a normal photo with the configured Pi camera and return the absolute saved path.",
+    capturePhotoSchema,
+    "capture_photo",
+  );
+  registerOptionalTool(
+    api,
+    "ninjaclawbot_recognize_faces",
+    "Recognize faces from a fresh photo or an existing image. Unknown faces return a recognition_id and face_id values for a later enrollment step.",
+    recognizeFacesSchema,
+    "recognize_faces",
+  );
+  registerOptionalTool(
+    api,
+    "ninjaclawbot_enroll_pending_face",
+    "Save a user-provided name for a previously unknown face returned by ninjaclawbot_recognize_faces.",
+    enrollPendingFaceSchema,
+    "enroll_pending_face",
   );
   registerOptionalTool(
     api,
