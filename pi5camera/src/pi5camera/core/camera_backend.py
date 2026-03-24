@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from pi5camera.environment import describe_picamera2_environment
+from pi5camera.environment import describe_picamera2_environment, inject_system_site_packages
 from pi5camera.errors import CaptureError
 from pi5camera.models import CaptureResult
 
@@ -15,14 +15,27 @@ from pi5camera.models import CaptureResult
 def _import_picamera2_module() -> Any:
     try:
         return importlib.import_module("picamera2")
-    except ImportError as exc:  # pragma: no cover - depends on host environment
-        environment = describe_picamera2_environment()
-        if not environment["available"] and environment["help_text"] is not None:
-            raise CaptureError(environment["help_text"]) from exc
-        raise CaptureError(
-            "Picamera2 was found but could not be imported in this environment. "
-            f"Original import error: {exc}"
-        ) from exc
+    except ImportError:
+        pass  # Fall through to recovery logic below.
+
+    # Attempt runtime recovery: inject system dist-packages into sys.path
+    # so apt-installed picamera2 becomes importable even when uv recreated
+    # the venv without --system-site-packages.
+    if inject_system_site_packages():
+        try:
+            return importlib.import_module("picamera2")
+        except ImportError:
+            pass  # Recovery added paths but import still failed.
+
+    # Report the final error with environment guidance.
+    environment = describe_picamera2_environment()
+    if not environment["available"] and environment["help_text"] is not None:
+        raise CaptureError(environment["help_text"])
+    raise CaptureError(
+        "Picamera2 could not be imported in this environment. "
+        "Check that python3-picamera2 is installed and the virtual environment "
+        "has access to system packages."
+    )
 
 
 def _apply_autofocus(picam2: Any, autofocus_mode: str) -> None:

@@ -134,6 +134,32 @@ run_sync() {
   )
 }
 
+ensure_system_site_packages() {
+  log "Ensuring system-site-packages access for Picamera2."
+
+  # 1. Re-ensure pyvenv.cfg has include-system-site-packages = true in case
+  #    uv sync overwrote it.
+  local CFG="${VENV_DIR}/pyvenv.cfg"
+  if [[ -f "${CFG}" ]]; then
+    if grep -q 'include-system-site-packages = false' "${CFG}" 2>/dev/null; then
+      sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' "${CFG}"
+    elif ! grep -q 'include-system-site-packages' "${CFG}" 2>/dev/null; then
+      echo 'include-system-site-packages = true' >> "${CFG}"
+    fi
+  fi
+
+  # 2. Write a .pth file into the venv site-packages so system dist-packages
+  #    are always on sys.path even if pyvenv.cfg gets overwritten later by uv.
+  local PY_VERSION
+  PY_VERSION=$("${VENV_DIR}/bin/python" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+  local SITE_DIR="${VENV_DIR}/lib/python${PY_VERSION}/site-packages"
+  local PTH_FILE="${SITE_DIR}/_pi5camera_system_packages.pth"
+  if [[ -d "${SITE_DIR}" ]]; then
+    "${PYTHON_BIN}" -c "import site; print('\n'.join(site.getsitepackages()))" > "${PTH_FILE}"
+    log "Wrote ${PTH_FILE}"
+  fi
+}
+
 run_health_checks() {
   log "Running standalone camera readiness checks."
   (
@@ -171,6 +197,7 @@ main() {
   install_system_packages
   ensure_venv
   run_sync
+  ensure_system_site_packages
   run_health_checks
 
   log "Standalone pi5camera bootstrap completed."
