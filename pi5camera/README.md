@@ -222,6 +222,8 @@ What this does:
 - installs the Raspberry Pi camera and build packages needed by `pi5camera`
 - creates the local `.venv` environment with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
+- ensures system-site-packages access is preserved by patching `pyvenv.cfg`
+  and writing a `.pth` file into the venv
 - runs `pi5camera doctor` and a final import check
 
 What you should expect:
@@ -752,7 +754,12 @@ This usually means one of two things:
 2. `python3-picamera2` is installed in `/usr/bin/python3`, but your local
    `.venv` was created without system site packages
 
-First install the Raspberry Pi camera stack:
+`pi5camera` includes a runtime auto-fix that detects this mismatch and injects
+the system dist-packages paths automatically. If `pi5camera doctor` shows
+`picamera2 (ready)`, the auto-fix is working and no manual action is needed.
+
+If doctor still shows `picamera2 (system-only)` or `picamera2 (missing)`,
+first install the Raspberry Pi camera stack:
 
 ```bash
 sudo apt update
@@ -779,6 +786,9 @@ uv sync --active --extra dev
 > **Important:** Always use `uv sync --active` (not plain `uv sync`) after
 > creating a venv with `--system-site-packages`. Without `--active`, `uv` may
 > recreate the `.venv` and lose the system-site-packages access to Picamera2.
+> The runtime auto-fix and the bootstrap script both write a `.pth` file to
+> guard against this, but recreating the venv with `uv sync` (no `--active`)
+> will remove that file too.
 
 If you want to confirm the mismatch directly, compare these two commands:
 
