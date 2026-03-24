@@ -9,6 +9,7 @@ SKIP_APT=0
 
 APT_PACKAGES=(
   python3-picamera2
+  python3-venv
   python3-dev
   build-essential
   cmake
@@ -23,8 +24,8 @@ Usage: ./scripts/bootstrap-rpi-standalone.sh [--skip-apt]
 
 Prepare standalone pi5camera on Raspberry Pi OS by:
 1. Installing the required system packages with apt
-2. Creating .venv with /usr/bin/python3 and --system-site-packages
-3. Running uv sync --extra dev
+2. Creating .venv with /usr/bin/python3 -m venv --system-site-packages
+3. Running uv sync --active --extra dev
 
 Options:
   --skip-apt   Skip the apt install step
@@ -73,6 +74,11 @@ raise SystemExit(0 if sys.base_prefix.startswith("/usr") else 1)
 PY
 }
 
+venv_can_import_picamera2() {
+  [[ -x "${VENV_DIR}/bin/python" ]] || return 1
+  "${VENV_DIR}/bin/python" -c "import picamera2" >/dev/null 2>&1
+}
+
 ensure_venv() {
   local recreate=0
 
@@ -85,6 +91,9 @@ ensure_venv() {
   elif ! venv_uses_system_python; then
     recreate=1
     log "Recreating .venv so it uses /usr/bin/python3."
+  elif ! venv_can_import_picamera2; then
+    recreate=1
+    log "Recreating .venv because Picamera2 is still not importable inside it."
   else
     log "Reusing existing compatible .venv."
   fi
@@ -93,8 +102,12 @@ ensure_venv() {
     rm -rf "${VENV_DIR}"
     (
       cd "${PROJECT_ROOT}"
-      uv venv --python "${PYTHON_BIN}" --system-site-packages
+      "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
     )
+  fi
+
+  if ! venv_can_import_picamera2; then
+    fail "Picamera2 is still not importable inside ${VENV_DIR}. Confirm that \`${PYTHON_BIN} -c 'import picamera2'\` works, then rerun this script."
   fi
 }
 
@@ -115,7 +128,9 @@ run_sync() {
   log "Syncing the standalone pi5camera environment."
   (
     cd "${PROJECT_ROOT}"
-    uv sync --extra dev
+    # Force uv to install into the verified .venv created above.
+    source "${VENV_DIR}/bin/activate"
+    uv sync --active --extra dev
   )
 }
 
@@ -123,8 +138,8 @@ run_health_checks() {
   log "Running standalone camera readiness checks."
   (
     cd "${PROJECT_ROOT}"
-    uv run pi5camera doctor
-    uv run python -c "import pi5camera, picamera2; print('imports-ok')"
+    "${VENV_DIR}/bin/python" -m pi5camera doctor
+    "${VENV_DIR}/bin/python" -c "import pi5camera, picamera2; print('imports-ok')"
   )
 }
 

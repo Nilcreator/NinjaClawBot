@@ -220,8 +220,8 @@ cd ~/pi5camera
 What this does:
 
 - installs the Raspberry Pi camera and build packages needed by `pi5camera`
-- creates the local `.venv` environment with access to Raspberry Pi system packages
-- runs `uv sync --extra dev`
+- creates the local `.venv` environment with `/usr/bin/python3 -m venv --system-site-packages`
+- runs `uv sync --active --extra dev`
 - runs `pi5camera doctor` and a final import check
 
 What you should expect:
@@ -239,6 +239,7 @@ sudo apt install -y \
   build-essential \
   cmake \
   pkg-config \
+  python3-venv \
   python3-dev \
   python3-picamera2 \
   libopenblas-dev \
@@ -249,8 +250,9 @@ Then create the environment manually:
 
 ```bash
 cd ~/pi5camera
-uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra dev
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev
 ```
 
 If you already installed the required apt packages and only want to recreate the

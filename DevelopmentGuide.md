@@ -596,9 +596,10 @@ Manual fallback if you need to do it step by step:
 ```bash
 cd ~/NinjaClawBot
 sudo apt update
-sudo apt install -y python3-picamera2
-uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra dev
+sudo apt install -y python3-picamera2 python3-venv
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev
 uv run pi5camera doctor
 ```
 

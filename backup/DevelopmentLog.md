@@ -12,8 +12,9 @@ Summary:
   `./scripts/bootstrap-rpi-standalone.sh`
 - both installers now:
   - re-check the required Raspberry Pi system packages
-  - recreate `.venv` with `/usr/bin/python3` and `--system-site-packages`
-  - run `uv sync --extra dev`
+  - recreate `.venv` with `/usr/bin/python3 -m venv --system-site-packages`
+  - verify that `picamera2` imports inside `.venv`
+  - run `uv sync --active --extra dev`
   - finish with camera readiness checks
 - added optional `--voiceinput` support to the workspace installer so the full
   robot stack can be bootstrapped with the wake-word dependency in one step
@@ -36,6 +37,9 @@ Why:
   because `Picamera2` depends on the system `libcamera` stack installed by `apt`
 - users needed a one-step recovery and installation path that matches the
   official Raspberry Pi guidance while keeping the project easy to install
+- real Raspberry Pi validation showed that the earlier `uv venv` bootstrap path
+  could still leave `picamera2` unavailable inside `.venv`, so the installer
+  had to switch to the standard-library `venv` flow
 
 Lint and test results:
 

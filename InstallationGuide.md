@@ -291,24 +291,30 @@ cd ~/NinjaClawBot
 What the bootstrap installer does:
 
 - re-checks and installs the required Raspberry Pi system packages
-- recreates `.venv` with `/usr/bin/python3` and `--system-site-packages`
-- runs `uv sync --extra dev`
-- runs `uv run pi5camera doctor`
+- recreates `.venv` with `/usr/bin/python3 -m venv --system-site-packages`
+- runs `uv sync --active --extra dev`
+- runs `pi5camera doctor` inside the verified `.venv`
 
 Manual fallback if you do not want to use the script:
 
 ```bash
+sudo apt update
+sudo apt install -y python3-picamera2 python3-venv
 cd ~/NinjaClawBot
-uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra dev
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev
 ```
 
 Manual fallback with the optional wake-word listener:
 
 ```bash
+sudo apt update
+sudo apt install -y python3-picamera2 python3-venv
 cd ~/NinjaClawBot
-uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra dev --extra voiceinput
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev --extra voiceinput
 ```
 
 Why the bootstrap installer is recommended:

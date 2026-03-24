@@ -161,11 +161,12 @@ If you already know that you want always-on voice input too, use:
 The bootstrap installer:
 
 - installs the Raspberry Pi system packages needed by `pi5camera` and `pi5mic`
-- recreates `.venv` with `/usr/bin/python3` and `--system-site-packages`
-- runs `uv sync --extra dev`
+- recreates `.venv` with `/usr/bin/python3 -m venv --system-site-packages`
+- runs `uv sync --active --extra dev`
 - finishes with `pi5camera doctor`
 
-If you already know that you want always-on voice input, install the optional wake-word dependency too:
+On non-Raspberry Pi development machines, if you already know that you want
+always-on voice input, install the optional wake-word dependency too:
 
 ```bash
 uv sync --extra dev --extra voiceinput
