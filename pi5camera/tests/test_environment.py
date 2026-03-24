@@ -22,8 +22,8 @@ def test_describe_picamera2_environment_detects_virtualenv_mismatch(monkeypatch)
 
     assert result["state"] == "system-only"
     assert result["available"] is False
-    assert "uv venv --python /usr/bin/python3 --system-site-packages" in result["help_text"]
-    assert "uv sync --extra dev" in result["help_text"]
+    assert "/usr/bin/python3 -m venv --system-site-packages" in result["help_text"]
+    assert "uv sync --active --extra dev" in result["help_text"]
 
 
 def test_describe_picamera2_environment_reports_missing_install(monkeypatch) -> None:
@@ -39,7 +39,7 @@ def test_describe_picamera2_environment_reports_missing_install(monkeypatch) -> 
 
     assert result["state"] == "missing"
     assert "sudo apt install -y python3-picamera2" in result["help_text"]
-    assert "uv venv --python /usr/bin/python3 --system-site-packages" in result["help_text"]
+    assert "/usr/bin/python3 -m venv --system-site-packages" in result["help_text"]
 
 
 def test_import_picamera2_module_raises_environment_guidance(monkeypatch) -> None:
@@ -57,9 +57,9 @@ def test_import_picamera2_module_raises_environment_guidance(monkeypatch) -> Non
             "available": False,
             "help_text": (
                 "Picamera2 is available in `/usr/bin/python3` but not in this virtual environment. "
-                "Recreate the environment with "
-                "`uv venv --python /usr/bin/python3 --system-site-packages`, "
-                "then run `uv sync --extra dev`."
+                "Run `./scripts/bootstrap-rpi-standalone.sh` to fix this, or manually: "
+                "`rm -rf .venv && /usr/bin/python3 -m venv --system-site-packages .venv`, "
+                "then `source .venv/bin/activate && uv sync --active --extra dev`."
             ),
         },
     )

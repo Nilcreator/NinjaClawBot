@@ -11,8 +11,8 @@ from typing import Any
 
 SYSTEM_PYTHON = Path("/usr/bin/python3")
 PICAMERA2_APT_COMMAND = "sudo apt install -y python3-picamera2"
-PICAMERA2_UV_VENV_COMMAND = "uv venv --python /usr/bin/python3 --system-site-packages"
-PICAMERA2_UV_SYNC_COMMAND = "uv sync --extra dev"
+PICAMERA2_VENV_COMMAND = "rm -rf .venv && /usr/bin/python3 -m venv --system-site-packages .venv"
+PICAMERA2_SYNC_COMMAND = "source .venv/bin/activate && uv sync --active --extra dev"
 
 
 def is_module_available(module_name: str) -> bool:
@@ -66,22 +66,22 @@ def describe_picamera2_environment(system_python: Path = SYSTEM_PYTHON) -> dict[
         state = "system-only"
         help_text = (
             "Picamera2 is available in `/usr/bin/python3` but not in this virtual environment. "
-            f"Recreate the environment with `{PICAMERA2_UV_VENV_COMMAND}`, then run "
-            f"`{PICAMERA2_UV_SYNC_COMMAND}`."
+            "Run `./scripts/bootstrap-rpi-standalone.sh` to fix this, or manually: "
+            f"`{PICAMERA2_VENV_COMMAND}`, then `{PICAMERA2_SYNC_COMMAND}`."
         )
     elif system_python_available:
         state = "system-only"
         help_text = (
             "Picamera2 is available in `/usr/bin/python3` but not in the current Python interpreter. "
-            f"Use the Raspberry Pi system Python or recreate the environment with "
-            f"`{PICAMERA2_UV_VENV_COMMAND}`, then run `{PICAMERA2_UV_SYNC_COMMAND}`."
+            "Run `./scripts/bootstrap-rpi-standalone.sh`, or manually: "
+            f"`{PICAMERA2_VENV_COMMAND}`, then `{PICAMERA2_SYNC_COMMAND}`."
         )
     else:
         state = "missing"
         help_text = (
             "Picamera2 is not importable. On Raspberry Pi OS install it with "
-            f"`{PICAMERA2_APT_COMMAND}`. If you use `uv`, create the environment with "
-            f"`{PICAMERA2_UV_VENV_COMMAND}` before running `{PICAMERA2_UV_SYNC_COMMAND}`."
+            f"`{PICAMERA2_APT_COMMAND}`, then run `./scripts/bootstrap-rpi-standalone.sh`. "
+            f"Or manually: `{PICAMERA2_VENV_COMMAND}`, then `{PICAMERA2_SYNC_COMMAND}`."
         )
 
     return {

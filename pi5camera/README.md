@@ -263,7 +263,7 @@ cd ~/pi5camera
 ./scripts/bootstrap-rpi-standalone.sh --skip-apt
 ```
 
-### Step 5. Confirm the command-line tools are available
+### Step 4. Confirm the command-line tools are available
 
 ```bash
 cd ~/pi5camera
@@ -279,7 +279,7 @@ What you should expect:
 - a help screen that lists commands such as `camera-tool`, `setup`, `doctor`,
   `status`, `capture`, `recognize`, `enroll`, and `manage-faces`
 
-### Step 6. Confirm the Raspberry Pi camera stack can see the module
+### Step 5. Confirm the Raspberry Pi camera stack can see the module
 
 ```bash
 rpicam-hello --list-cameras
@@ -765,6 +765,20 @@ Then rerun the standalone bootstrap installer:
 cd ~/pi5camera
 ./scripts/bootstrap-rpi-standalone.sh
 ```
+
+Or fix manually without the bootstrap script:
+
+```bash
+cd ~/pi5camera
+rm -rf .venv
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev
+```
+
+> **Important:** Always use `uv sync --active` (not plain `uv sync`) after
+> creating a venv with `--system-site-packages`. Without `--active`, `uv` may
+> recreate the `.venv` and lose the system-site-packages access to Picamera2.
 
 If you want to confirm the mismatch directly, compare these two commands:
 
