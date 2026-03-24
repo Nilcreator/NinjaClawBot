@@ -2,6 +2,67 @@
 
 ## 2026-03-24
 
+### pi5camera Picamera2 Environment Detection And Raspberry Pi `uv` Recovery
+
+Summary:
+
+- fixed the most common Raspberry Pi standalone and workspace camera failure
+  where `python3-picamera2` is installed in Raspberry Pi OS but hidden from the
+  current `uv` virtual environment
+- added environment-aware Picamera2 diagnostics so `status`, `doctor`, and live
+  capture errors can now distinguish:
+  - fully ready camera support
+  - Picamera2 available only in `/usr/bin/python3`
+  - Picamera2 missing entirely
+- updated the installation and troubleshooting docs so Raspberry Pi users now
+  create their `uv` environment with `--system-site-packages` before running
+  `uv sync`
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+- [pi5camera/src/pi5camera/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/_common.py)
+- [pi5camera/src/pi5camera/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/doctor.py)
+- [pi5camera/src/pi5camera/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/status.py)
+- [pi5camera/src/pi5camera/core/camera_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/core/camera_backend.py)
+- [pi5camera/tests/test_environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_environment.py)
+
+Why:
+
+- Raspberry Pi OS installs `Picamera2` through `apt`, not through PyPI
+- `uv sync` creates an isolated `.venv` by default, so `pi5camera` could report
+  that Picamera2 was missing even after `sudo apt install -y python3-picamera2`
+- users needed a clearer recovery path that matched how `uv` and Raspberry Pi
+  camera packages actually interact
+
+Lint and test results:
+
+- `cd pi5camera && uv run --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --extra dev ruff check src tests`
+- `cd pi5camera && uv run --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `8 passed`
+
+Raspberry Pi validation status:
+
+- local code patch complete
+- Raspberry Pi follow-up required:
+  - `cd ~/pi5camera`
+  - `rm -rf .venv`
+  - `uv venv --python /usr/bin/python3 --system-site-packages`
+  - `uv sync --extra dev`
+  - `uv run pi5camera doctor`
+  - confirm the camera backend no longer reports `missing` when `python3-picamera2` is installed
+
+Follow-up work:
+
+- confirm the same recovery path works in the full `~/NinjaClawBot` workspace on Raspberry Pi
+- if needed, add one-click environment repair guidance to the interactive tool flow
+
 ### pi5camera Standalone Library, NinjaClawBot Integration, And OpenClaw Camera Tools
 
 Summary:

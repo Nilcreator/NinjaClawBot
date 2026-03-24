@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+from pi5camera.environment import describe_picamera2_environment
 from pi5camera.errors import CaptureError
 from pi5camera.models import CaptureResult
 
@@ -15,9 +16,12 @@ def _import_picamera2_module() -> Any:
     try:
         return importlib.import_module("picamera2")
     except ImportError as exc:  # pragma: no cover - depends on host environment
+        environment = describe_picamera2_environment()
+        if not environment["available"] and environment["help_text"] is not None:
+            raise CaptureError(environment["help_text"]) from exc
         raise CaptureError(
-            "Picamera2 is not installed in this environment. On Raspberry Pi OS install it with "
-            "`sudo apt install -y python3-picamera2`."
+            "Picamera2 was found but could not be imported in this environment. "
+            f"Original import error: {exc}"
         ) from exc
 
 

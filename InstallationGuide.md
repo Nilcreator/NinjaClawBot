@@ -271,6 +271,14 @@ What this does:
 
 ### 5.2 Install the workspace
 
+Create the workspace environment first so Raspberry Pi system camera packages
+such as `python3-picamera2` are visible inside `uv`:
+
+```bash
+cd ~/NinjaClawBot
+uv venv --python /usr/bin/python3 --system-site-packages
+```
+
 Recommended full install if you may want voice input later:
 
 ```bash

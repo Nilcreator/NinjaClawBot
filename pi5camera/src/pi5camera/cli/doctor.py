@@ -39,10 +39,7 @@ def doctor(ctx: click.Context) -> None:
     if not _is_writable_directory(summary["data_dir"]):
         warnings.append(f"Camera data directory is not writable: {summary['data_dir']}")
     if not summary["camera_backend_available"]:
-        warnings.append(
-            "Picamera2 is not importable. On Raspberry Pi OS install it with "
-            "`sudo apt install -y python3-picamera2`."
-        )
+        warnings.append(summary["camera_backend_help_text"])
     if not summary["recognition_backend_available"]:
         warnings.append(
             "The face_recognition Python package is not importable in this environment."
@@ -51,12 +48,15 @@ def doctor(ctx: click.Context) -> None:
     click.echo("pi5camera doctor")
     click.echo("----------------")
     click.echo(f"Config path: {manager.path}")
+    click.echo(f"Python:      {summary['python_executable']}")
     click.echo(f"Photo dir:   {summary['photo_dir']}")
     click.echo(f"Data dir:    {summary['data_dir']}")
-    click.echo(
-        f"Camera backend: {summary['camera_backend']} "
-        f"({'ok' if summary['camera_backend_available'] else 'missing'})"
-    )
+    if summary["system_python"] is not None:
+        click.echo(
+            f"System Py:   {summary['system_python']} "
+            f"({'ok' if summary['system_python_available'] else 'missing'})"
+        )
+    click.echo(f"Camera backend: {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
         f"Recognition backend: {summary['recognition_backend']} "
         f"({'ok' if summary['recognition_backend_available'] else 'missing'})"

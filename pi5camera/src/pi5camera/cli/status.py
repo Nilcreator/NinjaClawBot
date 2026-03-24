@@ -22,17 +22,21 @@ def status(ctx: click.Context) -> None:
     click.echo("----------------")
     click.echo(f"Config path: {manager.path}")
     click.echo(f"Active root: {manager.active_root}")
+    click.echo(f"Python:      {summary['python_executable']}")
     click.echo(f"Photo dir:   {summary['photo_dir']}")
     click.echo(f"Data dir:    {summary['data_dir']}")
     click.echo(f"Resolution: {summary['resolution']['width']}x{summary['resolution']['height']}")
     click.echo(f"Warm-up:     {summary['warmup_seconds']:.1f}s")
-    click.echo(
-        "Camera:      "
-        f"{summary['camera_backend']} "
-        f"({'ready' if summary['camera_backend_available'] else 'missing'})"
-    )
+    if summary["system_python"] is not None:
+        click.echo(
+            f"System Py:   {summary['system_python']} "
+            f"({'ok' if summary['system_python_available'] else 'missing'})"
+        )
+    click.echo(f"Camera:      {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
         "Recognition: "
         f"{summary['recognition_backend']} "
         f"({'ready' if summary['recognition_backend_available'] else 'missing'})"
     )
+    if summary["camera_backend_help_text"] is not None:
+        click.echo(f"Camera fix:  {summary['camera_backend_help_text']}")

@@ -574,6 +574,9 @@ Use these four buckets whenever hardware-facing behavior changes.
 
 ### `pi5camera` says `Picamera2 is not importable`
 
+This usually means `python3-picamera2` is installed for the Raspberry Pi system
+Python, but the current `uv` environment cannot see it.
+
 Install the Raspberry Pi camera stack first:
 
 ```bash
@@ -581,9 +584,13 @@ sudo apt update
 sudo apt install -y python3-picamera2
 ```
 
-Then rerun:
+Then recreate the workspace environment and rerun:
 
 ```bash
+cd ~/NinjaClawBot
+rm -rf .venv
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync --extra dev
 uv run pi5camera doctor
 ```
 

@@ -241,16 +241,17 @@ Need more detail?
 - See [Problem Solving](#problem-solving) if `uv sync` later fails while
   building `face_recognition` or if the camera still does not show up
 
-### Step 4. Install the Python environment
+### Step 4. Create the Python environment
 
 ```bash
 cd ~/pi5camera
+uv venv --python /usr/bin/python3 --system-site-packages
 uv sync --extra dev
 ```
 
 What this does:
 
-- creates the local `.venv` environment
+- creates the local `.venv` environment with access to Raspberry Pi system packages
 - installs `pi5camera`
 - installs the dev tools used for validation and maintenance
 
@@ -258,6 +259,7 @@ What you should expect:
 
 - the command finishes successfully
 - `uv run pi5camera --help` works afterward
+- `uv run python -c "import picamera2; print('picamera2-ok')"` works afterward
 
 ### Step 5. Confirm the command-line tools are available
 
@@ -742,17 +744,34 @@ Purpose:
 
 #### `Picamera2 is not importable`
 
-Install the Raspberry Pi camera stack first:
+This usually means one of two things:
+
+1. `python3-picamera2` is not installed in Raspberry Pi OS
+2. `python3-picamera2` is installed in `/usr/bin/python3`, but your local
+   `.venv` was created without system site packages
+
+First install the Raspberry Pi camera stack:
 
 ```bash
 sudo apt update
 sudo apt install -y python3-picamera2
 ```
 
-Then rerun:
+Then recreate the standalone environment so `uv` can see the system package:
 
 ```bash
+cd ~/pi5camera
+rm -rf .venv
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync --extra dev
 uv run pi5camera doctor
+```
+
+If you want to confirm the mismatch directly, compare these two commands:
+
+```bash
+python3 -c "import sys, picamera2; print(sys.executable); print(picamera2.__file__)"
+uv run python -c "import sys, importlib.util; print(sys.executable); print(importlib.util.find_spec('picamera2'))"
 ```
 
 #### `face_recognition` is not importable

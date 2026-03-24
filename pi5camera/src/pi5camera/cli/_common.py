@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from typing import Any
 
 from pi5camera.config.config_manager import CameraConfigManager
+from pi5camera.environment import describe_picamera2_environment, is_module_available
 from pi5camera.errors import ConfigError
 
 
@@ -15,11 +15,6 @@ def load_manager(config_file: Path | str | None) -> CameraConfigManager:
     manager = CameraConfigManager(config_file)
     manager.load()
     return manager
-
-
-def is_module_available(module_name: str) -> bool:
-    """Return whether a Python module can be imported."""
-    return importlib.util.find_spec(module_name) is not None
 
 
 def describe_camera_stack(config: dict[str, Any]) -> dict[str, Any]:
@@ -35,11 +30,17 @@ def describe_camera_stack(config: dict[str, Any]) -> dict[str, Any]:
         raise ConfigError("Config key 'paths' must be an object.")
 
     recognition_backend = str(recognition_config.get("backend", "face_recognition"))
+    picamera2_environment = describe_picamera2_environment()
     return {
         "photo_dir": str(paths["photo_dir"]),
         "data_dir": str(paths["data_dir"]),
         "camera_backend": "picamera2",
-        "camera_backend_available": is_module_available("picamera2"),
+        "camera_backend_available": picamera2_environment["available"],
+        "camera_backend_state": picamera2_environment["state"],
+        "camera_backend_help_text": picamera2_environment["help_text"],
+        "python_executable": picamera2_environment["current_python"],
+        "system_python": picamera2_environment["system_python"],
+        "system_python_available": picamera2_environment["system_python_available"],
         "recognition_backend": recognition_backend,
         "recognition_backend_available": (
             is_module_available("face_recognition")
