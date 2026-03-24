@@ -15,7 +15,7 @@ dependencies = [
     "pi5mic",
     "pi5vl53l0x[pi]",
 ]
-requires-python = ">=3.11,<3.13"
+requires-python = ">=3.11,<3.14"
 readme = "README.md"
 
 [project.optional-dependencies]
