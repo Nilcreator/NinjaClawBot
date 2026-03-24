@@ -146,9 +146,24 @@ uv run pi5mic mic-tool
 uv run pi5vl53l0x sensor-tool
 ```
 
-On Raspberry Pi, create the workspace virtual environment first with
-`uv venv --python /usr/bin/python3 --system-site-packages` so the camera stack
-installed by `python3-picamera2` is visible to `pi5camera`.
+On Raspberry Pi, prefer the bootstrap installer before the first `uv run`:
+
+```bash
+./scripts/bootstrap-rpi-workspace.sh
+```
+
+If you already know that you want always-on voice input too, use:
+
+```bash
+./scripts/bootstrap-rpi-workspace.sh --voiceinput
+```
+
+The bootstrap installer:
+
+- installs the Raspberry Pi system packages needed by `pi5camera` and `pi5mic`
+- recreates `.venv` with `/usr/bin/python3` and `--system-site-packages`
+- runs `uv sync --extra dev`
+- finishes with `pi5camera doctor`
 
 If you already know that you want always-on voice input, install the optional wake-word dependency too:
 

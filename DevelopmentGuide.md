@@ -577,18 +577,26 @@ Use these four buckets whenever hardware-facing behavior changes.
 This usually means `python3-picamera2` is installed for the Raspberry Pi system
 Python, but the current `uv` environment cannot see it.
 
-Install the Raspberry Pi camera stack first:
-
-```bash
-sudo apt update
-sudo apt install -y python3-picamera2
-```
-
-Then recreate the workspace environment and rerun:
+Fastest recovery for the full workspace:
 
 ```bash
 cd ~/NinjaClawBot
-rm -rf .venv
+./scripts/bootstrap-rpi-workspace.sh
+```
+
+Standalone `pi5camera` recovery:
+
+```bash
+cd ~/pi5camera
+./scripts/bootstrap-rpi-standalone.sh
+```
+
+Manual fallback if you need to do it step by step:
+
+```bash
+cd ~/NinjaClawBot
+sudo apt update
+sudo apt install -y python3-picamera2
 uv venv --python /usr/bin/python3 --system-site-packages
 uv sync --extra dev
 uv run pi5camera doctor

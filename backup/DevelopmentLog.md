@@ -2,6 +2,67 @@
 
 ## 2026-03-24
 
+### Raspberry Pi Bootstrap Installers For Workspace And Standalone `pi5camera`
+
+Summary:
+
+- added a root workspace bootstrap installer for Raspberry Pi:
+  `./scripts/bootstrap-rpi-workspace.sh`
+- added a standalone `pi5camera` bootstrap installer:
+  `./scripts/bootstrap-rpi-standalone.sh`
+- both installers now:
+  - re-check the required Raspberry Pi system packages
+  - recreate `.venv` with `/usr/bin/python3` and `--system-site-packages`
+  - run `uv sync --extra dev`
+  - finish with camera readiness checks
+- added optional `--voiceinput` support to the workspace installer so the full
+  robot stack can be bootstrapped with the wake-word dependency in one step
+- updated the install docs so Raspberry Pi users are guided to these scripts as
+  the default setup path
+
+Files changed:
+
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [scripts/bootstrap-rpi-workspace.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/scripts/bootstrap-rpi-workspace.sh)
+- [pi5camera/scripts/bootstrap-rpi-standalone.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/scripts/bootstrap-rpi-standalone.sh)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- `uv sync --extra dev` alone cannot reliably solve Raspberry Pi camera setup
+  because `Picamera2` depends on the system `libcamera` stack installed by `apt`
+- users needed a one-step recovery and installation path that matches the
+  official Raspberry Pi guidance while keeping the project easy to install
+
+Lint and test results:
+
+- `bash -n scripts/bootstrap-rpi-workspace.sh pi5camera/scripts/bootstrap-rpi-standalone.sh`
+- `./scripts/bootstrap-rpi-workspace.sh --help`
+- `./pi5camera/scripts/bootstrap-rpi-standalone.sh --help`
+- `cd pi5camera && uv run --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --extra dev ruff check src tests`
+- `cd pi5camera && uv run --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `git diff --check`
+- result: `8 passed`
+
+Raspberry Pi validation status:
+
+- local script and package validation passed
+- Raspberry Pi follow-up required after validation:
+  - run `./scripts/bootstrap-rpi-workspace.sh` in `~/NinjaClawBot`
+  - run `./scripts/bootstrap-rpi-workspace.sh --voiceinput` if voice input is needed
+  - run `./scripts/bootstrap-rpi-standalone.sh` in standalone `~/pi5camera`
+  - confirm both flows finish with successful `pi5camera doctor` output
+
+Follow-up work:
+
+- confirm the bootstrap scripts behave well on a fresh Raspberry Pi OS Lite image
+- add more automation only if real-device validation finds repeat failure cases
+
 ### pi5camera Picamera2 Environment Detection And Raspberry Pi `uv` Recovery
 
 Summary:

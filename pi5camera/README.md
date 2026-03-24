@@ -210,12 +210,32 @@ What you should expect:
 If your shell is not `zsh`, open a new terminal window or load the correct
 shell profile for your shell.
 
-### Step 3. Install Raspberry Pi system packages
+### Step 3. Run the Raspberry Pi bootstrap installer
+
+```bash
+cd ~/pi5camera
+./scripts/bootstrap-rpi-standalone.sh
+```
+
+What this does:
+
+- installs the Raspberry Pi camera and build packages needed by `pi5camera`
+- creates the local `.venv` environment with access to Raspberry Pi system packages
+- runs `uv sync --extra dev`
+- runs `pi5camera doctor` and a final import check
+
+What you should expect:
+
+- the command finishes successfully
+- `uv run pi5camera --help` works afterward
+- `uv run python -c "import picamera2; print('picamera2-ok')"` works afterward
+
+Manual fallback if you want to install the Raspberry Pi system packages
+yourself first:
 
 ```bash
 sudo apt update
 sudo apt install -y \
-  git \
   build-essential \
   cmake \
   pkg-config \
@@ -225,23 +245,7 @@ sudo apt install -y \
   liblapack-dev
 ```
 
-What this does:
-
-- installs the Raspberry Pi camera stack used by `Picamera2`
-- installs common build tools often needed by `face_recognition` and `dlib`
-- installs Python headers used during package builds
-
-What you should expect:
-
-- the install finishes without errors
-- the common camera error `Picamera2 is not importable` should no longer appear
-
-Need more detail?
-
-- See [Problem Solving](#problem-solving) if `uv sync` later fails while
-  building `face_recognition` or if the camera still does not show up
-
-### Step 4. Create the Python environment
+Then create the environment manually:
 
 ```bash
 cd ~/pi5camera
@@ -249,17 +253,13 @@ uv venv --python /usr/bin/python3 --system-site-packages
 uv sync --extra dev
 ```
 
-What this does:
+If you already installed the required apt packages and only want to recreate the
+virtual environment, use:
 
-- creates the local `.venv` environment with access to Raspberry Pi system packages
-- installs `pi5camera`
-- installs the dev tools used for validation and maintenance
-
-What you should expect:
-
-- the command finishes successfully
-- `uv run pi5camera --help` works afterward
-- `uv run python -c "import picamera2; print('picamera2-ok')"` works afterward
+```bash
+cd ~/pi5camera
+./scripts/bootstrap-rpi-standalone.sh --skip-apt
+```
 
 ### Step 5. Confirm the command-line tools are available
 
@@ -757,14 +757,11 @@ sudo apt update
 sudo apt install -y python3-picamera2
 ```
 
-Then recreate the standalone environment so `uv` can see the system package:
+Then rerun the standalone bootstrap installer:
 
 ```bash
 cd ~/pi5camera
-rm -rf .venv
-uv venv --python /usr/bin/python3 --system-site-packages
-uv sync --extra dev
-uv run pi5camera doctor
+./scripts/bootstrap-rpi-standalone.sh
 ```
 
 If you want to confirm the mismatch directly, compare these two commands:
@@ -790,8 +787,7 @@ Then reinstall:
 
 ```bash
 cd ~/pi5camera
-uv sync --extra dev
-uv run pi5camera doctor
+./scripts/bootstrap-rpi-standalone.sh
 ```
 
 #### `No faces were found`

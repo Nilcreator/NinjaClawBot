@@ -172,6 +172,8 @@ sudo apt install -y \
   swig \
   i2c-tools \
   python3-picamera2 \
+  libopenblas-dev \
+  liblapack-dev \
   libportaudio2 \
   portaudio19-dev
 ```
@@ -271,35 +273,50 @@ What this does:
 
 ### 5.2 Install the workspace
 
-Create the workspace environment first so Raspberry Pi system camera packages
-such as `python3-picamera2` are visible inside `uv`:
+Recommended automated install:
+
+```bash
+cd ~/NinjaClawBot
+./scripts/bootstrap-rpi-workspace.sh
+```
+
+Recommended automated install if you already know that you want always-on
+voice input too:
+
+```bash
+cd ~/NinjaClawBot
+./scripts/bootstrap-rpi-workspace.sh --voiceinput
+```
+
+What the bootstrap installer does:
+
+- re-checks and installs the required Raspberry Pi system packages
+- recreates `.venv` with `/usr/bin/python3` and `--system-site-packages`
+- runs `uv sync --extra dev`
+- runs `uv run pi5camera doctor`
+
+Manual fallback if you do not want to use the script:
 
 ```bash
 cd ~/NinjaClawBot
 uv venv --python /usr/bin/python3 --system-site-packages
-```
-
-Recommended full install if you may want voice input later:
-
-```bash
-cd ~/NinjaClawBot
-uv sync --extra dev --extra voiceinput
-```
-
-Minimal install if you are certain you do not want the wake-word listener yet:
-
-```bash
-cd ~/NinjaClawBot
 uv sync --extra dev
 ```
 
-Why the first command is recommended:
+Manual fallback with the optional wake-word listener:
+
+```bash
+cd ~/NinjaClawBot
+uv venv --python /usr/bin/python3 --system-site-packages
+uv sync --extra dev --extra voiceinput
+```
+
+Why the bootstrap installer is recommended:
 
 - it installs the normal development workspace
 - it also installs the optional `openWakeWord` dependency used by the always-on
-  `pi5mic` listener
-- it avoids having to reinstall the workspace later when you decide to add
-  voice input
+-  `pi5mic` listener when `--voiceinput` is used
+- it avoids the common `Picamera2` virtual-environment mismatch on Raspberry Pi
 
 ### 5.3 Verify the workspace install
 
