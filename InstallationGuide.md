@@ -720,7 +720,7 @@ Expected result:
 - you have a `.onnx` or `.tflite` model saved somewhere you can point to
   during setup
 
-### 8.5 Optional first always-on test in the foreground
+### 8.5 set up wakeword model
 
 Use this only after `doctor` is clean.
 
