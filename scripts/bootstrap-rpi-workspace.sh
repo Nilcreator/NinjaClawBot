@@ -30,15 +30,6 @@ OPTIONAL_CAMERA_APT_PACKAGES=(
   python3-libcamera
 )
 
-OPTIONAL_RECOGNITION_APT_PACKAGES=(
-  python3-scipy
-  python3-dlib
-  python3-face-recognition
-  python3-face-recognition-models
-)
-
-RECOGNITION_PIP_FALLBACK=0
-
 usage() {
   cat <<'EOF'
 Usage: ./scripts/bootstrap-rpi-workspace.sh [--skip-apt] [--voiceinput]
@@ -46,7 +37,7 @@ Usage: ./scripts/bootstrap-rpi-workspace.sh [--skip-apt] [--voiceinput]
 Prepare the NinjaClawBot workspace on Raspberry Pi OS by:
 1. Installing the required system packages with apt
 2. Creating .venv with /usr/bin/python3 -m venv --system-site-packages
-3. Running uv sync --active --extra dev
+3. Running uv sync --active --extra dev (with system Python preference)
 
 Options:
   --skip-apt    Skip the apt install step
@@ -79,19 +70,14 @@ assert_linux() {
 assert_python_version() {
   "$PYTHON_BIN" - <<'PY'
 import sys
-if not ((3, 11) <= sys.version_info[:2] < (3, 13)):
-    raise SystemExit("Expected /usr/bin/python3 to be Python 3.11 or 3.12 for NinjaClawBot.")
+if not ((3, 11) <= sys.version_info[:2] < (3, 14)):
+    raise SystemExit("Expected /usr/bin/python3 to be Python 3.11–3.13 for NinjaClawBot.")
 PY
 }
 
 venv_can_import_picamera2() {
   [[ -x "${VENV_DIR}/bin/python" ]] || return 1
   "${VENV_DIR}/bin/python" -c "import libcamera, picamera2" >/dev/null 2>&1
-}
-
-venv_can_import_face_recognition() {
-  [[ -x "${VENV_DIR}/bin/python" ]] || return 1
-  "${VENV_DIR}/bin/python" -c "import face_recognition" >/dev/null 2>&1
 }
 
 list_available_optional_packages() {
@@ -102,39 +88,6 @@ list_available_optional_packages() {
       printf '%s\n' "${package}"
     fi
   done
-}
-
-system_python_can_import() {
-  local import_code="$1"
-  "${PYTHON_BIN}" -c "${import_code}" >/dev/null 2>&1
-}
-
-install_fallback_recognition_stack() {
-  log "Installing the Python recognition fallback into .venv."
-  (
-    cd "${PROJECT_ROOT}"
-    source "${VENV_DIR}/bin/activate"
-    uv pip install \
-      --python "${VENV_DIR}/bin/python" \
-      --reinstall \
-      "face-recognition>=1.3"
-  )
-}
-
-ensure_venv() {
-  log "Recreating workspace virtual environment."
-  rm -rf "${VENV_DIR}"
-  (
-    cd "${PROJECT_ROOT}"
-    "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
-  )
-  if ! venv_can_import_picamera2; then
-    local venv_output
-    local system_output
-    venv_output=$("${VENV_DIR}/bin/python" -c "import libcamera, picamera2" 2>&1 || true)
-    system_output=$("${PYTHON_BIN}" -c "import libcamera, picamera2" 2>&1 || true)
-    fail "Picamera2 is still not importable inside ${VENV_DIR}. .venv import output: ${venv_output}. /usr/bin/python3 import output: ${system_output}"
-  fi
 }
 
 install_system_packages() {
@@ -155,12 +108,24 @@ install_system_packages() {
     [[ -n "${optional_package}" ]] || continue
     packages+=("${optional_package}")
   done < <(list_available_optional_packages "${OPTIONAL_CAMERA_APT_PACKAGES[@]}")
-  while IFS= read -r optional_package; do
-    [[ -n "${optional_package}" ]] || continue
-    packages+=("${optional_package}")
-  done < <(list_available_optional_packages "${OPTIONAL_RECOGNITION_APT_PACKAGES[@]}")
 
   sudo apt install -y "${packages[@]}"
+}
+
+ensure_venv() {
+  log "Recreating workspace virtual environment with system Python."
+  rm -rf "${VENV_DIR}"
+  (
+    cd "${PROJECT_ROOT}"
+    "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
+  )
+  if ! venv_can_import_picamera2; then
+    local venv_output
+    local system_output
+    venv_output=$("${VENV_DIR}/bin/python" -c "import libcamera, picamera2" 2>&1 || true)
+    system_output=$("${PYTHON_BIN}" -c "import libcamera, picamera2" 2>&1 || true)
+    fail "Picamera2 is still not importable inside ${VENV_DIR}. .venv import output: ${venv_output}. /usr/bin/python3 import output: ${system_output}"
+  fi
 }
 
 run_sync() {
@@ -169,60 +134,29 @@ run_sync() {
     sync_args+=(--extra voiceinput)
   fi
 
-  log "Syncing the NinjaClawBot workspace."
+  log "Syncing the NinjaClawBot workspace (using system Python)."
   (
     cd "${PROJECT_ROOT}"
-    # Force uv to install into the verified .venv created above.
     source "${VENV_DIR}/bin/activate"
-    uv sync "${sync_args[@]}"
+    # Force uv to use the system Python interpreter so the venv retains
+    # access to system site-packages (python3-picamera2, python3-libcamera).
+    UV_PYTHON_PREFERENCE=system uv sync "${sync_args[@]}"
   )
 }
 
 ensure_system_site_packages() {
-  log "Installing the venv startup hook for Raspberry Pi system packages."
+  log "Verifying system site-packages access in .venv."
 
   local CFG="${VENV_DIR}/pyvenv.cfg"
   if [[ -f "${CFG}" ]]; then
     if grep -q 'include-system-site-packages = false' "${CFG}" 2>/dev/null; then
       sed -i 's/include-system-site-packages = false/include-system-site-packages = true/' "${CFG}"
+      log "Re-enabled include-system-site-packages in pyvenv.cfg."
     elif ! grep -q 'include-system-site-packages' "${CFG}" 2>/dev/null; then
       echo 'include-system-site-packages = true' >> "${CFG}"
+      log "Added include-system-site-packages to pyvenv.cfg."
     fi
   fi
-
-  (
-    cd "${PROJECT_ROOT}"
-    "${VENV_DIR}/bin/python" -c \
-      "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
-  ) || fail "Failed to install the pi5camera startup import hook into ${VENV_DIR}."
-}
-
-ensure_face_recognition_stack() {
-  ensure_system_site_packages
-
-  if venv_can_import_face_recognition; then
-    log "face_recognition is importable in .venv."
-    return
-  fi
-
-  if system_python_can_import "import face_recognition"; then
-    local import_output
-    import_output=$("${VENV_DIR}/bin/python" -c "import face_recognition" 2>&1 || true)
-    fail "face_recognition is importable in /usr/bin/python3 but not inside ${VENV_DIR}. ${import_output}"
-  fi
-
-  log "System recognition packages are not available; using the Python fallback."
-  RECOGNITION_PIP_FALLBACK=1
-  install_fallback_recognition_stack
-
-  if venv_can_import_face_recognition; then
-    log "face_recognition import repaired."
-    return
-  fi
-
-  local import_output
-  import_output=$("${VENV_DIR}/bin/python" -c "import face_recognition" 2>&1 || true)
-  fail "face_recognition is still not importable inside ${VENV_DIR}. ${import_output}"
 }
 
 run_health_checks() {
@@ -230,7 +164,7 @@ run_health_checks() {
   (
     cd "${PROJECT_ROOT}"
     uv run pi5camera doctor
-    uv run python -c "import ninjaclawbot, pi5camera, libcamera, picamera2, face_recognition; print('imports-ok')"
+    uv run python -c "import ninjaclawbot, pi5camera, libcamera, picamera2, cv2; print('imports-ok')"
   )
 }
 
@@ -266,12 +200,8 @@ main() {
   ensure_venv
   run_sync
   ensure_system_site_packages
-  ensure_face_recognition_stack
   run_health_checks
 
-  if (( RECOGNITION_PIP_FALLBACK )); then
-    log "Recognition is using the Python fallback inside .venv because system apt packages were unavailable."
-  fi
   log "Workspace bootstrap completed."
 }
 

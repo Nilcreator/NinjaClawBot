@@ -294,7 +294,9 @@ What the bootstrap installer does:
 - installs the Raspberry Pi camera stack (`python3-picamera2`, `python3-libcamera`)
   for `pi5camera`
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
-- runs `uv sync --active --extra dev`
+- runs `uv sync --active --extra dev` with `UV_PYTHON_PREFERENCE=system` so
+  `uv` uses the system Python interpreter and preserves access to system
+  site-packages (`picamera2`, `libcamera`)
 - runs `uv run pi5camera doctor` and a final
   `uv run python -c "import libcamera, picamera2, cv2; print('imports-ok')"`
   check inside the verified environment
@@ -308,7 +310,7 @@ cd ~/NinjaClawBot
 rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-uv sync --active --extra dev
+UV_PYTHON_PREFERENCE=system uv sync --active --extra dev
 uv run pi5camera doctor
 ```
 
@@ -316,11 +318,12 @@ Manual fallback with the optional wake-word listener:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-picamera2 python3-venv
+sudo apt install -y python3-picamera2 python3-libcamera python3-venv
 cd ~/NinjaClawBot
+rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-uv sync --active --extra dev --extra voiceinput
+UV_PYTHON_PREFERENCE=system uv sync --active --extra dev --extra voiceinput
 uv run pi5camera doctor
 ```
 
@@ -328,8 +331,10 @@ Why the bootstrap installer is recommended:
 
 - it installs the normal development workspace
 - it also installs the optional `openWakeWord` dependency used by the always-on
--  `pi5mic` listener when `--voiceinput` is used
-- it avoids the common `Picamera2` virtual-environment mismatch on Raspberry Pi
+  `pi5mic` listener when `--voiceinput` is used
+- it uses `UV_PYTHON_PREFERENCE=system` to keep the system Python interpreter,
+  ensuring `picamera2` and `libcamera` from Raspberry Pi system packages remain
+  importable inside `.venv`
 
 ### 5.3 Verify the workspace install
 
