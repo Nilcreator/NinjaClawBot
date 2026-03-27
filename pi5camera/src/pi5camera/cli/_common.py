@@ -43,6 +43,7 @@ def describe_camera_stack(config: dict[str, Any]) -> dict[str, Any]:
         "recognition_backend_available": env["recognition_backend_available"],
         "recognition_backend_state": env["recognition_backend_state"],
         "recognition_backend_help_text": env["recognition_backend_help_text"],
+        "detection_mode": env["detection_mode"],
         "resolution": {
             "width": int(camera_config.get("width", 1280)),
             "height": int(camera_config.get("height", 720)),

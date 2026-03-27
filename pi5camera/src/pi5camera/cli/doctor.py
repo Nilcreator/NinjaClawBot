@@ -55,6 +55,7 @@ def doctor(ctx: click.Context) -> None:
     click.echo(
         f"Recognition: {summary['recognition_backend']} ({summary['recognition_backend_state']})"
     )
+    click.echo(f"Detection:   {summary['detection_mode']}")
 
     if warnings:
         click.echo("\nWarnings:")

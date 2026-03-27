@@ -152,13 +152,13 @@ Storage layout created by setup and normal use:
 
 ### Runtime dependencies
 
-| Package | Purpose | ARM64 wheel |
-|---|---|---|
-| `click` | CLI framework | ✅ |
-| `Pillow` | Image processing (crop, resize) | ✅ |
-| `mediapipe` | Face detection (Google, lightweight) | ✅ |
-| `opencv-python-headless` | Face embedding via DNN, image I/O | ✅ |
-| `numpy` | Array operations (required by MediaPipe and OpenCV) | ✅ |
+| Package | Purpose | Required | ARM64 wheel |
+|---|---|---|---|
+| `click` | CLI framework | ✅ Yes | ✅ |
+| `Pillow` | Image processing (crop, resize) | ✅ Yes | ✅ |
+| `opencv-python-headless` | Face detection (Haar cascade), face embedding (DNN), image I/O | ✅ Yes | ✅ |
+| `numpy` | Array operations (used by OpenCV) | ✅ Yes | ✅ |
+| `mediapipe` | Higher-accuracy face detection (Google) | ❌ Optional | ❌ No ARM64 Linux wheel |
 
 ### Raspberry Pi system packages
 
@@ -167,10 +167,24 @@ Storage layout created by setup and normal use:
 | `python3-picamera2` | Camera hardware interface |
 | `python3-libcamera` | Low-level camera control |
 
-> **Note:** `dlib` and `face-recognition` are **not used**. The new recognition
-> backend uses MediaPipe + OpenCV DNN, which installs from pre-built wheels and
-> does not require C++ compilation. Peak RAM usage during recognition is
-> significantly lower than the old dlib-based stack.
+### How face detection works
+
+- **On x86_64 / macOS** (where MediaPipe can install): uses MediaPipe for
+  higher-accuracy face detection.
+- **On ARM64 / Raspberry Pi** (where MediaPipe cannot install): automatically
+  falls back to **OpenCV Haar cascade**, which is always shipped with
+  `opencv-python-headless`. No extra installation needed.
+
+The `doctor` and `status` commands show which detector is active:
+
+```text
+Detection:   opencv_haar    ← ARM64 fallback (Raspberry Pi)
+Detection:   mediapipe      ← primary detector (x86_64 / macOS)
+```
+
+> **Note:** `dlib` and `face-recognition` are **not used**. The recognition
+> backend uses OpenCV (required) + MediaPipe (optional), which does not
+> require C++ compilation.
 
 ### Development dependencies
 

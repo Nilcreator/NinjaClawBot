@@ -1,9 +1,8 @@
 """Environment and dependency probes for pi5camera.
 
-Simplified from the original 538-line version to a focused ~80-line
-probe module. No more runtime .pth file generation, startup hook code
-generation, or custom MetaPathFinder injection. Users should use the
-documented bootstrap scripts for venv setup.
+Simplified from the original 538-line version to a focused probe module.
+No more runtime .pth file generation, startup hook code generation, or
+custom MetaPathFinder injection.
 """
 
 from __future__ import annotations
@@ -84,13 +83,28 @@ def describe_camera_environment() -> dict[str, Any]:
             "Picamera2 is only available on Raspberry Pi. Using stub backend on this machine."
         )
 
-    recognition_state = "ready" if (mediapipe_ok and cv2_ok) else "missing"
+    # Recognition only requires OpenCV. MediaPipe is optional (enhances
+    # detection accuracy but has no ARM64 Linux wheel).
+    recognition_available = cv2_ok
+    if cv2_ok and mediapipe_ok:
+        recognition_state = "ready"
+        detection_mode = "mediapipe"
+    elif cv2_ok:
+        recognition_state = "ready"
+        detection_mode = "opencv_haar"
+    else:
+        recognition_state = "missing"
+        detection_mode = "none"
+
     recognition_help = None
-    if not mediapipe_ok:
-        recognition_help = "MediaPipe is not installed. Install with: pip install mediapipe"
-    elif not cv2_ok:
+    if not cv2_ok:
         recognition_help = (
             "OpenCV is not installed. Install with: pip install opencv-python-headless"
+        )
+    elif not mediapipe_ok and not on_pi:
+        recognition_help = (
+            "MediaPipe is not installed (optional, improves accuracy). "
+            "Install with: pip install mediapipe"
         )
 
     return {
@@ -99,9 +113,10 @@ def describe_camera_environment() -> dict[str, Any]:
         "camera_backend_available": picamera2_ok,
         "camera_backend_state": camera_state,
         "camera_backend_help_text": camera_help,
-        "recognition_backend_available": mediapipe_ok and cv2_ok,
+        "recognition_backend_available": recognition_available,
         "recognition_backend_state": recognition_state,
         "recognition_backend_help_text": recognition_help,
         "mediapipe_available": mediapipe_ok,
         "opencv_available": cv2_ok,
+        "detection_mode": detection_mode,
     }
