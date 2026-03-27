@@ -179,7 +179,7 @@ run_sync() {
 }
 
 ensure_system_site_packages() {
-  log "Ensuring system-site-packages access for Raspberry Pi packages."
+  log "Installing the venv startup hook for Raspberry Pi system packages."
 
   local CFG="${VENV_DIR}/pyvenv.cfg"
   if [[ -f "${CFG}" ]]; then
@@ -190,14 +190,11 @@ ensure_system_site_packages() {
     fi
   fi
 
-  local PY_VERSION
-  PY_VERSION=$("${VENV_DIR}/bin/python" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-  local SITE_DIR="${VENV_DIR}/lib/python${PY_VERSION}/site-packages"
-  local PTH_FILE="${SITE_DIR}/_pi5camera_system_packages.pth"
-  if [[ -d "${SITE_DIR}" ]]; then
-    "${PYTHON_BIN}" -c "import site; print('\n'.join(site.getsitepackages()))" > "${PTH_FILE}"
-    log "Wrote ${PTH_FILE}"
-  fi
+  (
+    cd "${PROJECT_ROOT}"
+    "${VENV_DIR}/bin/python" -c \
+      "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
+  ) || fail "Failed to install the pi5camera startup import hook into ${VENV_DIR}."
 }
 
 ensure_face_recognition_stack() {
@@ -232,8 +229,8 @@ run_health_checks() {
   log "Running camera readiness checks."
   (
     cd "${PROJECT_ROOT}"
-    "${VENV_DIR}/bin/python" -m pi5camera doctor
-    "${VENV_DIR}/bin/python" -c "import ninjaclawbot, pi5camera, libcamera, picamera2, face_recognition; print('imports-ok')"
+    uv run pi5camera doctor
+    uv run python -c "import ninjaclawbot, pi5camera, libcamera, picamera2, face_recognition; print('imports-ok')"
   )
 }
 

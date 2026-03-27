@@ -165,7 +165,7 @@ run_sync() {
 }
 
 ensure_system_site_packages() {
-  log "Ensuring system-site-packages access for Picamera2."
+  log "Installing the venv startup hook for Raspberry Pi system packages."
 
   # 1. Re-ensure pyvenv.cfg has include-system-site-packages = true in case
   #    uv sync overwrote it.
@@ -178,16 +178,14 @@ ensure_system_site_packages() {
     fi
   fi
 
-  # 2. Write a .pth file into the venv site-packages so system dist-packages
-  #    are always on sys.path even if pyvenv.cfg gets overwritten later by uv.
-  local PY_VERSION
-  PY_VERSION=$("${VENV_DIR}/bin/python" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-  local SITE_DIR="${VENV_DIR}/lib/python${PY_VERSION}/site-packages"
-  local PTH_FILE="${SITE_DIR}/_pi5camera_system_packages.pth"
-  if [[ -d "${SITE_DIR}" ]]; then
-    "${PYTHON_BIN}" -c "import site; print('\n'.join(site.getsitepackages()))" > "${PTH_FILE}"
-    log "Wrote ${PTH_FILE}"
-  fi
+  # 2. Install a venv-local startup hook that prepends Raspberry Pi system
+  #    packages before user imports, so they still win even if broken wheels
+  #    inside the venv would otherwise shadow them.
+  (
+    cd "${PROJECT_ROOT}"
+    "${VENV_DIR}/bin/python" -c \
+      "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
+  ) || fail "Failed to install the pi5camera startup import hook into ${VENV_DIR}."
 }
 
 ensure_face_recognition_stack() {
@@ -222,8 +220,8 @@ run_health_checks() {
   log "Running standalone camera readiness checks."
   (
     cd "${PROJECT_ROOT}"
-    "${VENV_DIR}/bin/python" -m pi5camera doctor
-    "${VENV_DIR}/bin/python" -c "import pi5camera, libcamera, picamera2, face_recognition; print('imports-ok')"
+    uv run pi5camera doctor
+    uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"
   )
 }
 

@@ -223,16 +223,20 @@ What this does:
 - installs optional Raspberry Pi camera and recognition packages such as
   `python3-libcamera`, `python3-scipy`, `python3-dlib`, and
   `python3-face-recognition` when they are available on the host image
+- works whether this `pi5camera` folder is still inside the full
+  NinjaClawBot workspace or has been copied out and used on its own
 - recreates the local `.venv` environment from scratch with
   `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
-- ensures system-site-packages access is preserved by patching `pyvenv.cfg`
-  and writing a `.pth` file into the venv
+- installs a venv-local startup hook so plain `uv run python` and
+  `uv run pi5camera ...` commands can see the Raspberry Pi system camera
+  packages before any user imports happen
 - prefers the Raspberry Pi system recognition stack on ARM boards and only
   falls back to a Python package install if those system packages are not
   available
-- runs `pi5camera doctor` and a final import check for `libcamera`,
-  `picamera2`, and `face_recognition`
+- runs `uv run pi5camera doctor` and a final
+  `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
+  check
 
 What you should expect:
 
@@ -763,6 +767,7 @@ rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 ```
 
 If your image does not provide `python3-face-recognition`, install the Python
@@ -819,14 +824,15 @@ rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 ```
 
 > **Important:** Always use `uv sync --active` (not plain `uv sync`) after
 > creating a venv with `--system-site-packages`. Without `--active`, `uv` may
 > recreate the `.venv` and lose the system-site-packages access to Picamera2.
-> The runtime auto-fix and the bootstrap script both write a `.pth` file to
-> guard against this, but recreating the venv with `uv sync` (no `--active`)
-> will remove that file too.
+> The bootstrap script and the manual recovery path also reinstall the
+> `pi5camera` startup hook after `uv sync`, because recreating the venv can
+> remove that hook.
 
 If you want to confirm the mismatch directly, compare these two commands:
 
@@ -875,6 +881,7 @@ the Python fallback manually:
 cd ~/pi5camera
 source .venv/bin/activate
 uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 uv run pi5camera doctor
 ```
 

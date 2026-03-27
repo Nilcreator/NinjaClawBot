@@ -579,6 +579,8 @@ environment. Common causes are:
 
 - `python3-picamera2` or `python3-libcamera` is missing in the system Python
 - the current `.venv` is stale and no longer reflects the system camera stack
+- the active `.venv` can import a stale or partial camera package before it
+  reaches the healthy Raspberry Pi system copy
 
 Fastest recovery for the full workspace:
 
@@ -604,6 +606,7 @@ rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 uv run pi5camera doctor
 ```
 
@@ -640,6 +643,7 @@ rm -rf .venv
 source .venv/bin/activate
 uv sync --active --extra dev
 uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 uv run python -c "import face_recognition; print('face-recognition-ok')"
 uv run pi5camera doctor
 ```

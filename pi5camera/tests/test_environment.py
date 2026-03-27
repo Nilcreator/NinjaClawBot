@@ -9,10 +9,11 @@ import pytest
 from pi5camera.core.camera_backend import _import_picamera2_module
 from pi5camera.environment import (
     _PTH_FILE_NAME,
+    _STARTUP_HELPER_FILE_NAME,
     describe_face_recognition_environment,
     describe_picamera2_environment,
     inject_system_site_packages,
-    is_module_available,
+    install_startup_import_hook,
 )
 from pi5camera.errors import CaptureError
 
@@ -164,16 +165,14 @@ def test_inject_system_site_packages_adds_paths_and_writes_pth(
         lambda: site_packages,
     )
 
-    # After injection, picamera2 should be importable.
-    def patched_is_module_available(name: str) -> bool:
-        if name == "picamera2":
-            return True
-        return is_module_available(name)
+    real_import_module = importlib.import_module
 
-    monkeypatch.setattr(
-        "pi5camera.environment.is_module_available",
-        patched_is_module_available,
-    )
+    def fake_import_module(name: str):
+        if name == "picamera2":
+            return object()
+        return real_import_module(name)
+
+    monkeypatch.setattr("pi5camera.environment.importlib.import_module", fake_import_module)
     # Create a fake system python so the exists() check passes on macOS.
     fake_system_python = tmp_path / "fake-python3"
     fake_system_python.touch()
@@ -182,13 +181,44 @@ def test_inject_system_site_packages_adds_paths_and_writes_pth(
     result = inject_system_site_packages(system_python=fake_system_python)
 
     assert result is True
-    assert fake_dist in sys.path
-    # Clean up sys.path so we don't leak into other tests.
-    sys.path.remove(fake_dist)
+    assert sys.path.index(fake_dist) <= 1
+    while fake_dist in sys.path:
+        sys.path.remove(fake_dist)
 
     pth_file = site_packages / _PTH_FILE_NAME
     assert pth_file.exists()
-    assert fake_dist in pth_file.read_text(encoding="utf-8")
+    assert "import _pi5camera_rpi_startup" in pth_file.read_text(encoding="utf-8")
+
+    startup_file = site_packages / _STARTUP_HELPER_FILE_NAME
+    assert startup_file.exists()
+    startup_body = startup_file.read_text(encoding="utf-8")
+    assert fake_dist in startup_body
+
+
+def test_install_startup_import_hook_writes_helper_module(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
+    monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
+    monkeypatch.setattr(
+        "pi5camera.environment._get_system_site_package_paths",
+        lambda system_python: ["/usr/lib/python3/dist-packages"],
+    )
+
+    version = f"python{sys.version_info.major}.{sys.version_info.minor}"
+    site_packages = tmp_path / "venv" / "lib" / version / "site-packages"
+    site_packages.mkdir(parents=True)
+    monkeypatch.setattr(
+        "pi5camera.environment._venv_site_packages_dir",
+        lambda: site_packages,
+    )
+
+    fake_system_python = tmp_path / "fake-python3"
+    fake_system_python.touch()
+
+    assert install_startup_import_hook(system_python=fake_system_python) is True
+    assert (site_packages / _PTH_FILE_NAME).exists()
+    helper_path = site_packages / _STARTUP_HELPER_FILE_NAME
+    assert helper_path.exists()
+    assert "/usr/lib/python3/dist-packages" in helper_path.read_text(encoding="utf-8")
 
 
 def test_describe_face_recognition_environment_reports_missing_dependency(monkeypatch) -> None:

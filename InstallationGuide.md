@@ -295,11 +295,15 @@ What the bootstrap installer does:
   they are available on the Raspberry Pi image
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
+- installs the `pi5camera` startup hook inside `.venv` so plain `uv run python`
+  and `uv run pi5camera ...` commands can see the Raspberry Pi system camera
+  stack before user imports
 - prefers the Raspberry Pi system recognition stack on ARM boards and only
   falls back to a Python package install when those system packages are not
   available
-- runs `pi5camera doctor` and final import checks for `libcamera`, `picamera2`,
-  and `face_recognition` inside the verified `.venv`
+- runs `uv run pi5camera doctor` and a final
+  `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
+  check inside the verified environment
 
 Manual fallback if you do not want to use the script:
 
@@ -311,6 +315,7 @@ rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 ```
 
 Manual fallback with the optional wake-word listener:
@@ -322,6 +327,7 @@ cd ~/NinjaClawBot
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev --extra voiceinput
+.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
 ```
 
 Why the bootstrap installer is recommended:

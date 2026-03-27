@@ -2,6 +2,64 @@
 
 ## 2026-03-27
 
+### `pi5camera` Copied-Standalone Startup Hook Fix For `uv run` Imports
+
+Summary:
+
+- audited a Raspberry Pi standalone report where `pi5camera` had been copied
+  outside the NinjaClawBot workspace and the user still hit
+  `ModuleNotFoundError: No module named 'libcamera'` with plain
+  `uv run python -c "import libcamera, picamera2, face_recognition"`
+- identified that the previous recovery path still relied too much on
+  `pi5camera` code being imported first, while the user-facing health checks
+  and many real workflows begin with plain `uv run python` imports
+- identified that the earlier `.pth` persistence approach could still lose the
+  import-order battle if a stale or partial package inside `.venv` shadowed the
+  healthy Raspberry Pi system copy
+- added a venv-local startup hook installer in `pi5camera.environment` so
+  bootstrap can persist a Python startup repair that prepends Raspberry Pi
+  system package paths before user imports
+- added a project-level `sitecustomize.py` fallback for copied standalone
+  installs and tightened it to detect broken imports, not just missing module
+  specs
+- updated both Raspberry Pi bootstrap scripts to install the startup hook and
+  validate the exact `uv run ...` path that users run after setup
+- updated the install and troubleshooting docs so the manual fallback path now
+  includes reinstalling the startup hook after `uv sync`
+
+Files changed:
+
+- [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+- [pi5camera/src/sitecustomize.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/sitecustomize.py)
+- [pi5camera/scripts/bootstrap-rpi-standalone.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/scripts/bootstrap-rpi-standalone.sh)
+- [scripts/bootstrap-rpi-workspace.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/scripts/bootstrap-rpi-workspace.sh)
+- [pi5camera/tests/test_environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_environment.py)
+- [pi5camera/tests/test_sitecustomize.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_sitecustomize.py)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the copied-standalone failure was not mainly a bad repo path assumption; it
+  was a startup-order problem
+- the old repair path could make `pi5camera doctor` look healthier than a
+  plain `uv run python` import, because the repair logic was not guaranteed to
+  run early enough for every entry point
+- a startup hook inside `.venv` is more robust because it does not depend on
+  the original workspace path and it runs before normal user imports
+
+Lint and test results:
+
+- `bash -n pi5camera/scripts/bootstrap-rpi-standalone.sh scripts/bootstrap-rpi-workspace.sh`
+- `cd pi5camera && uv run --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --extra dev ruff check src tests`
+- `cd pi5camera && uv run --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- result: `16 passed`
+
 ### `pi5camera` Raspberry Pi Bootstrap Rework For Camera And Recognition Reliability
 
 Summary:
