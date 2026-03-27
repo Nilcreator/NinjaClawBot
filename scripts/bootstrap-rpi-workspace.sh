@@ -140,11 +140,20 @@ run_sync() {
     sync_args+=(--extra voiceinput)
   fi
 
+  # Detect the system Python version and write it to .python-version so uv
+  # uses the same interpreter that /usr/bin/python3 provides.  Without this,
+  # a stale .python-version (e.g. "3.11") forces uv to download a managed
+  # Python that cannot see system site-packages (picamera2, libcamera).
+  local system_pyver
+  system_pyver=$("${PYTHON_BIN}" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+  echo "${system_pyver}" > "${PROJECT_ROOT}/.python-version"
+  log "Set .python-version to ${system_pyver} (matching system Python)."
+
   log "Syncing the NinjaClawBot workspace."
   (
     cd "${PROJECT_ROOT}"
     source "${VENV_DIR}/bin/activate"
-    UV_PYTHON_PREFERENCE=only-system uv sync "${sync_args[@]}"
+    uv sync "${sync_args[@]}"
   )
 }
 
