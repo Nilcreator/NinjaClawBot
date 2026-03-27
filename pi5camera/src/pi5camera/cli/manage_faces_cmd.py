@@ -6,7 +6,7 @@ import click
 
 from pi5camera.cli._common import load_manager
 from pi5camera.errors import ConfigError, StorageError
-from pi5camera.storage.face_store import FaceStore
+from pi5camera.storage.face_index import FaceIndex
 
 
 @click.group("manage-faces")
@@ -22,8 +22,8 @@ def list_faces(ctx: click.Context) -> None:
     """List known enrolled identities."""
     try:
         manager = load_manager(ctx.obj.get("config_file"))
-        store = FaceStore(manager.config)
-        names = store.list_known_faces()
+        index = FaceIndex(manager.config)
+        names = index.list_known_faces()
     except (ConfigError, StorageError) as exc:
         raise click.ClickException(str(exc)) from exc
 
@@ -43,8 +43,8 @@ def remove_face(ctx: click.Context, name: str) -> None:
     """Remove a known enrolled identity."""
     try:
         manager = load_manager(ctx.obj.get("config_file"))
-        store = FaceStore(manager.config)
-        removed = store.remove_known_face(name)
+        index = FaceIndex(manager.config)
+        removed = index.remove_known_face(name)
     except (ConfigError, StorageError) as exc:
         raise click.ClickException(str(exc)) from exc
 

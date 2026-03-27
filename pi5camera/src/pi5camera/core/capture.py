@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pi5camera.core.camera_backend import build_camera_backend
-from pi5camera.errors import StorageError
-from pi5camera.models import CaptureResult
-from pi5camera.storage.face_store import FaceStore
+from pi5camera.errors import CaptureError
+from pi5camera.models import CaptureResult, microsecond_timestamp
+from pi5camera.storage.photo_storage import PhotoStorage
 
 
 def build_output_path(
@@ -23,11 +22,11 @@ def build_output_path(
         resolved = output_path.expanduser().resolve()
         if resolved.suffix:
             return resolved
-        timestamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+        timestamp = microsecond_timestamp()
         return resolved / f"{filename_prefix}-{timestamp}.jpg"
 
-    store = FaceStore(config)
-    return store.create_photo_path(prefix=filename_prefix)
+    storage = PhotoStorage(config)
+    return storage.create_photo_path(prefix=filename_prefix)
 
 
 def capture_photo(
@@ -40,17 +39,12 @@ def capture_photo(
     destination = build_output_path(
         config, output_path=output_path, filename_prefix=filename_prefix
     )
-    backend = None
     try:
-        backend = build_camera_backend(config)
-        return backend.capture(destination)
+        with build_camera_backend(config) as backend:
+            return backend.capture(destination)
+    except CaptureError:
+        raise
     except OSError as exc:
-        raise StorageError(
+        raise CaptureError(
             f"Could not create the output photo path '{destination}': {exc}"
         ) from exc
-    finally:
-        if backend is not None:
-            try:
-                backend.close()
-            except Exception:
-                pass

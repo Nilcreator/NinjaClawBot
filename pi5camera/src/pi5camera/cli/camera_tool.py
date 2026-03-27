@@ -4,13 +4,6 @@ from __future__ import annotations
 
 import click
 
-from pi5camera.cli.capture_cmd import capture_cmd
-from pi5camera.cli.doctor import doctor
-from pi5camera.cli.manage_faces_cmd import list_faces, remove_face
-from pi5camera.cli.recognize_cmd import recognize_cmd
-from pi5camera.cli.setup_cmd import setup_cmd
-from pi5camera.cli.status import status
-
 
 @click.command("camera-tool")
 @click.pass_context
@@ -38,19 +31,33 @@ def camera_tool(ctx: click.Context) -> None:
 
         try:
             if choice == "1":
+                from pi5camera.cli.setup_cmd import setup_cmd
+
                 ctx.invoke(setup_cmd)
             elif choice == "2":
+                from pi5camera.cli.doctor import doctor
+
                 ctx.invoke(doctor)
             elif choice == "3":
+                from pi5camera.cli.status import status
+
                 ctx.invoke(status)
             elif choice == "4":
+                from pi5camera.cli.capture_cmd import capture_cmd
+
                 ctx.invoke(capture_cmd, output=None, prefix="photo")
             elif choice == "5":
+                from pi5camera.cli.recognize_cmd import recognize_cmd
+
                 ctx.invoke(recognize_cmd, image_file=None, prompt_for_names=True)
             elif choice == "6":
+                from pi5camera.cli.manage_faces_cmd import list_faces
+
                 ctx.invoke(list_faces)
             elif choice == "7":
                 name = click.prompt("Name to remove").strip()
+                from pi5camera.cli.manage_faces_cmd import remove_face
+
                 ctx.invoke(remove_face, name=name)
             else:
                 click.echo("Leaving pi5camera camera-tool.")

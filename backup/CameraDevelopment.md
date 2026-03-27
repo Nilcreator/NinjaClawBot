@@ -1,843 +1,615 @@
-# pi5camera Development Plan
+# pi5camera Development Plan — Full Rebuild
 
-Last updated: 2026-03-24
+Last updated: 2026-03-27
+
+---
 
 ## 1. Purpose
 
-This document is the current planning and status guide for `pi5camera`.
+This document replaces the previous `CameraDevelopment.md` in its entirety.
 
-It has four jobs:
+It has five jobs:
 
-1. lock the product specification around the approved standalone and integrated
-   camera use cases
-2. refine the earlier high-level implementation plan into a repository-ready
-   phased build plan
-3. define the correct ownership boundary between `pi5camera`, `ninjaclawbot`,
-   and the OpenClaw plugin
-4. provide a practical execution and validation guide before coding begins
+1. present the results of a comprehensive line-by-line code audit of the
+   current `pi5camera` implementation
+2. document the critical bugs, architectural weaknesses, and stability risks
+   found during the audit
+3. present research findings on face-recognition backends compatible with the
+   Raspberry Pi 5, with a focus on RAM efficiency and dlib-free alternatives
+4. define a phased plan to rewrite the library from scratch
+5. provide a practical execution, validation, and documentation guide
 
-This document intentionally follows the more practical structure now used by
-`MicDevelopment.md`:
-
-- overall development goal and product spec
-- current repository and research findings
-- key design decisions
-- phased implementation plan
-- validation and Raspberry Pi execution guidance
+---
 
 ## 2. Overall Development Goal
 
-`pi5camera` is the standalone-first camera library planned for the
-NinjaClawBot workspace.
+`pi5camera` is the standalone-first camera library for the NinjaClawBot
+workspace.
 
-The target product is:
+The target product remains unchanged:
 
-- a local Raspberry Pi camera tool that works by itself
+- a local Raspberry Pi 5 camera tool that works by itself
 - a guided interactive setup and testing tool for users
-- a local face-recognition workflow built on a free open-source backend
+- a local face-recognition workflow built on a free, open-source, dlib-free
+  backend that runs within the limited RAM of a Raspberry Pi 5
 - a thin `ninjaclawbot` integration layer for AI-driven orchestration
-- an OpenClaw plugin surface that reuses `ninjaclawbot` actions rather than
-  calling raw camera code directly
-
-The long-term finished user experience should be:
-
-1. install the NinjaClawBot workspace with `uv sync`
-2. set up the hardware libraries
-3. run `uv run pi5camera camera-tool`
-4. capture a photo or run face recognition
-5. if a face is new during the interactive local flow, type a name and save the
-   enrollment
-6. if a face is already known, receive the stored name automatically
-7. optionally call the same camera capability through `ninjaclawbot`
-8. let OpenClaw take a normal photo from day one
-9. let OpenClaw recognize faces from day one
-10. let OpenClaw chain camera actions with robot actions such as servo
-    movement, expression playback, and status reporting
-
-## 3. Product Rules And User Clarifications
-
-These are the locked product rules for the first build.
-
-- repository package name should be `pi5camera` for consistency with the
-  existing `pi5*` packages
-- the library must remain standalone-first and usable without `ninjaclawbot`
-- root workspace installation must include `pi5camera` through the same single
-  `uv sync` flow as the other `pi5*` packages
-- standalone package-local installation should also work with the normal package
-  flow:
-  - `cd pi5camera && uv sync --extra dev`
-- the primary interactive operator tool should be:
-  - `uv run pi5camera camera-tool`
-- `camera-tool` setup must allow the user to choose the photo save directory as
-  an absolute path
-- default photo directory should depend on the active project root:
-  - standalone `pi5camera` use defaults to `<pi5camera_root>/photo`
-  - NinjaClawBot-root use defaults to `<NinjaClawBot_root>/photo`
-- both standalone use and OpenClaw-triggered photo capture should save into the
-  same configured directory unless a future explicit per-call override is added
-- the primary package CLI should follow the existing package pattern:
-  - `setup`
-  - `doctor`
-  - `status`
-  - `capture`
-  - `recognize`
-  - `enroll`
-  - `manage-faces`
-  - `camera-tool`
-- the first release should focus on still-photo workflows, not continuous video
-  streaming
-- local interactive recognition is allowed to prompt the user for names when an
-  unknown face is found
-- non-interactive automation must never block on a local TTY prompt
-- normal still-photo capture must be a mandatory first-release feature for:
-  - standalone `pi5camera`
-  - `ninjaclawbot`
-  - OpenClaw through the plugin
-- `ninjaclawbot` and OpenClaw integrations must return structured unknown-face
-  results instead of waiting for local keyboard input
-- the OpenClaw recognition path should support a first-step recognition action
-  that captures a fresh image internally when needed and returns either a known
-  name or an unknown-face result
-- pending unknown-face context must survive long enough for a follow-up chat
-  turn where the user later provides the name for saving
-- the default face-recognition path must be local and open-source
-- the first release should not depend on a paid or cloud face-recognition API
-- OpenClaw must not fail if `pi5camera` is missing, unconfigured, or the camera
-  is disconnected
-- camera images and enrolled-face data should stay in explicit local files under
-  the project or standalone package directory
-- the package should be mock-friendly and import-safe on macOS development
-  machines with no Raspberry Pi camera attached
-
-## 4. Current Build Status
-
-### 4.1 What is already done
-
-The planning and audit work is already done.
-
-Current completed work:
-
-- repository audit for current package structure and integration patterns
-- review of:
-  - `README.md`
-  - `DevelopmentGuide.md`
-  - `InstallationGuide.md`
-  - `backup/DevelopmentPlan.md`
-  - `backup/MicDevelopment.md`
-- audit of current `ninjaclawbot` action, runtime, and adapter boundaries
-- audit of the OpenClaw plugin tool-registration pattern
-- external research on:
-  - `Picamera2`
-  - `face_recognition`
-  - `DeepFace`
-  - `InsightFace`
-  - `onnxruntime`
-- first-pass implementation plan for the new camera library
-
-### 4.2 What is working today
-
-There is no current `pi5camera` package in the repository.
-
-What is working today is the surrounding project structure that the camera
-library will plug into:
-
-- standalone-first `pi5*` package layout
-- guided hardware tools such as `servo-tool`, `display-tool`, and `mic-tool`
-- `ninjaclawbot` adapter/runtime/action pattern
-- OpenClaw plugin registration through typed `ninjaclawbot_*` tools
-
-### 4.3 What is not built yet
-
-The following camera features are still planned work, not finished work:
-
-- the `pi5camera` package scaffold
-- camera config and data storage
-- still-image capture commands
-- camera health-check and doctor flows
-- local face enrollment and recognition
-- interactive unknown-face naming flow
-- `ninjaclawbot` camera actions
-- OpenClaw plugin camera tools
-- Raspberry Pi 5 field validation for the full camera workflow
-
-## 5. Audit Summary
-
-### 5.1 Repository and package audit findings
-
-Important current strengths:
-
-- the repository already has a clean standalone-first package model
-- each `pi5*` package owns:
-  - its own CLI
-  - its own config manager
-  - its own tests
-  - its own hardware boundary
-- the current project already has a strong template for a guided hardware tool:
-  - `pi5mic mic-tool`
-- the root workspace already supports sibling editable packages through local
-  `uv` sources
-
-Important current constraints:
-
-- there is no existing camera package or config convention yet
-- the root workspace currently includes:
-  - `pi5buzzer`
-  - `pi5servo`
-  - `pi5disp`
-  - `pi5mic`
-  - `pi5vl53l0x`
-- the root test and Python path configuration will need to be expanded for
-  `pi5camera`
-
-### 5.2 `ninjaclawbot` audit findings
-
-Important current strengths:
-
-- `ninjaclawbot` already composes standalone hardware packages through adapters
-- the runtime already uses lazy-import style helpers for optional hardware
-  ownership
-- the action surface is explicit and typed
-- health reporting is centralized
-
-Important current constraints:
-
-- the current action surface does not include camera actions yet
-- runtime health-check currently reports:
-  - `servo`
-  - `buzzer`
-  - `display`
-  - `distance`
-  - optional `voice_input`
-- `ninjaclawbot` is the right place for reusable typed camera actions, but not
-  for the interactive naming prompt owned by the standalone camera workflow
-
-### 5.3 OpenClaw plugin audit findings
-
-Important current strengths:
-
-- the plugin already exposes typed `ninjaclawbot_*` tools
-- the plugin already follows the repository rule that OpenClaw should call
-  `ninjaclawbot`, not raw driver CLIs
-- optional tools and typed schemas are already established patterns
-
-Important current constraints:
-
-- the plugin should not own direct camera hardware setup
-- the plugin should not own local face enrollment prompting
-- the plugin should not call `camera-tool` directly because `camera-tool` is an
-  interactive human operator flow
-- if camera behavior is exposed to OpenClaw, it should happen only after the
-  same behavior exists in `ninjaclawbot`
-
-### 5.4 External fact-check findings
-
-Checked against upstream documentation on 2026-03-24:
-
-- `Picamera2` is the official Raspberry Pi Python camera stack built on
-  `libcamera`
-- Raspberry Pi recommends installing `Picamera2` with `apt` instead of `pip`
-  so the Python package and underlying camera stack stay version-compatible
-- Raspberry Pi OS Bookworm renamed the camera CLI apps from `libcamera-*` to
-  `rpicam-*`, though compatibility links still exist
-- `Picamera2` supports:
-  - still capture
-  - metadata capture
-  - camera controls
-  - mode switching
-  - request-level access
-- `Picamera2` request objects must be released properly
-- the Raspberry Pi camera stack expects single-process camera ownership, so the
-  library should avoid multi-process camera control
-- `face_recognition` provides the simplest local API for:
-  - loading images
-  - locating faces
-  - generating encodings
-  - comparing known and unknown faces
-  - tuning tolerance
-- `face_recognition` documents Raspberry Pi installation guidance and uses a
-  default comparison tolerance of `0.6`
-- `DeepFace` is feature-rich and offers `verify`, `find`, and `represent`, but
-  it is a much heavier stack than needed for the first Pi 5 implementation
-- `onnxruntime` supports Linux ARM64, which keeps the door open for a future
-  alternative backend
-- `InsightFace` code is MIT, but the published model licensing is more
-  restrictive, so it should not be the default backend for this repository
-
-## 6. Key Design Decisions
-
-### 6.1 Where the camera runtime should live
-
-The direct camera runtime should live in `pi5camera`, not in `ninjaclawbot`
-and not inside the OpenClaw plugin.
-
-Why:
-
-- `pi5camera` should own:
-  - camera access
-  - still capture
-  - face enrollment
-  - face recognition
-  - local camera diagnostics
-- `ninjaclawbot` should stay focused on robot-level composition
-- the OpenClaw plugin should stay as a typed tool wrapper around
-  `ninjaclawbot`
-
-### 6.2 Where `camera-tool` should live
-
-Recommended decision:
-
-- primary implementation:
-  - `uv run pi5camera camera-tool`
-- optional future convenience wrapper:
-  - `uv run ninjaclawbot camera-tool`
-
-Why:
-
-- this is consistent with the actual repository pattern for standalone hardware
-  packages
-- `movement-tool` and `expression-tool` are integrated robot tools, while
-  `camera-tool` is fundamentally a hardware and data-enrollment tool
-- OpenClaw should not invoke `camera-tool` directly; it should call typed
-  `ninjaclawbot` actions or plugin tools
-
-### 6.3 Camera backend choice
-
-Recommended first-release backend:
-
-- `Picamera2`
-
-Why:
-
-- it is the official Raspberry Pi Python camera interface
-- it is directly aligned with Raspberry Pi 5 and current Bookworm-era camera
-  software
-- it supports still capture and camera controls without inventing a custom
-  wrapper around `rpicam-*`
-
-Operational rule:
-
-- imports of `Picamera2` should stay lazy so the package remains importable
-  during macOS development and unit testing
-
-### 6.4 Face-recognition backend choice
-
-Recommended first-release backend:
-
-- `face_recognition`
-
-Recommended future backend model:
-
-- keep recognition behind a pluggable backend interface
-- allow an optional heavier backend later if Raspberry Pi validation shows a
-  strong need
-
-Why `face_recognition` is the first choice:
-
-- simplest local API
-- no cloud dependency
-- strong fit for the requested open-source offline workflow
-- enough control to build:
-  - enrollment
-  - known-face matching
-  - multi-face handling
-  - configurable tolerance
+- an OpenClaw plugin surface that reuses `ninjaclawbot` actions
 
-Why `DeepFace` is not the first default:
+---
 
-- heavier dependency and runtime footprint
-- broader feature set than the current use case needs
-
-Why `InsightFace` is not the first default:
-
-- model licensing needs more care than this repository should assume by default
-
-### 6.5 Interactive naming policy for unknown faces
+## 3. Code Audit Results
 
-This is one of the most important refinements added after reviewing the use
-cases.
+### 3.1 Audit scope
 
-Recommended policy:
-
-- local interactive `camera-tool` recognition may prompt for names when it
-  finds unknown faces
-- non-interactive commands should support an explicit `--prompt-for-names`
-  style mode only when a real terminal is present
-- `ninjaclawbot` actions must never block waiting for local keyboard input
-- OpenClaw plugin tools must never block waiting for local keyboard input
+Every source and test file in `pi5camera/` was reviewed line by line using
+Serena symbolic analysis. The files audited were:
 
-Expected non-interactive behavior:
-
-- return:
-  - recognition session or result id
-  - recognized names
-  - unknown-face count
-  - per-face stable ids or tokens for follow-up enrollment
-  - crop paths or capture paths
-  - face locations
-  - match distances when useful
-- require a separate explicit enrollment action for follow-up naming in
-  `ninjaclawbot` and OpenClaw
-
-### 6.6 Multi-face policy
-
-The first release should support multiple faces in a single image.
-
-Recommended behavior:
-
-- detect all faces in the image
-- order results deterministically
-- first implementation should use a stable top-to-bottom then left-to-right
-  ordering
-- compare every detected face against all stored encodings
-- choose the closest accepted match within the configured tolerance
-- mark all others as unknown
+**Package scaffold (5 files)**
 
-Interactive naming flow:
-
-- if one unknown face is found:
-  - prompt once for a name
-- if multiple unknown faces are found:
-  - prompt one face at a time with:
-    - face index
-    - bounding box
-    - crop file path if available
+| File | Lines | Purpose |
+|------|-------|---------|
+| `__init__.py` | 61 | Lazy public exports |
+| `__main__.py` | 88 | Click CLI entry point with LazyGroup |
+| `driver.py` | 58 | Compatibility re-exports (near-duplicate of `__init__.py`) |
+| `errors.py` | 24 | Exception hierarchy |
+| `models.py` | 89 | Dataclasses: FaceBoundingBox, FaceResult, EncodedFace, CaptureResult |
 
-### 6.7 Face-store policy
+**Environment and bootstrap (2 files)**
 
-The first implementation should store face data locally in explicit files.
+| File | Lines | Purpose |
+|------|-------|---------|
+| `environment.py` | 538 | Venv+system-package injection, import probes, startup hooks |
+| `src/sitecustomize.py` | 89 | Auto-startup hook for system package injection |
 
-Recommended layout:
+**Core workflows (4 files)**
 
-- `camera.json`
-- `photo/`
-- `camera_data/captures/`
-- `camera_data/known_faces/<person_name>/`
-- `camera_data/index/encodings.json`
-- optional `camera_data/faces/unknown/` for debug crops if enabled
+| File | Lines | Purpose |
+|------|-------|---------|
+| `core/camera_backend.py` | 141 | Picamera2 still-capture backend |
+| `core/capture.py` | 54 | One-shot capture orchestration |
+| `core/recognition.py` | 107 | Face recognition workflow |
+| `core/enrollment.py` | 88 | Known-face enrollment from images or pending records |
 
-Recommended root-aware default behavior:
+**Storage (1 file)**
 
-- when setup runs from the NinjaClawBot project root, default photo storage
-  should be `<project_root>/photo`
-- when setup runs from a standalone `pi5camera` directory, default photo
-  storage should be `<package_root>/photo`
-- users must be able to replace that default with another absolute directory
+| File | Lines | Purpose |
+|------|-------|---------|
+| `storage/face_store.py` | 276 | Filesystem-backed face index, pending records, crops |
 
-Recommended matching policy:
+**Config (1 file)**
 
-- support more than one image per person over time
-- generate and store one encoding per enrollment image
-- compare against all stored encodings
-- return the best accepted match
-- persist temporary pending-recognition artifacts so a later follow-up
-  enrollment action can reuse the exact captured face
+| File | Lines | Purpose |
+|------|-------|---------|
+| `config/config_manager.py` | 195 | camera.json loading, saving, merging |
 
-This is more reliable than forcing a one-image-per-person rule forever.
+**Recognition backend (2 files)**
 
-### 6.8 Privacy and retention policy
+| File | Lines | Purpose |
+|------|-------|---------|
+| `recognition/base.py` | 14 | Backend protocol definition |
+| `recognition/face_recognition_backend.py` | 74 | face_recognition package wrapper |
 
-The package should stay local-first and explicit.
+**CLI commands (9 files)**
 
-Recommended rules:
+| File | Lines | Purpose |
+|------|-------|---------|
+| `cli/__init__.py` | 20 | Eager command imports (opposite of lazy main) |
+| `cli/_common.py` | 57 | Shared helpers: load_manager, describe_camera_stack |
+| `cli/camera_tool.py` | 59 | Interactive menu loop |
+| `cli/setup_cmd.py` | 94 | Guided setup wizard |
+| `cli/capture_cmd.py` | 30 | One-shot photo capture |
+| `cli/doctor.py` | 68 | Backend and directory health check |
+| `cli/status.py` | 41 | Config and readiness summary |
+| `cli/recognize_cmd.py` | 79 | Recognition with optional name prompting |
+| `cli/enroll_cmd.py` | 50 | Enroll from image or pending record |
+| `cli/manage_faces_cmd.py` | 50 | List/remove known faces |
 
-- no automatic cloud upload
-- no hidden background sync
-- no automatic deletion of enrolled identities without an explicit user command
-- capture retention should be configurable
-- recognition debug crops should be optional
-- users should be able to:
-  - list saved identities
-  - remove saved identities
-  - clear old captures
-
-### 6.9 Integration policy for `ninjaclawbot`
-
-Recommended integrated action surface:
-
-- `camera_health_check`
-- `capture_photo`
-- `recognize_faces`
-- `enroll_pending_face`
-- optional future:
-  - `list_known_faces`
-  - `discard_pending_recognition`
-
-Important design rule:
-
-- `ninjaclawbot` should expose typed camera actions
-- it should not recreate the full interactive enrollment wizard
-- the OpenClaw-facing recognition path should use `recognize_faces` as the
-  primary first-step recognition action
-- `recognize_faces` may capture a fresh image internally by default, but it is
-  not the same thing as a full recognize-and-save transaction
-- `capture_photo` is a mandatory first-release raw-photo action for both local
-  integration use and OpenClaw use
-- `capture_photo` should save to the configured photo directory and return the
-  absolute saved file path
-
-### 6.10 Integration policy for OpenClaw
+**Tests (5 files)**
 
-Recommended first plugin tools:
-
-- `ninjaclawbot_capture_photo`
-- `ninjaclawbot_recognize_faces`
-- `ninjaclawbot_enroll_pending_face`
-
-Optional later plugin tools:
-
-- `ninjaclawbot_list_known_faces`
-- `ninjaclawbot_discard_pending_recognition`
-
-Important rule:
-
-- plugin tools should only expose actions that already exist in
-  `ninjaclawbot`
-- unknown-face naming during chat should be a later follow-up agent flow, not
-  an implicit local prompt
-
-### 6.11 Pending recognition context policy
-
-This is required for the OpenClaw follow-up enrollment use case.
-
-Recommended policy:
-
-- when `recognize_faces` finds one or more unknown faces in a non-interactive
-  flow, it should persist a short-lived pending recognition record
-- the result should include a stable `recognition_id`
-- each unknown face should also get a stable `face_id` or equivalent token
-- the later save-name action should consume:
-  - `recognition_id`
-  - `face_id` or face index
-  - target name
-
-Recommended storage direction:
-
-- `camera_data/pending/<recognition_id>/`
-- saved source capture
-- optional per-face crops
-- metadata with creation time and expiry time
+| File | Lines | Purpose |
+|------|-------|---------|
+| `tests/test_environment.py` | 261 | Environment probe and injection tests |
+| `tests/test_config_manager.py` | 37 | Config defaults and output path tests |
+| `tests/test_recognition_flow.py` | 154 | Recognize → enroll integration tests |
+| `tests/test_cli_startup.py` | 46 | Lightweight import and CLI help tests |
+| `tests/test_sitecustomize.py` | 39 | Sitecustomize targeted finder tests |
 
-Recommended lifecycle:
-
-- auto-expire stale pending records after a configurable TTL
-- clear a pending record after successful enrollment unless unused faces still
-  remain
-- allow an explicit discard action later if needed
-
-This keeps the two-turn OpenClaw conversation robust even when the user answers
-on the next message instead of immediately.
-
-## 7. Recommended Setup Flow
-
-This is the recommended future setup order for the full project.
-
-1. install the NinjaClawBot workspace with `uv sync`
-2. physically connect the Raspberry Pi camera module
-3. verify the camera is detected with:
-   - `rpicam-hello --list-cameras`
-   - or `libcamera-hello --list-cameras` on older environments
-4. run `uv run pi5camera camera-tool`
-5. use `setup` to save camera defaults into `camera.json`, including the photo
-   save directory
-6. accept or replace the root-aware default photo directory:
-   - `<active_root>/photo`
-7. capture one test image
-8. run one local face-recognition cycle
-9. enroll at least one known face
-10. if integrated robot use is needed, run `ninjaclawbot` health-check and
-   camera-related actions next
-11. only after local validation, expose the camera surface through OpenClaw
-
-Important setup message to add later in docs:
-
-- `pi5camera` should be usable by itself
-- package-local standalone setup should still work with:
-  - `cd /path/to/pi5camera`
-  - `uv sync --extra dev`
-- the setup wizard should propose `<active_root>/photo` as the default photo
-  directory, where `active_root` is the current project root used by the tool
-- but users who plan to let OpenClaw use the camera should still validate local
-  camera capture and recognition first
-
-## 8. Camera Specification
-
-### 8.1 Control model
-
-The first release should use a manual tool and typed command model:
-
-- manual start of the CLI tool
-- still capture on demand
-- recognition on demand
-- no always-on background camera watcher
-- no hidden auto-capture service
-
-### 8.2 Capture behavior
-
-The first release should support:
-
-- JPEG still capture
-- configurable save directory
-- setup-time selection of an absolute photo directory
-- default photo directory of `<active_root>/photo`
-- timestamp-based default filenames
-- access to camera metadata
-- configurable preview or no-preview behavior when supported
-- basic camera controls through config:
-  - resolution
-  - timeout/warm-up delay
-  - autofocus mode where supported
-  - exposure-related controls only if they can be kept simple and stable
-
-Expected save-path rule:
-
-- saved photos should return an absolute file path in both standalone and
-  OpenClaw-triggered flows
-
-### 8.3 Recognition behavior
-
-The face-recognition workflow should behave like this:
-
-- capture or load an image
-- locate faces
-- generate embeddings
-- compare against the stored face index
-- return recognized names when matched
-- mark other faces as unknown
-
-First-release recognition defaults:
-
-- backend:
-  - `face_recognition`
-- tolerance:
-  - start with `0.6`
-- allow later user tuning in config once Pi field results exist
-
-### 8.4 Interactive local unknown-face behavior
-
-The interactive `camera-tool` recognition flow should behave like this:
-
-- automatically capture or load a photo
-- attempt recognition
-- if all faces are known:
-  - print the names and save the result
-- if unknown faces exist:
-  - prompt for names one face at a time
-  - save those new identities locally
-  - rebuild the local index cleanly
-
-### 8.5 Non-interactive and agent behavior
-
-The non-interactive and agent flow should behave like this:
-
-- never prompt locally
-- never wait for terminal input
-- return structured output only
-- support a first-step recognition call for OpenClaw that can capture a fresh
-  image internally when needed
-
-Expected structured output fields:
-
-- `recognition_id`
-- capture path
-- absolute photo path
-- face count
-- `needs_enrollment`
-- `requires_disambiguation`
-- per-face result entries including:
-  - face index
-  - stable `face_id`
-  - bounding box
-  - recognized name or `null`
-  - accepted match distance if available
-  - crop path if exported
-
-### 8.6 OpenClaw conversational enrollment behavior
-
-The OpenClaw flow for the approved use case should behave like this:
-
-1. the user asks OpenClaw to take a photo and recognize the face
-2. OpenClaw calls `ninjaclawbot_recognize_faces`
-3. that tool performs the first-step recognition flow and may capture a fresh
-   image internally
-4. if a face is known:
-   - the tool returns the recognized name
-   - OpenClaw answers the user directly
-5. if a face is unknown:
-   - the tool returns `recognition_id`, `face_id`, and unknown-face state
-   - OpenClaw tells the user it does not know the name
-6. later, if the user tells OpenClaw the name:
-   - OpenClaw calls `ninjaclawbot_enroll_pending_face`
-   - the tool saves that pending face into the known-face store
-7. OpenClaw confirms the saved name to the user
-
-If multiple unknown faces are detected:
-
-- the tool should return all unknown-face entries
-- if there is ambiguity, set `requires_disambiguation`
-- OpenClaw should ask which face the user wants to name before calling the
-  save-name function
-
-### 8.7 OpenClaw normal photo behavior
-
-The OpenClaw raw-photo flow should behave like this:
-
-1. the user asks OpenClaw to take a normal photo
-2. OpenClaw calls `ninjaclawbot_capture_photo`
-3. that tool captures one still image and saves it into the configured photo
-   directory
-4. the tool returns the absolute saved photo path and relevant metadata
-5. OpenClaw answers the user using that returned result
-
-### 8.8 Skip behavior
-
-If camera support is missing, the rest of the project should not crash.
-
-Expected skip cases:
-
-- `pi5camera` not installed
-- `camera.json` missing
-- `Picamera2` missing from the current environment
-- no Raspberry Pi camera detected
-- face-recognition backend missing
-- corrupted local encoding index
-
-In those cases:
-
-- `pi5camera` should surface a clear setup or doctor error
-- `ninjaclawbot` should report camera unavailability clearly
-- OpenClaw should skip or report the tool failure without breaking the rest of
-  the robot stack
-
-## 9. What Has Been Done Already
-
-The following planning work is complete:
-
-- repository audit
-- integration-boundary audit
-- upstream camera and face-recognition research
-- first implementation plan
-- refinement against the approved standalone and integration use cases
-
-The most important refined conclusions are:
-
-- `camera-tool` should belong to `pi5camera`, not to the plugin
-- `ninjaclawbot` should expose a thin reusable camera action layer
-- OpenClaw should call typed `ninjaclawbot_*` tools, not raw camera code
-- human naming prompts and agent-safe flows must be separated explicitly
-- normal photo capture is a mandatory day-one OpenClaw capability
-- the OpenClaw recognition path should be a first-step recognize call followed
-  by a later save-name call when needed
-- unknown-face follow-up naming needs a persisted pending-recognition record
-
-## 10. What Still Needs Improvement
-
-The following work is still open:
-
-- actual package implementation
-- field-tested Pi 5 camera configuration defaults
-- recognition tuning with multiple lighting conditions
-- a clear management UX for editing and deleting known faces
-- optional future wrapper alias inside `ninjaclawbot`
-- optional future higher-accuracy alternative recognition backend
-- optional future support for richer vision tasks beyond face recognition
-- optional future anti-spoofing or liveness checks if the project later needs
-  them
-
-## 11. Phased Implementation Plan
-
-### 11.1 Camera planning lock
-
-Status: complete
-
-Summary:
-
-- the product goal is now locked around the approved use cases
-- the camera library is confirmed as standalone-first
-- the integration boundary is confirmed as:
-  - `pi5camera` owns camera and recognition
-  - `ninjaclawbot` owns typed orchestration
-  - the OpenClaw plugin owns typed external tool exposure
-
-### Phase C0: Package contract and workspace lock
+**Build config (1 file)**
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| `pyproject.toml` | 31 | Package metadata, dependencies, tool config |
+
+**Total audited**: ~2,712 lines across 30 files.
+
+---
+
+### 3.2 Critical bugs found
+
+#### BUG-01: `face-recognition` dependency is excluded on Pi ARM64
+
+**File**: `pyproject.toml`
+**Severity**: Critical — face recognition cannot be installed via pip on the
+target hardware.
+
+```toml
+"face-recognition>=1.3; platform_system == 'Linux' and platform_machine != 'aarch64' and platform_machine != 'armv7l' and platform_machine != 'armv6l'"
+```
+
+The marker explicitly excludes `aarch64` (Raspberry Pi 5's architecture). This
+means `face-recognition` will never be installed by `uv sync` on the Pi. The
+code expects runtime injection from system packages, but this only works if the
+user manually installs `face-recognition` and `dlib` via `apt` or `pip` outside
+the managed environment. This is fragile and undocumented as a hard requirement.
+
+#### BUG-02: `dlib` compilation causes OOM crashes on Raspberry Pi
+
+**File**: `face_recognition_backend.py` (indirect dependency)
+**Severity**: Critical — the current face-recognition backend depends on
+`dlib`, which requires C++ compilation from source on ARM64. On a Pi 5 with 4GB
+of RAM, `dlib` compilation routinely triggers Out-of-Memory kills. Even with
+swap management, success is unreliable and the process can take 30+ minutes.
+
+#### BUG-03: `driver.py` is a near-exact duplicate of `__init__.py`
+
+**File**: `driver.py`
+**Severity**: Medium — maintenance hazard.
+
+Both files contain identical lazy `__getattr__` handlers and `__all__` exports.
+Any change to one must be mirrored to the other. The only difference is the
+error message string: `"module 'pi5camera' has no attribute"` vs
+`"module 'pi5camera.driver' has no attribute"`.
+
+#### BUG-04: `cli/__init__.py` eagerly imports all commands
+
+**File**: `cli/__init__.py`
+**Severity**: Medium — undermines the lazy loading architecture.
+
+The `__main__.py` carefully uses `LazyGroup` to avoid importing heavy modules at
+startup. But `cli/__init__.py` does `from .camera_tool import camera_tool` etc.,
+which eagerly imports all CLI commands and their dependencies. If anything
+imports `pi5camera.cli`, the lazy loading is defeated. The `camera_tool.py`
+itself eagerly imports `capture_cmd`, `doctor`, `manage_faces_cmd`,
+`recognize_cmd`, `setup_cmd`, and `status` at module level.
+
+#### BUG-05: `core/__init__.py` eagerly imports all core workflows
+
+**File**: `core/__init__.py`
+**Severity**: Medium — same problem as BUG-04.
+
+```python
+from .capture import capture_photo
+from .enrollment import enroll_face_from_image, enroll_pending_face
+from .recognition import recognize_faces
+```
+
+This triggers loading of `Pillow`, `face_store`, and eventually attempts to load
+`face_recognition` the moment `pi5camera.core` is imported anywhere.
+
+#### BUG-06: Timestamp collision risk in file naming
+
+**File**: `face_store.py` line 23
+**Severity**: Low — but causes silent overwrites.
+
+```python
+def _timestamp() -> str:
+    return _utc_now().strftime("%Y%m%d-%H%M%S")
+```
+
+Resolution is only to the second. If two captures or enrollments happen within
+the same second, file paths collide and data is silently overwritten.
+
+#### BUG-07: `capture.py` suppresses original `CaptureError` on storage failure
+
+**File**: `capture.py`
+**Severity**: Low — error masking.
+
+The `except OSError` handler in `capture_photo` will catch filesystem failures
+but not camera failures. However, if a `CaptureError` is raised by the backend,
+the `finally` block runs `backend.close()` which swallows exceptions silently —
+this is actually correct. But the `except OSError` re-raises as `StorageError`,
+which could mask the real error if the backend raised an `OSError`-subclass.
+
+#### BUG-08: `sitecustomize.py` and `environment.py` duplicate the same logic
+
+**File**: `src/sitecustomize.py`, `environment.py`
+**Severity**: Medium — two independent implementations of the same
+system-package injection pattern.
+
+Both files contain their own `_is_virtual_environment()`, site-packages
+detection, `MetaPathFinder` subclass, and installation logic. They use different
+marker strings. If one is updated without the other, behavior diverges.
+
+#### BUG-09: `_merge_config` silently allows `None` to replace dict sections
+
+**File**: `config_manager.py` line 53-54
+**Severity**: Medium — can corrupt config.
+
+```python
+if value is None:
+    merged[key] = None
+    continue
+```
+
+If a user's `camera.json` has `"paths": null`, the config manager sets
+`paths = None`. Then `_apply_runtime_defaults` tries `config.get("paths")` and
+gets `None`, which fails the `isinstance(paths, dict)` check and raises
+`ConfigError`. This is technically caught, but the error message is unhelpful:
+"Config key 'paths' must be an object." without explaining that `null` in the
+JSON caused it.
+
+#### BUG-10: `recognition.py` indexes faces starting from 1 but `face_id` is string
+
+**File**: `recognition.py` line 74
+**Severity**: Low — inconsistency.
+
+Faces are indexed `enumerate(detected, start=1)` producing `face_id = "face-1"`,
+`"face-2"`, etc. But the `enroll_pending_face` function searches for
+`face_id` by string comparison: `str(face.get("face_id")) == face_id`. This
+works but is fragile if the indexing ever changes.
+
+---
+
+### 3.3 Architectural weaknesses
+
+#### ARCH-01: Over-engineered environment/venv injection system
+
+The `environment.py` module alone is 538 lines — nearly 20% of the entire
+library. It implements:
+
+- subprocess-based Python probing
+- system site-package detection
+- custom `MetaPathFinder` for selective module injection
+- `.pth` file generation
+- startup helper code generation
+- venv repair guidance text
+- separate picamera2 and face_recognition environment descriptions
+
+This complexity addresses a real problem (system packages not visible in venvs)
+but the solution is too heavy for a camera library. The same pattern is then
+duplicated in `sitecustomize.py`.
+
+A rebuild should simplify this to:
+
+- a single environment probe function
+- documented bootstrap scripts
+- no runtime `.pth` file or startup hook generation
+
+#### ARCH-02: No backend abstraction for camera capture
+
+The `camera_backend.py` hardcodes `Picamera2StillBackend` as the only backend.
+The `build_camera_backend` function ignores any config and always returns
+`Picamera2StillBackend`. There is no mock/stub backend for macOS development
+or test automation.
+
+#### ARCH-03: Euclidean distance matching is reimplemented manually
+
+The `recognition.py` module implements its own `_euclidean_distance` and
+`_best_known_match` functions. The `face_recognition` library provides
+`face_recognition.face_distance()` and `face_recognition.compare_faces()` which
+are optimized and tested. The manual reimplementation is error-prone and slower.
+
+However, since the rebuild will move away from `face_recognition`+dlib entirely,
+this point becomes moot — the new backend will need its own distance function.
+
+#### ARCH-04: No resource cleanup protocol
+
+The `Picamera2StillBackend` creates a `Picamera2` instance in `__init__` and
+only closes it in the `close()` method. It does not implement `__enter__` /
+`__exit__` context manager protocol. If an exception occurs between
+construction and `close()`, camera resources leak.
+
+#### ARCH-05: `FaceStore` mixes storage, indexing, and pending-record lifecycle
+
+The `FaceStore` class (276 lines) handles:
+
+- directory creation
+- photo path generation
+- face index CRUD
+- face crop generation
+- pending-recognition record CRUD
+- TTL-based expiry purging
+
+This should be split into separate concerns: a photo storage helper, a face
+index manager, and a pending-record manager.
+
+---
+
+### 3.4 Test coverage gaps
+
+Current test counts:
+
+| Test file | Tests | Coverage area |
+|-----------|-------|---------------|
+| `test_environment.py` | 7 | Environment probing, injection |
+| `test_config_manager.py` | 2 | Config defaults, output path |
+| `test_recognition_flow.py` | 4 | Recognize + enroll integration |
+| `test_cli_startup.py` | 2 | Lightweight import checks |
+| `test_sitecustomize.py` | 3 | Sitecustomize finder |
+
+**Missing test coverage:**
+
+- Camera backend construction and capture (no mock backend exists)
+- `FaceStore` CRUD operations (create, read, update, delete known faces)
+- Pending-record expiry and TTL enforcement
+- Config merge edge cases (null values, invalid types, missing sections)
+- CLI command execution (only `--help` is tested)
+- Multi-face recognition ordering
+- Error paths: corrupted index recovery, missing photo directory, camera failure
+- `driver.py` re-export behavior
+
+---
+
+## 4. Face Recognition Research
+
+### 4.1 Problem statement
+
+The current library depends on `face_recognition` which requires `dlib`. On
+Raspberry Pi 5 (ARM64, typically 4GB or 8GB RAM):
+
+- `dlib` must be compiled from C++ source (no ARM64 wheels are published)
+- Compilation needs 2-3GB of RAM and routinely triggers OOM kills
+- Even with swap management, compilation takes 30+ minutes and is unreliable
+- The pyproject.toml explicitly excludes ARM64 from the dependency marker
+- Success requires manual system-level intervention that is poorly documented
+
+This makes the current approach unacceptable for a library that should be
+installable with a simple `uv sync`.
+
+### 4.2 Requirements for the replacement backend
+
+The replacement face-recognition backend must:
+
+1. be free and open source (MIT, Apache 2.0, or similar)
+2. install on ARM64 Linux without compiling C++ from source
+3. run face detection and embedding generation within 2GB of peak RAM
+4. work offline — no cloud API dependency
+5. support the existing workflow: detect → encode → compare → enroll
+6. have pre-built Python wheels or be pip-installable on aarch64
+
+### 4.3 Researched alternatives
+
+#### Option A: MediaPipe face detection + OpenCV DNN FaceNet embeddings
+
+**Face detection**: Google's MediaPipe provides lightweight, optimized face
+detection models that run efficiently on ARM64. MediaPipe installs via pip with
+pre-built wheels (`mediapipe`) on Linux ARM64. It detects faces with 6 key
+landmarks and can handle multiple faces in a single frame.
+
+**Face embeddings**: OpenCV's DNN module can load a pre-trained FaceNet or
+VGGFace2 model in ONNX format to generate 128-d or 256-d face embeddings. This
+avoids dlib entirely. OpenCV (`opencv-python-headless`) has pre-built ARM64
+wheels.
+
+**Pros:**
+- No dlib dependency
+- No C++ compilation required
+- MediaPipe is highly optimized for ARM CPUs
+- Low peak RAM usage (~200-400 MB for detection + embedding)
+- Well-documented Raspberry Pi 5 support
+- Pre-built ARM64 wheels available
+- Google-backed, actively maintained
+
+**Cons:**
+- MediaPipe does face detection, not recognition (embeddings need separate model)
+- Requires managing a small ONNX model file (~5-30 MB)
+- Slightly more integration work than a single `face_recognition.face_encodings()` call
+
+**Verdict**: **Recommended primary backend for the rebuild.**
+
+#### Option B: OpenCV DNN face detection + FaceNet ONNX embeddings (no MediaPipe)
+
+Same as Option A but uses OpenCV's DNN module for face detection too (SSD
+MobileNet or YuNet). This eliminates the MediaPipe dependency entirely and uses
+only OpenCV + numpy.
+
+**Pros:**
+- Single vision library dependency (OpenCV)
+- OpenCV DNN face detection runs at 8-12 FPS on Pi 5
+- Minimal additional dependencies
+
+**Cons:**
+- OpenCV DNN face detection is less accurate than MediaPipe on edge cases
+- More manual setup for detection model configuration
+
+**Verdict**: Good fallback if MediaPipe installation causes issues.
+
+#### Option C: ONNX Runtime + custom face models
+
+Use `onnxruntime` directly with a lightweight face detection model
+(e.g., UltraFace, SCRFD) and a face embedding model (MobileFaceNet, InsSightFace
+ArcFace). ONNX Runtime supports Linux ARM64.
+
+**Pros:**
+- Maximum control over model selection
+- Support for INT8 quantized models
+- Future-proof: can swap models easily
+
+**Cons:**
+- More integration work
+- `onnxruntime` ARM64 installation can be slow
+- Heavier dependency than pure OpenCV
+
+**Verdict**: Consider for a future high-accuracy backend option.
+
+#### Option D: Keep `face_recognition` + dlib (current approach)
+
+**Verdict**: **Rejected.** The dlib compilation problem is fundamental and
+cannot be reliably solved without pre-built ARM64 wheels, which don't exist.
+
+#### Option E: DeepFace
+
+**Verdict**: **Rejected for first release.** Too heavy for Pi 5 first release
+(pulls in TensorFlow and multiple model backends).
+
+#### Option F: InsightFace
+
+**Verdict**: **Rejected.** Model licensing is restrictive (non-commercial use
+only for default models). Code is MIT but models are not.
+
+### 4.4 Recommended backend strategy
+
+**Primary backend (Phase 1)**: MediaPipe face detection + OpenCV DNN FaceNet
+embedding via ONNX model.
+
+**Dependencies to add:**
+- `mediapipe` (pre-built ARM64 wheels)
+- `opencv-python-headless` (pre-built ARM64 wheels)
+- `numpy` (already required)
+
+**Dependencies to remove:**
+- `face-recognition` (removes dlib dependency entirely)
+- `dlib` (no longer needed)
+
+**Backend interface**: Keep the existing `RecognitionBackend` protocol but
+implement a new `MediaPipeFaceNetBackend` class that uses MediaPipe for
+detection and OpenCV DNN for embedding generation.
+
+**ONNX model management**: Ship a small FaceNet ONNX model (~5-30 MB) or
+download it on first use during setup. Prefer shipping with the package for
+fully offline operation.
+
+### 4.5 RAM usage comparison
+
+| Backend | Peak RAM (detection + encoding) | Install method |
+|---------|-------------------------------|----------------|
+| face_recognition + dlib | ~800MB runtime, 2-3GB compile | Compile from source |
+| MediaPipe + OpenCV DNN + ONNX | ~200-400 MB | Pre-built wheels |
+| OpenCV DNN only | ~150-300 MB | Pre-built wheels |
+| DeepFace + TF | ~1-2 GB | Pre-built wheels |
+
+The MediaPipe + OpenCV DNN approach uses **2-4x less RAM** than the current
+approach and requires **zero compilation**.
+
+---
+
+## 5. Key Design Decisions For The Rebuild
+
+### 5.1 Complete rewrite, not incremental patching
+
+The audit found 10 bugs and 5 architectural weaknesses. Many are structural and
+cannot be fixed without breaking the module boundaries. A clean rewrite is the
+most practical path.
+
+The rewrite should preserve:
+
+- the package name `pi5camera`
+- the CLI command surface (`setup`, `doctor`, `status`, `capture`, `recognize`,
+  `enroll`, `manage-faces`, `camera-tool`)
+- the config file `camera.json` format and key structure
+- the `FaceResult`, `CaptureResult`, `EncodedFace`, and `FaceBoundingBox`
+  dataclass contracts
+- the `RecognitionBackend` protocol
+- the integration surface for `ninjaclawbot` and OpenClaw
+
+### 5.2 Eliminate dlib dependency entirely
+
+Replace `face_recognition` + `dlib` with MediaPipe + OpenCV DNN + FaceNet ONNX.
+This removes the biggest blocker for reliable Pi 5 installation.
+
+### 5.3 Simplify the environment/bootstrap system
+
+Replace the 538-line `environment.py` and 89-line `sitecustomize.py` with:
+
+- a simple environment probe (~50 lines) that checks for camera and recognition
+  availability
+- documented bootstrap scripts for venv setup
+- no runtime `.pth` file generation
+- no custom `MetaPathFinder`
+- no startup helper code generation
+
+### 5.4 Add a mock camera backend
+
+For macOS development and test automation, implement a `StubCameraBackend` that
+returns a placeholder image without accessing real hardware. Register it via
+config.
+
+### 5.5 Split `FaceStore` into focused components
+
+- `PhotoStorage`: timestamped photo path generation, directory management
+- `FaceIndex`: known-face encoding CRUD, index rebuild
+- `PendingRecordManager`: pending recognition lifecycle, TTL expiry
+
+### 5.6 Fix lazy loading throughout
+
+- `cli/__init__.py` should be empty or only export `__all__` strings
+- `core/__init__.py` should use lazy `__getattr__` like `__init__.py` does
+- `camera_tool.py` should use lazy imports for subcommands
+
+### 5.7 Add microsecond timestamps
+
+Replace `%Y%m%d-%H%M%S` with `%Y%m%d-%H%M%S-%f` to avoid file collisions.
+
+---
+
+## 6. Phased Rebuild Plan
+
+### Phase R0: Scaffold cleanup and workspace registration
 
 Status: planned
 
-Objective:
+Objective: Create a clean package scaffold with correct dependencies and no
+legacy bugs.
 
-- create the `pi5camera` package contract and workspace registration before
-  hardware logic is added
+Likely files to create or rewrite:
 
-Likely files:
+- `pi5camera/pyproject.toml` — replace `face-recognition` with `mediapipe` and
+  `opencv-python-headless`; fix requires-python
+- `pi5camera/src/pi5camera/__init__.py` — clean lazy exports
+- `pi5camera/src/pi5camera/__main__.py` — keep LazyGroup, fix entrypoint
+- `pi5camera/src/pi5camera/driver.py` — generate from `__init__.py`, not
+  duplicate
+- `pi5camera/src/pi5camera/errors.py` — keep error hierarchy, add
+  `BackendNotAvailableError`
+- `pi5camera/src/pi5camera/models.py` — keep dataclasses, add microsecond
+  timestamp helper
 
-- `pyproject.toml`
-- new `pi5camera/pyproject.toml`
-- new `pi5camera/README.md`
-- new `pi5camera/src/pi5camera/__init__.py`
-- new `pi5camera/src/pi5camera/__main__.py`
-- new `pi5camera/src/pi5camera/driver.py`
-- new `pi5camera/tests/*`
-- `backup/CameraDevelopment.md`
+Files to delete:
 
-Implementation targets:
-
-- add `pi5camera` to root workspace dependencies and local `uv` sources
-- add `pi5camera/src` and `pi5camera/tests` to the root test configuration
-- define the package CLI shape
-- define compatibility re-export patterns through `driver.py`
+- `pi5camera/src/sitecustomize.py`
+- `pi5camera/src/pi5camera/core/__init__.py` (replace with lazy version)
+- `pi5camera/src/pi5camera/cli/__init__.py` (replace with lazy version or empty)
 
 Validation:
 
-- planning review
-- `uv lock`
-- package import smoke tests once the scaffold exists
+- `uv lock` succeeds from workspace root
+- `cd pi5camera && uv sync --extra dev` succeeds
+- `python -m compileall src tests`
+- `ruff check src tests`
+- `ruff format --check src tests`
+- `import pi5camera` does not load Pillow, OpenCV, or MediaPipe
 
-Risk level:
+Risk level: low
 
-- low
+---
 
-### Phase C1: Config, storage, and doctor/status scaffold
+### Phase R1: Config, storage split, and doctor/status
 
 Status: planned
 
-Objective:
+Objective: Rewrite config management and split FaceStore into focused components.
 
-- create the config and filesystem model before live capture or recognition
-  logic is added
+Likely files to create or rewrite:
 
-Likely files:
-
-- `pi5camera/src/pi5camera/errors.py`
-- `pi5camera/src/pi5camera/models.py`
-- `pi5camera/src/pi5camera/config/config_manager.py`
-- `pi5camera/src/pi5camera/cli/setup_cmd.py`
-- `pi5camera/src/pi5camera/cli/status.py`
-- `pi5camera/src/pi5camera/cli/doctor.py`
-- `pi5camera/tests/test_config.py`
-- `pi5camera/tests/test_status.py`
-- `pi5camera/tests/test_doctor.py`
-
-Expected config direction:
-
-- `camera.json` should capture:
-  - photo directory
-  - known-faces directory
-  - backend selection
-  - recognition tolerance
-  - camera resolution
-  - preview mode
-  - autofocus preference where supported
-  - capture warm-up delay
-  - retention/debug settings
-
-Photo-directory requirements:
-
-- the setup wizard must allow an absolute path
-- the default should be `<active_root>/photo`
-- the chosen directory should be reused by:
-  - standalone `capture`
-  - `camera-tool`
-  - `ninjaclawbot capture_photo`
-  - OpenClaw photo capture through the plugin
+- `pi5camera/src/pi5camera/config/config_manager.py` — fix null-section
+  handling, keep merge logic
+- `pi5camera/src/pi5camera/storage/photo_storage.py` — timestamped photo
+  paths with microseconds
+- `pi5camera/src/pi5camera/storage/face_index.py` — known-face CRUD, index
+  rebuild, corrupted index recovery
+- `pi5camera/src/pi5camera/storage/pending_records.py` — pending-recognition
+  lifecycle, TTL expiry
+- `pi5camera/src/pi5camera/storage/__init__.py` — clean re-exports
+- `pi5camera/src/pi5camera/environment.py` — simplified probe: check camera
+  (rpicam-hello), check mediapipe, check opencv; ~50-80 lines max
+- `pi5camera/src/pi5camera/cli/setup_cmd.py` — rewrite
+- `pi5camera/src/pi5camera/cli/doctor.py` — rewrite
+- `pi5camera/src/pi5camera/cli/status.py` — rewrite
+- `pi5camera/src/pi5camera/cli/_common.py` — simplify
+- `pi5camera/tests/test_config_manager.py` — expand
+- `pi5camera/tests/test_photo_storage.py` — new
+- `pi5camera/tests/test_face_index.py` — new
+- `pi5camera/tests/test_pending_records.py` — new
 
 Validation:
 
@@ -845,401 +617,306 @@ Validation:
 - `cd pi5camera && uv run --extra dev ruff check src tests`
 - `cd pi5camera && uv run --extra dev ruff format --check src tests`
 - `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- All new storage tests pass
+- Config edge cases (null sections, missing keys) tested
 
-Risk level:
+Risk level: low
 
-- low
+---
 
-### Phase C2: `Picamera2` capture backend
+### Phase R2: Camera backend with mock support
 
 Status: planned
 
-Objective:
+Objective: Rewrite the camera capture backend with context manager support
+and a stub backend for macOS development.
 
-- add a stable still-capture backend using `Picamera2`
+Likely files to create or rewrite:
 
-Likely files:
-
-- `pi5camera/src/pi5camera/core/camera_backend.py`
-- `pi5camera/src/pi5camera/core/capture.py`
-- `pi5camera/src/pi5camera/cli/capture_cmd.py`
-- `pi5camera/tests/test_capture.py`
-
-Implementation targets:
-
-- lazy import `Picamera2`
-- still-image capture to file
-- absolute output-path reporting
-- metadata collection
-- warm-up delay before capture
-- safe close/release behavior
-- single-process ownership assumptions documented
+- `pi5camera/src/pi5camera/core/camera_backend.py` — add `CameraBackend`
+  protocol, `Picamera2StillBackend` (with `__enter__`/`__exit__`),
+  `StubCameraBackend`
+- `pi5camera/src/pi5camera/core/capture.py` — use context manager, clean error
+  handling
+- `pi5camera/src/pi5camera/cli/capture_cmd.py` — rewrite
+- `pi5camera/tests/test_camera_backend.py` — new: test stub backend, config
+  dispatch
+- `pi5camera/tests/test_capture.py` — new: test capture orchestration with
+  mock backend
 
 Validation:
 
-- package-local Python gate
-- Raspberry Pi smoke tests:
-  - `rpicam-hello --list-cameras`
-  - `uv run pi5camera doctor`
-  - `uv run pi5camera capture`
+- Package-local quality gate passes
+- Stub backend capture produces a valid JPEG
+- Config dispatches to stub vs picamera2 based on a config flag
+- Capture creates correct timestamped file paths
 
-Risk level:
+Risk level: medium (Picamera2 interaction cannot be tested on macOS)
 
-- medium
+---
 
-### Phase C3: Face store and recognition backend
+### Phase R3: MediaPipe + OpenCV DNN recognition backend
 
 Status: planned
 
-Objective:
+Objective: Implement the new dlib-free face detection and embedding backend.
 
-- add local enrollment and recognition through `face_recognition`
+Likely files to create or rewrite:
 
-Likely files:
+- `pi5camera/src/pi5camera/recognition/base.py` — keep protocol, add
+  `detect_faces` and `encode_faces` methods if needed
+- `pi5camera/src/pi5camera/recognition/mediapipe_opencv_backend.py` — new:
+  MediaPipe face detection + OpenCV DNN FaceNet embedding
+- `pi5camera/src/pi5camera/recognition/face_recognition_backend.py` — delete
+  or keep as deprecated optional backend
+- `pi5camera/src/pi5camera/core/recognition.py` — rewrite with new backend
+- `pi5camera/src/pi5camera/core/enrollment.py` — rewrite
+- `pi5camera/tests/test_recognition_backend.py` — new: unit tests with
+  synthetic face data
+- `pi5camera/tests/test_recognition_flow.py` — rewrite
+- `pi5camera/models/` — add FaceNet ONNX model file or download script
 
-- `pi5camera/src/pi5camera/recognition/base.py`
-- `pi5camera/src/pi5camera/recognition/face_recognition_backend.py`
-- `pi5camera/src/pi5camera/storage/face_store.py`
-- `pi5camera/src/pi5camera/core/enrollment.py`
-- `pi5camera/src/pi5camera/core/recognition.py`
-- `pi5camera/tests/test_face_store.py`
-- `pi5camera/tests/test_recognition.py`
+Dependencies to verify:
 
-Implementation targets:
-
-- face detection
-- encoding generation
-- deterministic per-face result ordering
-- local encoding persistence
-- pending-recognition artifact persistence with expiry
-- one or more images per known identity
-- configurable tolerance
-- clean rebuild of the encoding index
+- `mediapipe` installs on macOS (development) and Linux ARM64 (Pi 5)
+- `opencv-python-headless` installs on both platforms
+- FaceNet ONNX model loads correctly in OpenCV DNN
 
 Validation:
 
-- package-local Python gate
-- unit tests for:
-  - no faces found
-  - one known face
-  - one unknown face
-  - multiple faces
-  - index rebuild
-  - corrupted index recovery
+- Package-local quality gate passes
+- Detection returns correct bounding boxes on test images
+- Embedding generation produces consistent 128-d vectors
+- Known-face comparison with euclidean distance works
+- End-to-end recognize flow with mock backend passes
+- No import of `face_recognition` or `dlib` anywhere
 
-Risk level:
+Risk level: high (core accuracy-critical change)
 
-- medium
+---
 
-### Phase C4: Interactive `camera-tool` and operator UX
+### Phase R4: Interactive camera-tool and operator UX
 
 Status: planned
 
-Objective:
+Objective: Rewrite the interactive `camera-tool` with lazy imports and clean
+error handling.
 
-- create the guided operator tool that matches the approved local use case
+Likely files to create or rewrite:
 
-Likely files:
-
-- `pi5camera/src/pi5camera/cli/camera_tool.py`
-- `pi5camera/src/pi5camera/cli/enroll_cmd.py`
-- `pi5camera/src/pi5camera/cli/recognize_cmd.py`
-- `pi5camera/src/pi5camera/cli/manage_faces_cmd.py`
-- `pi5camera/tests/test_camera_tool.py`
-
-Implementation targets:
-
-- setup wizard
-- photo-directory selection with root-aware default
-- one-shot photo capture
-- interactive recognition
-- unknown-face naming prompts
-- listing known faces
-- deleting known faces
-- optional capture cleanup commands
+- `pi5camera/src/pi5camera/cli/camera_tool.py` — rewrite with lazy command
+  imports
+- `pi5camera/src/pi5camera/cli/recognize_cmd.py` — rewrite
+- `pi5camera/src/pi5camera/cli/enroll_cmd.py` — rewrite
+- `pi5camera/src/pi5camera/cli/manage_faces_cmd.py` — rewrite
+- `pi5camera/tests/test_cli_commands.py` — new: CLI invocation tests with
+  CliRunner
 
 Validation:
 
-- package-local Python gate
-- manual Raspberry Pi flow:
-  - run `camera-tool`
-  - capture photo
-  - enroll one face
-  - recognize that face again
-  - confirm the tool returns the saved name
+- Package-local quality gate passes
+- `camera-tool --help` does not load heavy dependencies
+- Each CLI command exits cleanly with appropriate messages
+- Interactive recognition with name prompting flow works end-to-end
 
-Risk level:
+Risk level: low
 
-- medium
+---
 
-### Phase C5: `ninjaclawbot` camera integration
+### Phase R5: `ninjaclawbot` camera integration
 
 Status: planned
 
-Objective:
-
-- add a thin camera adapter and typed action surface in `ninjaclawbot`
+Objective: Add thin camera adapter and typed action surface in `ninjaclawbot`.
 
 Likely files:
 
-- `ninjaclawbot/pyproject.toml`
-- `ninjaclawbot/src/ninjaclawbot/config.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/actions.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `ninjaclawbot/tests/test_adapters.py`
-- `ninjaclawbot/tests/test_runtime.py`
-- `ninjaclawbot/tests/test_actions.py`
-- `ninjaclawbot/tests/test_executor.py`
+- `ninjaclawbot/pyproject.toml` — add optional `pi5camera` dependency
+- `ninjaclawbot/src/ninjaclawbot/adapters.py` — add camera adapter
+- `ninjaclawbot/src/ninjaclawbot/runtime.py` — add camera health reporting
+- `ninjaclawbot/src/ninjaclawbot/actions.py` — add camera actions
+- `ninjaclawbot/tests/` — test stubs
 
 Implementation targets:
 
-- camera config discovery from the root workspace
-- optional camera health reporting
-- typed raw-photo capture action
-- typed recognition action for the first-step recognize flow
-- typed pending-face enrollment action
-- structured unknown-face results
-- no local TTY prompt inside `ninjaclawbot`
+- `camera_health_check`
+- `capture_photo`
+- `recognize_faces`
+- `enroll_pending_face`
+- All actions return structured results, never block on TTY
 
 Validation:
 
-- `cd ninjaclawbot && uv run --extra dev python -m compileall src tests`
-- `cd ninjaclawbot && uv run --extra dev ruff check src tests`
-- `cd ninjaclawbot && uv run --extra dev ruff format --check src tests`
-- `cd ninjaclawbot && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `ninjaclawbot` quality gate passes
+- Camera unavailability is reported gracefully
 
-Risk level:
+Risk level: medium
 
-- medium
+---
 
-### Phase C6: OpenClaw plugin camera tools
+### Phase R6: OpenClaw plugin camera tools
 
 Status: planned
 
-Objective:
-
-- expose approved camera actions through optional OpenClaw plugin tools
+Objective: Expose camera actions through the OpenClaw plugin.
 
 Likely files:
 
 - `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
 - `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/tests/*`
 
-Implementation targets:
+Plugin tools:
 
-- add typed schemas for camera tools
-- expose:
-  - `ninjaclawbot_capture_photo`
-  - `ninjaclawbot_recognize_faces`
+- `ninjaclawbot_capture_photo`
+- `ninjaclawbot_recognize_faces`
 - `ninjaclawbot_enroll_pending_face`
-- keep tool responses structured and agent-friendly
-- never block on local naming prompts
-- support later save-name chat flows by passing `recognition_id` and `face_id`
 
 Validation:
 
-- `cd integrations/openclaw/ninjaclawbot-plugin && npm install`
-- `cd integrations/openclaw/ninjaclawbot-plugin && npm run typecheck`
-- `cd integrations/openclaw/ninjaclawbot-plugin && npm test`
+- `npm run typecheck`
+- `npm test`
 
-Risk level:
+Risk level: low-medium
 
-- low to medium
+---
 
-### Phase C7: Documentation and repository updates
+### Phase R7: Documentation update
 
 Status: planned
 
-Objective:
+Objective: Update all project documentation to reflect the new camera library.
 
-- document the final camera package, setup flow, integration surface, and Pi
-  validation process
-
-Likely files:
+Files:
 
 - `README.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
 - `pi5camera/README.md`
 - `ninjaclawbot/README.md`
-- `backup/DevelopmentLog.md`
 - `backup/CameraDevelopment.md`
+- `backup/DevelopmentLog.md`
 
-Documentation targets:
+Risk level: low
 
-- add `pi5camera` to the project overview and quick-start flow
-- add Raspberry Pi camera validation guidance
-- add package usage examples
-- add `ninjaclawbot` camera action and plugin tool documentation
+---
 
-Validation:
-
-- `git diff --check`
-- run the same lint/test gates for any code touched in the documentation phase
-
-Risk level:
-
-- low
-
-### Phase C8: Raspberry Pi field validation and tuning
+### Phase R8: Raspberry Pi 5 field validation
 
 Status: planned
 
-Objective:
+Objective: Validate the rebuilt library on Raspberry Pi 5 hardware.
 
-- validate the final local and integrated camera workflows on Raspberry Pi 5
+Safe smoke tests:
 
-Validation targets:
+- `rpicam-hello --list-cameras`
+- `uv run pi5camera doctor`
+- `uv run pi5camera status`
+- One still capture with no recognition
 
-- standalone smoke tests:
-  - camera detection
-  - setup
-  - status
-  - doctor
-  - still capture
-- recognition tests:
-  - known face
-  - unknown face
-  - multiple faces
-  - repeated re-recognition after enrollment
-- integrated tests:
-  - `ninjaclawbot` recognize-and-enroll action calls
-  - OpenClaw recognize, ask, enroll flow
-  - sequence with another robot action
-- long-run tests:
-  - repeated captures
-  - repeated recognition cycles
-  - storage growth and cleanup behavior
-  - thermal and memory monitoring during repeated use
+Communication/interface tests:
 
-Risk level:
+- Repeated still captures
+- Known-face recognition
+- Unknown-face detection
+- Enrollment and re-recognition
+- Multi-face detection and ordering
 
-- medium
+Performance tests:
 
-## 12. Quality Gates
+- Measure RAM usage during detection + embedding (target: < 400 MB)
+- Measure single-frame recognition latency (target: < 3 seconds)
+- Check thermal throttling during repeated cycles
 
-Every implementation phase should pass the matching package gate.
+Long-run tests:
 
-### `pi5camera` package gate
+- Repeated capture+recognize cycles (10+ rounds)
+- Storage growth monitoring
+- Recovery after camera disconnect
 
-- `cd pi5camera && uv run --extra dev python -m compileall src tests`
-- `cd pi5camera && uv run --extra dev ruff check src tests`
-- `cd pi5camera && uv run --extra dev ruff format --check src tests`
-- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+Risk level: medium
 
-### Root workspace gate
+---
 
-- `uv run --extra dev python -m compileall .`
-- `uv run --extra dev ruff check .`
-- `uv run --extra dev ruff format --check .`
-- run the package-specific pytest commands from `DevelopmentGuide.md`
+## 7. Quality Gates
 
-### OpenClaw plugin gate
+### `pi5camera` package gate (all phases)
 
-- `npm run typecheck`
-- `npm test`
+```bash
+cd pi5camera && uv run --extra dev python -m compileall src tests
+cd pi5camera && uv run --extra dev ruff check src tests
+cd pi5camera && uv run --extra dev ruff format --check src tests
+cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml
+```
 
-## 13. Raspberry Pi Validation Categories
+### Root workspace gate (when shared files change)
 
-Always separate validation into:
+```bash
+uv run --extra dev python -m compileall .
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+```
 
-- safe smoke tests
-- communication/interface tests
-- actuator-moving tests
-- power-risk and long-run tests
+### OpenClaw plugin gate (Phase R6)
 
-Recommended category mapping for camera work:
+```bash
+cd integrations/openclaw/ninjaclawbot-plugin && npm run typecheck
+cd integrations/openclaw/ninjaclawbot-plugin && npm test
+```
+
+---
+
+## 8. Raspberry Pi Validation Categories
 
 ### Safe smoke tests
 
 - `rpicam-hello --list-cameras`
 - `uv run pi5camera doctor`
 - `uv run pi5camera status`
-- one still capture with no recognition
+- One still capture with no recognition
 
 ### Communication/interface tests
 
-- repeated still captures
-- metadata capture
-- known-face recognition
-- unknown-face detection
-- enrollment and re-recognition
+- Repeated still captures
+- Metadata capture
+- Known-face recognition
+- Unknown-face detection
+- Enrollment and re-recognition
 
-### Actuator-moving tests
+### Performance tests
 
-- camera-only package phases should not move hardware
-- integrated tests may later combine:
-  - one safe servo action
-  - one camera capture or recognition action
-- do not combine motion and recognition until both are stable separately
+- RAM usage measurement: `ps -o rss= -p $PID` during recognition
+- Latency measurement: time from capture command to result
+- Thermal monitoring: `vcgencmd measure_temp` during repeated cycles
 
-### Power-risk and long-run tests
+### Long-run tests
 
-- repeated capture cycles
-- repeated recognition cycles
-- monitor temperature and throttling
-- monitor disk growth in capture and face-store folders
-- verify cleanup and recovery after camera disconnect or failure
+- 10+ capture+recognize cycles
+- Storage growth in `photo/` and `camera_data/`
+- Recovery after camera disconnect and reconnect
 
-## 14. Final Recommendation Before Coding
+---
 
-The recommended implementation direction is:
+## 9. References
 
-- build `pi5camera` as a standalone-first package
-- keep `camera-tool` in `pi5camera`
-- use `Picamera2` as the first camera backend
-- use `face_recognition` as the first local recognition backend
-- keep the recognition backend pluggable for future alternatives
-- separate human-interactive unknown-face naming from agent-safe automation
-- expose only thin typed camera actions through `ninjaclawbot`
-- expose only approved typed camera tools through the OpenClaw plugin
-- validate all standalone camera behavior locally before enabling integrated
-  OpenClaw use
+### Audit sources
 
-This is the most practical and repository-consistent path for the current
-NinjaClawBot workspace.
+All 30 files in `pi5camera/` were audited line-by-line via Serena on 2026-03-27.
 
-## 15. References
+### Face recognition research sources (checked 2026-03-27)
 
-Repository inputs reviewed:
+- MediaPipe: https://developers.google.com/mediapipe
+- OpenCV DNN module: https://docs.opencv.org/4.x/d2/d58/tutorial_table_of_content_dnn.html
+- FaceNet model: https://github.com/davidsandberg/facenet
+- ONNX Runtime ARM64: https://onnxruntime.ai/docs/get-started/with-python.html
+- face_recognition/dlib Pi issues: https://github.com/ageitgey/face_recognition/issues
+- dlib ARM64 compilation OOM: confirmed via field reports and conversation
+  c4ceb32c-5349-4222-b221-c375ebb1b41d
+
+### Previous planning sources
 
 - `README.md`
 - `DevelopmentGuide.md`
 - `InstallationGuide.md`
 - `backup/DevelopmentPlan.md`
 - `backup/MicDevelopment.md`
-- `pyproject.toml`
-- `pi5mic/pyproject.toml`
-- `pi5mic/README.md`
-- `pi5mic/src/pi5mic/__main__.py`
-- `pi5mic/src/pi5mic/cli/mic_tool.py`
-- `pi5mic/src/pi5mic/cli/setup_cmd.py`
-- `pi5mic/src/pi5mic/cli/run_cmd.py`
-- `pi5mic/src/pi5mic/config/config_manager.py`
 - `ninjaclawbot/README.md`
-- `ninjaclawbot/src/ninjaclawbot/actions.py`
-- `ninjaclawbot/src/ninjaclawbot/adapters.py`
-- `ninjaclawbot/src/ninjaclawbot/runtime.py`
-- `ninjaclawbot/src/ninjaclawbot/executor.py`
-- `integrations/openclaw/ninjaclawbot-plugin/src/index.ts`
-- `integrations/openclaw/ninjaclawbot-plugin/src/schemas.ts`
-
-External primary sources checked on 2026-03-24:
-
-- Raspberry Pi Camera Software docs:
-  - https://www.raspberrypi.com/documentation/computers/camera_software.html
-- Picamera2 manual:
-  - https://datasheets.raspberrypi.com/camera/picamera2-manual.pdf
-- Picamera2 GitHub repository:
-  - https://github.com/raspberrypi/picamera2
-- `face_recognition` README:
-  - https://raw.githubusercontent.com/ageitgey/face_recognition/master/README.md
-- `DeepFace` GitHub repository:
-  - https://github.com/serengil/deepface
-- `InsightFace` GitHub repository and licensing note:
-  - https://raw.githubusercontent.com/deepinsight/insightface/master/README.md
-- ONNX Runtime Python platform support:
-  - https://onnxruntime.ai/docs/get-started/with-python.html

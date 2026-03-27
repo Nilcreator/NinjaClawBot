@@ -1,36 +1,22 @@
-"""Compatibility re-exports for standalone pi5camera usage."""
+"""Compatibility re-exports for standalone pi5camera usage.
+
+This module mirrors the public API of ``pi5camera.__init__`` so that
+``from pi5camera.driver import capture_photo`` works as expected by
+the NinjaClawBot driver-layer convention.
+"""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-from pi5camera.config.config_manager import (
+from pi5camera.config.config_manager import (  # noqa: F401
     CONFIG_FILE_NAME,
     DEFAULT_CONFIG,
     CameraConfigManager,
     get_default_config_filepath,
 )
 
-if TYPE_CHECKING:
-    from pi5camera.core.capture import capture_photo
-    from pi5camera.core.enrollment import enroll_face_from_image, enroll_pending_face
-    from pi5camera.core.recognition import recognize_faces
-    from pi5camera.storage.face_store import FaceStore
-
-__all__ = [
-    "CONFIG_FILE_NAME",
-    "DEFAULT_CONFIG",
-    "CameraConfigManager",
-    "FaceStore",
-    "capture_photo",
-    "enroll_face_from_image",
-    "enroll_pending_face",
-    "get_default_config_filepath",
-    "recognize_faces",
-]
-
 
 def __getattr__(name: str):
+    """Lazily resolve heavy symbols on first access."""
     if name == "capture_photo":
         from pi5camera.core.capture import capture_photo
 
@@ -48,7 +34,7 @@ def __getattr__(name: str):
 
         return recognize_faces
     if name == "FaceStore":
-        from pi5camera.storage.face_store import FaceStore
+        from pi5camera.storage.face_index import FaceIndex
 
-        return FaceStore
+        return FaceIndex
     raise AttributeError(f"module 'pi5camera.driver' has no attribute {name!r}")

@@ -7,13 +7,18 @@ from pathlib import Path
 from typing import Any
 
 from pi5camera.core.capture import capture_photo
-from pi5camera.models import FaceResult
-from pi5camera.recognition.face_recognition_backend import build_recognition_backend
-from pi5camera.storage.face_store import FaceStore
+from pi5camera.errors import RecognitionError
+from pi5camera.models import CaptureResult, EncodedFace, FaceResult
+from pi5camera.recognition.mediapipe_opencv_backend import build_recognition_backend
+from pi5camera.storage.face_index import FaceIndex
+from pi5camera.storage.pending_records import PendingRecordManager
 
 
-def _euclidean_distance(left: list[float], right: list[float]) -> float:
-    return math.sqrt(sum((lval - rval) ** 2 for lval, rval in zip(left, right, strict=False)))
+def _euclidean_distance(encoding_a: list[float], encoding_b: list[float]) -> float:
+    """Compute Euclidean distance between two face embeddings."""
+    if len(encoding_a) != len(encoding_b):
+        return float("inf")
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(encoding_a, encoding_b)))
 
 
 def _best_known_match(
@@ -21,22 +26,19 @@ def _best_known_match(
     known_entries: list[dict[str, Any]],
     tolerance: float,
 ) -> tuple[str | None, float | None]:
+    """Find the best matching known face within tolerance."""
     best_name: str | None = None
     best_distance: float | None = None
-    for entry in known_entries:
-        candidate = entry.get("encoding", [])
-        if not isinstance(candidate, list):
-            continue
-        distance = _euclidean_distance(
-            [float(value) for value in encoding],
-            [float(value) for value in candidate],
-        )
-        if best_distance is None or distance < best_distance:
-            best_distance = distance
-            best_name = str(entry.get("name", "")).strip() or None
 
-    if best_distance is None or best_distance > tolerance:
-        return None, best_distance
+    for entry in known_entries:
+        known_encoding = entry.get("encoding", [])
+        if not known_encoding:
+            continue
+        distance = _euclidean_distance(encoding, known_encoding)
+        if distance <= tolerance and (best_distance is None or distance < best_distance):
+            best_name = str(entry.get("name", ""))
+            best_distance = distance
+
     return best_name, best_distance
 
 
@@ -45,73 +47,103 @@ def recognize_faces(
     *,
     image_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Recognize faces from a live capture or an existing image file."""
-    store = FaceStore(config)
-    store.ensure_layout()
-    store.purge_expired_pending()
-    backend = build_recognition_backend(config)
+    """Run one face-recognition cycle.
 
-    photo_metadata: dict[str, Any] = {}
+    If *image_path* is ``None`` a photo is captured first.
+    """
+    recognition_config = config.get("recognition", {})
+    tolerance = float(recognition_config.get("tolerance", 0.6))
+
+    # Build the backend first — fail fast before capturing.
+    try:
+        backend = build_recognition_backend(config)
+    except Exception as exc:
+        raise RecognitionError(f"Recognition backend unavailable: {exc}") from exc
+
+    # Capture or load photo.
     if image_path is None:
-        capture_result = capture_photo(config, filename_prefix="recognition")
-        source_photo = capture_result.path
-        photo_metadata = capture_result.metadata
+        result: CaptureResult = capture_photo(config, filename_prefix="recognize")
+        photo_path = result.path
+        photo_metadata = result.metadata
     else:
-        source_photo = image_path.expanduser().resolve()
+        photo_path = Path(image_path).expanduser().resolve()
+        if not photo_path.exists():
+            raise RecognitionError(f"Image file does not exist: {photo_path}")
+        photo_metadata: dict[str, Any] = {}
 
-    detected = backend.detect_and_encode(source_photo)
-    tolerance = float(config.get("recognition", {}).get("tolerance", 0.6))
-    known_entries = store.load_known_entries()
+    # Detect and encode.
+    try:
+        detected: list[EncodedFace] = backend.detect_and_encode(photo_path)
+    except RecognitionError:
+        raise
+    except Exception as exc:
+        raise RecognitionError(f"Face detection failed: {exc}") from exc
 
-    faces: list[FaceResult] = []
+    # Load known faces for comparison.
+    index = FaceIndex(config)
+    known_entries = index.load_known_entries()
+
+    face_results: list[FaceResult] = []
     unknown_faces: list[dict[str, Any]] = []
     recognized_names: list[str] = []
 
-    for index, encoded_face in enumerate(detected, start=1):
-        face_id = f"face-{index}"
+    for i, encoded_face in enumerate(detected, start=1):
+        face_id = f"face-{i}"
         name, distance = _best_known_match(encoded_face.encoding, known_entries, tolerance)
-        status = "known" if name else "unknown"
+
         if name:
+            face_results.append(
+                FaceResult(
+                    face_id=face_id,
+                    index=i,
+                    bounding_box=encoded_face.bounding_box,
+                    status="known",
+                    name=name,
+                    match_distance=distance,
+                )
+            )
             recognized_names.append(name)
-        result = FaceResult(
-            face_id=face_id,
-            index=index,
-            bounding_box=encoded_face.bounding_box,
-            status=status,
-            name=name,
-            match_distance=distance,
-        )
-        faces.append(result)
-        if status == "unknown":
+        else:
+            face_results.append(
+                FaceResult(
+                    face_id=face_id,
+                    index=i,
+                    bounding_box=encoded_face.bounding_box,
+                    status="unknown",
+                )
+            )
             unknown_faces.append(
                 {
-                    **result.to_dict(),
-                    "encoding": [float(value) for value in encoded_face.encoding],
+                    "face_id": face_id,
+                    "index": i,
+                    "bounding_box": encoded_face.bounding_box.to_dict(),
+                    "encoding": encoded_face.encoding,
                 }
             )
 
+    # Save pending record if there are unknown faces.
     recognition_id: str | None = None
     if unknown_faces:
-        pending = store.save_pending_recognition(
-            photo_path=source_photo,
+        pending_manager = PendingRecordManager(config)
+        pending_data = pending_manager.save_pending_recognition(
+            photo_path=photo_path,
             photo_metadata=photo_metadata,
             unknown_faces=unknown_faces,
         )
-        recognition_id = str(pending["recognition_id"])
-        crops_by_face = {
-            str(face["face_id"]): face.get("crop_path") for face in pending.get("faces", [])
-        }
-        for result in faces:
-            result.crop_path = crops_by_face.get(result.face_id)
+        recognition_id = pending_data["recognition_id"]
+
+        # Update face results with crop paths.
+        face_id_to_crop = {face["face_id"]: face.get("crop_path") for face in pending_data["faces"]}
+        for face_result in face_results:
+            if face_result.status == "unknown":
+                face_result.crop_path = face_id_to_crop.get(face_result.face_id)
 
     return {
-        "recognition_id": recognition_id,
-        "photo_path": str(source_photo),
-        "photo_metadata": photo_metadata,
-        "face_count": len(faces),
-        "unknown_count": len(unknown_faces),
+        "photo_path": str(photo_path),
+        "face_count": len(face_results),
         "recognized_names": recognized_names,
         "needs_enrollment": bool(unknown_faces),
-        "requires_disambiguation": len(unknown_faces) > 1,
-        "faces": [face.to_dict() for face in faces],
+        "unknown_count": len(unknown_faces),
+        "recognition_id": recognition_id,
+        "faces": [face.to_dict() for face in face_results],
     }

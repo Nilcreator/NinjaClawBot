@@ -25,13 +25,8 @@ def status(ctx: click.Context) -> None:
     click.echo(f"Python:      {summary['python_executable']}")
     click.echo(f"Photo dir:   {summary['photo_dir']}")
     click.echo(f"Data dir:    {summary['data_dir']}")
-    click.echo(f"Resolution: {summary['resolution']['width']}x{summary['resolution']['height']}")
+    click.echo(f"Resolution:  {summary['resolution']['width']}x{summary['resolution']['height']}")
     click.echo(f"Warm-up:     {summary['warmup_seconds']:.1f}s")
-    if summary["system_python"] is not None:
-        click.echo(
-            f"System Py:   {summary['system_python']} "
-            f"({'ok' if summary['system_python_available'] else 'missing'})"
-        )
     click.echo(f"Camera:      {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
         f"Recognition: {summary['recognition_backend']} ({summary['recognition_backend_state']})"

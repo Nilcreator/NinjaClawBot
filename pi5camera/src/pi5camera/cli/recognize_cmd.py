@@ -7,8 +7,6 @@ from pathlib import Path
 import click
 
 from pi5camera.cli._common import load_manager
-from pi5camera.core.enrollment import enroll_pending_face
-from pi5camera.core.recognition import recognize_faces
 from pi5camera.errors import (
     CaptureError,
     ConfigError,
@@ -60,6 +58,8 @@ def recognize_cmd(
     """Capture or load an image and run face recognition."""
     try:
         manager = load_manager(ctx.obj.get("config_file"))
+        from pi5camera.core.recognition import recognize_faces
+
         result = recognize_faces(manager.config, image_path=image_file)
     except (CaptureError, ConfigError, RecognitionError, StorageError, ValueError) as exc:
         raise click.ClickException(str(exc)) from exc
@@ -84,6 +84,8 @@ def recognize_cmd(
         if not name:
             continue
         try:
+            from pi5camera.core.enrollment import enroll_pending_face
+
             enrollment = enroll_pending_face(
                 manager.config,
                 recognition_id=recognition_id,

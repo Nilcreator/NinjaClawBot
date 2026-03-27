@@ -1,3 +1,5 @@
+"""Tests for lightweight pi5camera startup."""
+
 from __future__ import annotations
 
 import json
@@ -26,14 +28,14 @@ def test_importing_pi5camera_package_is_lightweight() -> None:
         "import json, sys, pi5camera; "
         "print(json.dumps({"
         "'capture': 'pi5camera.core.capture' in sys.modules, "
-        "'face_store': 'pi5camera.storage.face_store' in sys.modules, "
+        "'face_index': 'pi5camera.storage.face_index' in sys.modules, "
         "'pil': 'PIL' in sys.modules"
         "}))"
     )
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout.strip())
-    assert payload == {"capture": False, "face_store": False, "pil": False}
+    assert payload == {"capture": False, "face_index": False, "pil": False}
 
 
 def test_cli_help_is_lightweight() -> None:
@@ -45,11 +47,11 @@ def test_cli_help_is_lightweight() -> None:
         "print(json.dumps({"
         "'exit_code': run.exit_code, "
         "'capture': 'pi5camera.core.capture' in sys.modules, "
-        "'face_store': 'pi5camera.storage.face_store' in sys.modules, "
+        "'face_index': 'pi5camera.storage.face_index' in sys.modules, "
         "'pil': 'PIL' in sys.modules"
         "}))"
     )
 
     assert result.returncode == 0, result.stderr
     payload = json.loads(result.stdout.strip())
-    assert payload == {"exit_code": 0, "capture": False, "face_store": False, "pil": False}
+    assert payload == {"exit_code": 0, "capture": False, "face_index": False, "pil": False}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,9 +14,14 @@ def deep_copy_dict(data: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(data)
 
 
+def microsecond_timestamp() -> str:
+    """Return a UTC timestamp with microsecond resolution for unique filenames."""
+    return datetime.now(UTC).strftime("%Y%m%d-%H%M%S-%f")
+
+
 @dataclass(slots=True)
 class FaceBoundingBox:
-    """A face bounding box using the face_recognition location format."""
+    """A face bounding box in (top, right, bottom, left) format."""
 
     top: int
     right: int
@@ -23,7 +29,7 @@ class FaceBoundingBox:
     left: int
 
     def as_crop_box(self) -> tuple[int, int, int, int]:
-        """Return a Pillow-friendly crop box."""
+        """Return a Pillow-friendly crop box (left, top, right, bottom)."""
         return (self.left, self.top, self.right, self.bottom)
 
     def to_dict(self) -> dict[str, int]:

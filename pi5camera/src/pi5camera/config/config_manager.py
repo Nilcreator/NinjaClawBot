@@ -13,6 +13,7 @@ CONFIG_FILE_NAME = "camera.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "camera": {
+        "backend": "picamera2",
         "width": 1280,
         "height": 720,
         "warmup_seconds": 1.0,
@@ -20,7 +21,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "autofocus_mode": "continuous",
     },
     "recognition": {
-        "backend": "face_recognition",
+        "backend": "mediapipe_opencv",
         "tolerance": 0.6,
         "save_unknown_crops": True,
         "pending_ttl_seconds": 86_400,
@@ -37,7 +38,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 
 def get_default_config_filepath() -> Path:
-    """Return the default `camera.json` path."""
+    """Return the default ``camera.json`` path relative to cwd."""
     return Path.cwd() / CONFIG_FILE_NAME
 
 
@@ -47,14 +48,17 @@ def _merge_config(
     *,
     path: str,
 ) -> dict[str, Any]:
+    """Deep-merge *overrides* into *defaults* with validation."""
     merged = deep_copy_dict(defaults)
     for key, value in overrides.items():
         if key in merged and isinstance(merged[key], dict):
             if value is None:
-                merged[key] = None
+                # Keep the default dict rather than nullifying the section.
                 continue
             if not isinstance(value, dict):
-                raise ConfigError(f"Expected '{path}.{key}' to be an object.")
+                raise ConfigError(
+                    f"Expected '{path}.{key}' to be an object, got {type(value).__name__}."
+                )
             merged[key] = _merge_config(merged[key], value, path=f"{path}.{key}")
             continue
         merged[key] = value
@@ -62,23 +66,24 @@ def _merge_config(
 
 
 def _normalize_absolute_dir(raw_value: Any, fallback: Path) -> str:
+    """Resolve a directory value to an absolute string path."""
     if raw_value in (None, ""):
         return str(fallback)
     return str(Path(str(raw_value)).expanduser().resolve())
 
 
 def _apply_runtime_defaults(config: dict[str, Any], active_root: Path) -> dict[str, Any]:
+    """Fill in root-aware path defaults."""
     paths = config.get("paths")
     if not isinstance(paths, dict):
         raise ConfigError("Config key 'paths' must be an object.")
-
     paths["photo_dir"] = _normalize_absolute_dir(paths.get("photo_dir"), active_root / "photo")
     paths["data_dir"] = _normalize_absolute_dir(paths.get("data_dir"), active_root / "camera_data")
     return config
 
 
 class CameraConfigManager:
-    """Manage `camera.json` loading, saving, export, and import."""
+    """Manage ``camera.json`` loading, saving, export, and import."""
 
     def __init__(self, config_path: Path | str | None = None) -> None:
         self._path = (
@@ -110,7 +115,7 @@ class CameraConfigManager:
 
     @property
     def config(self) -> dict[str, Any]:
-        """Return a copy of the active config."""
+        """Return a deep copy of the active config."""
         return deep_copy_dict(self._config)
 
     def load(self) -> dict[str, Any]:

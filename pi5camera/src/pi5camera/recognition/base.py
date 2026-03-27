@@ -9,7 +9,8 @@ from pi5camera.models import EncodedFace
 
 
 class RecognitionBackend(Protocol):
-    """Protocol for face-detection and encoding backends."""
+    """Protocol for face detection and encoding backends."""
 
     def detect_and_encode(self, image_path: Path) -> list[EncodedFace]:
-        """Return all detected faces with embeddings for the given image."""
+        """Detect all faces in the given image and return their encodings."""
+        ...

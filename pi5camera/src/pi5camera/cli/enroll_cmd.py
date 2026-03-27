@@ -7,7 +7,6 @@ from pathlib import Path
 import click
 
 from pi5camera.cli._common import load_manager
-from pi5camera.core.enrollment import enroll_face_from_image, enroll_pending_face
 from pi5camera.errors import ConfigError, EnrollmentError, RecognitionError, StorageError
 
 
@@ -33,6 +32,8 @@ def enroll_cmd(
     try:
         manager = load_manager(ctx.obj.get("config_file"))
         if recognition_id and face_id:
+            from pi5camera.core.enrollment import enroll_pending_face
+
             result = enroll_pending_face(
                 manager.config,
                 recognition_id=recognition_id,
@@ -40,6 +41,8 @@ def enroll_cmd(
                 name=name,
             )
         elif image_file is not None:
+            from pi5camera.core.enrollment import enroll_face_from_image
+
             result = enroll_face_from_image(manager.config, name=name, image_path=image_file)
         else:
             raise click.ClickException(

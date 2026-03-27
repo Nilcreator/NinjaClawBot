@@ -30,4 +30,4 @@ def capture_cmd(ctx: click.Context, output: Path | None, prefix: str) -> None:
 
     click.echo(f"Saved photo to {result.path}")
     if result.metadata:
-        click.echo(f"Metadata keys: {', '.join(sorted(result.metadata))}")
+        click.echo(f"Metadata keys: {', '.join(sorted(str(k) for k in result.metadata))}")

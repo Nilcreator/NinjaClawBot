@@ -39,12 +39,11 @@ def doctor(ctx: click.Context) -> None:
     if not _is_writable_directory(summary["data_dir"]):
         warnings.append(f"Camera data directory is not writable: {summary['data_dir']}")
     if not summary["camera_backend_available"]:
-        warnings.append(summary["camera_backend_help_text"])
+        msg = summary["camera_backend_help_text"] or "Camera backend is not available."
+        warnings.append(msg)
     if not summary["recognition_backend_available"]:
-        warnings.append(
-            summary["recognition_backend_help_text"]
-            or "The face_recognition Python package is not importable in this environment."
-        )
+        msg = summary["recognition_backend_help_text"] or "Recognition backend is not available."
+        warnings.append(msg)
 
     click.echo("pi5camera doctor")
     click.echo("----------------")
@@ -52,15 +51,9 @@ def doctor(ctx: click.Context) -> None:
     click.echo(f"Python:      {summary['python_executable']}")
     click.echo(f"Photo dir:   {summary['photo_dir']}")
     click.echo(f"Data dir:    {summary['data_dir']}")
-    if summary["system_python"] is not None:
-        click.echo(
-            f"System Py:   {summary['system_python']} "
-            f"({'ok' if summary['system_python_available'] else 'missing'})"
-        )
-    click.echo(f"Camera backend: {summary['camera_backend']} ({summary['camera_backend_state']})")
+    click.echo(f"Camera:      {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
-        f"Recognition backend: {summary['recognition_backend']} "
-        f"({summary['recognition_backend_state']})"
+        f"Recognition: {summary['recognition_backend']} ({summary['recognition_backend_state']})"
     )
 
     if warnings:

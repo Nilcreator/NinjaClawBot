@@ -25,3 +25,7 @@ class EnrollmentError(CameraError):
 
 class StorageError(CameraError):
     """Raised when camera files or indexes cannot be saved or loaded."""
+
+
+class BackendNotAvailableError(CameraError):
+    """Raised when a required backend (camera or recognition) is not importable."""
