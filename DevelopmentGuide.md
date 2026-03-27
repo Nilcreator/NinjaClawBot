@@ -574,17 +574,19 @@ Use these four buckets whenever hardware-facing behavior changes.
 
 ### `pi5camera` says `Picamera2 is not importable`
 
-This usually means the Raspberry Pi camera stack is incomplete in the active
-environment. Common causes are:
+This usually means the Raspberry Pi camera stack is not visible inside the
+active `.venv`. Common causes are:
 
-- `python3-picamera2` or `python3-libcamera` is missing in the system Python
-- the current `.venv` is stale and no longer reflects the system camera stack
-- the active `.venv` can import a stale or partial camera package before it
-  reaches the healthy Raspberry Pi system copy
+- `python3-picamera2` or `python3-libcamera` is missing from the system Python
+- the `.venv` was created by `uv` with a managed Python that cannot see system
+  site-packages (the most common cause)
+- the `raspberry-pi-system-packages.pth` file is missing from the venv's
+  site-packages directory
 
-The current fix path uses a targeted import finder for Raspberry Pi camera and
-recognition modules, so unrelated venv packages such as `Pillow` stay in the
-virtual environment.
+The current fix uses a `.pth` file injected into the venv's site-packages that
+adds `/usr/lib/python3/dist-packages` to `sys.path`, making system-installed
+`picamera2` and `libcamera` importable regardless of which Python interpreter
+`uv` uses for the venv.
 
 Fastest recovery for the full workspace:
 
@@ -609,57 +611,54 @@ sudo apt install -y python3-picamera2 python3-libcamera python3-venv
 rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
+
+# Set .python-version to match the system Python so uv uses it.
+/usr/bin/python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" > .python-version
+
 uv sync --active --extra dev
-.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
+
+# Inject Raspberry Pi system dist-packages path.
+SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
+echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
+
 uv run pi5camera doctor
 ```
 
-### `pi5camera` says `face_recognition` is not importable
+### `pi5camera` recognition backend unavailable
 
-This means the recognition backend is not usable in the active environment. The
-most common Raspberry Pi causes are:
+The `pi5camera` recognition backend uses `mediapipe_opencv`. On Raspberry Pi
+(ARM64), face detection uses OpenCV Haar cascade because MediaPipe is not
+available on ARM. This is normal and expected.
 
-- the Raspberry Pi image does not provide the recognition packages and the
-  Python fallback has not been installed yet
-- the active `.venv` contains a stale or corrupted compiled extension such as
-  `dlib`, which shadows the system package
+If `pi5camera doctor` shows `Recognition: mediapipe_opencv (missing)`:
 
-Fastest recovery for the full workspace:
+- confirm `cv2` (OpenCV) is installed:
+  ```bash
+  uv run python -c "import cv2; print(cv2.__version__)"
+  ```
+- if missing, install it:
+  ```bash
+  uv pip install opencv-python-headless
+  ```
+- then recheck:
+  ```bash
+  uv run pi5camera doctor
+  ```
 
-```bash
-cd ~/NinjaClawBot
-./scripts/bootstrap-rpi-workspace.sh
-```
+Expected healthy output:
 
-Standalone `pi5camera` recovery:
-
-```bash
-cd ~/pi5camera
-./scripts/bootstrap-rpi-standalone.sh
-```
-
-Manual fallback if your Raspberry Pi image does not provide
-`python3-face-recognition`:
-
-```bash
-rm -rf .venv
-/usr/bin/python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-uv sync --active --extra dev
-uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
-.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
-uv run python -c "import face_recognition; print('face-recognition-ok')"
-uv run pi5camera doctor
+```text
+Camera:      picamera2 (ready)
+Recognition: mediapipe_opencv (ready)
+Detection:   opencv_haar
 ```
 
 Note:
 
-- `pi5camera recognize` now checks the recognition backend before it takes a
-  live photo, so a broken recognition environment should fail fast instead of
-  capturing a new image first.
-- if doctor reports `_dlib_pybind11 ... file too short`, treat it as a stale or
-  corrupted `.venv` binary and recreate `.venv` from scratch with the bootstrap
-  installer
+- `pi5camera recognize` checks the recognition backend before it takes a
+  live photo, so a broken recognition environment fails fast instead of
+  capturing a new image first
+- face data is stored in `camera_data/` under your project root
 
 ### `pi5mic` says `PortAudio library not found`
 

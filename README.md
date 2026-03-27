@@ -161,18 +161,14 @@ If you already know that you want always-on voice input too, use:
 The bootstrap installer:
 
 - installs the Raspberry Pi system packages needed by `pi5camera` and `pi5mic`
-- installs optional camera and recognition apt packages for `pi5camera` when
-  they are available on the Raspberry Pi image
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
+- detects the system Python version and writes it to `.python-version` so `uv`
+  uses the same interpreter
 - runs `uv sync --active --extra dev`
-- installs the `pi5camera` startup hook inside `.venv` so plain `uv run python`
-  and `uv run pi5camera ...` commands resolve selected Raspberry Pi camera and
-  recognition modules from the system Python before user imports
-- prefers the Raspberry Pi system recognition stack on ARM boards and only
-  falls back to a Python package install when those system packages are not
-  available
+- injects a `.pth` file into the venv that adds `/usr/lib/python3/dist-packages`
+  to `sys.path`, ensuring `picamera2` and `libcamera` are always importable
 - finishes with `uv run pi5camera doctor` plus a
-  `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
+  `uv run python -c "import libcamera, picamera2, cv2; print('imports-ok')"`
   check
 
 On non-Raspberry Pi development machines, if you already know that you want
@@ -270,6 +266,7 @@ This project is licensed under the **MIT License**.
 | 構成 | 現在の検証方向 |
 | --- | --- |
 | 本体 | Raspberry Pi 5 |
+| カメラ | `pi5camera` 対応の Raspberry Pi カメラモジュール |
 | 表示 | `pi5disp` 対応の SPI ディスプレイ |
 | マイク | `pi5mic` を使う USB マイクまたはマイクモジュール |
 | 音 | `pi5buzzer` 対応のパッシブブザー |
@@ -294,9 +291,10 @@ This project is licensed under the **MIT License**.
 | `pi5servo` | サーボ校正、動作制御、モーション管理 | `servo-tool` |
 | `pi5disp` | 画面初期化、描画、明るさや回転設定 | `display-tool` |
 | `pi5buzzer` | 音再生、音パターン確認 | `buzzer-tool` |
+| `pi5camera` | 写真撮影、顔認識、顔登録 | `camera-tool` |
 | `pi5mic` | 録音、STT、OpenClaw 引き渡し、常時待機音声入力 | `mic-tool`, `voiceinput-tool` |
 | `pi5vl53l0x` | 距離センサー設定と確認 | `sensor-tool` |
-| `ninjaclawbot` | 統合アクション、表情、モーション再生 | `expression-tool`, `movement-tool` |
+| `ninjaclawbot` | 統合アクション、表情、モーション再生、カメラ連携 | `camera-tool`, `expression-tool`, `movement-tool` |
 
 ## 使い始める道順
 
@@ -319,6 +317,7 @@ git clone https://github.com/Nilcreator/NinjaClawBot.git
 cd NinjaClawBot
 uv sync --extra dev
 uv run ninjaclawbot health-check
+uv run pi5camera camera-tool
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool
@@ -405,6 +404,7 @@ uv sync --extra dev --extra voiceinput
 | 元件 | 目前驗證方向 |
 | --- | --- |
 | 主機 | Raspberry Pi 5 |
+| 相機 | 透過 `pi5camera` 使用的 Raspberry Pi 相機模組 |
 | 顯示器 | `pi5disp` 支援的 SPI 顯示器 |
 | 麥克風 | 透過 `pi5mic` 使用的 USB 麥克風或麥克風模組 |
 | 聲音 | `pi5buzzer` 支援的被動式蜂鳴器 |
@@ -429,9 +429,10 @@ uv sync --extra dev --extra voiceinput
 | `pi5servo` | 伺服馬達校正、動作控制、動作資產 | `servo-tool` |
 | `pi5disp` | 顯示初始化、畫面渲染、亮度與旋轉設定 | `display-tool` |
 | `pi5buzzer` | 聲音播放與音效測試 | `buzzer-tool` |
+| `pi5camera` | 拍照、臉部辨識、臉部登錄 | `camera-tool` |
 | `pi5mic` | 錄音、STT、OpenClaw 交接、常時語音輸入 | `mic-tool`, `voiceinput-tool` |
 | `pi5vl53l0x` | 距離感測器設定與檢查 | `sensor-tool` |
-| `ninjaclawbot` | 整合動作、表情、動作播放 | `expression-tool`, `movement-tool` |
+| `ninjaclawbot` | 整合動作、表情、動作播放、相機連動 | `camera-tool`, `expression-tool`, `movement-tool` |
 
 ## 依需求選擇路徑
 
@@ -454,6 +455,7 @@ git clone https://github.com/Nilcreator/NinjaClawBot.git
 cd NinjaClawBot
 uv sync --extra dev
 uv run ninjaclawbot health-check
+uv run pi5camera camera-tool
 uv run pi5servo servo-tool
 uv run pi5disp display-tool
 uv run pi5buzzer buzzer-tool

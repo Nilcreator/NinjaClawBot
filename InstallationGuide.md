@@ -304,60 +304,8 @@ What the bootstrap installer does:
   `uv run python -c "import libcamera, picamera2, cv2; print('imports-ok')"`
   check inside the verified environment
 
-Manual fallback if you do not want to use the script:
-
-```bash
-sudo apt update
-sudo apt install -y python3-picamera2 python3-libcamera python3-venv
-cd ~/NinjaClawBot
-rm -rf .venv
-/usr/bin/python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-
-# Set .python-version to match the system Python so uv uses it.
-/usr/bin/python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" > .python-version
-
-uv sync --active --extra dev
-
-# Inject Raspberry Pi system dist-packages path into the venv so
-# picamera2 and libcamera are importable regardless of interpreter.
-SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
-echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
-
-uv run pi5camera doctor
-```
-
-Manual fallback with the optional wake-word listener:
-
-```bash
-sudo apt update
-sudo apt install -y python3-picamera2 python3-libcamera python3-venv
-cd ~/NinjaClawBot
-rm -rf .venv
-/usr/bin/python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-
-# Set .python-version to match the system Python.
-/usr/bin/python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" > .python-version
-
-uv sync --active --extra dev --extra voiceinput
-
-# Inject Raspberry Pi system dist-packages path.
-SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
-echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
-
-uv run pi5camera doctor
-```
-
-Why the bootstrap installer is recommended:
-
-- it installs the normal development workspace
-- it also installs the optional `openWakeWord` dependency used by the always-on
-  `pi5mic` listener when `--voiceinput` is used
-- it detects the system Python version and updates `.python-version` so `uv`
-  uses the same interpreter as `/usr/bin/python3`
-- it injects a `.pth` file that adds system dist-packages to the venv path,
-  ensuring `picamera2` and `libcamera` remain importable
+> **Prefer the bootstrap script above.** If you need to install manually
+> without the script, see [Appendix A — Manual install fallback](#appendix-a-manual-install-fallback).
 
 ### 5.3 Verify the workspace install
 
@@ -1505,6 +1453,40 @@ Need help later?
   - reboot after editing
 - `PortAudio library not found`:
   - install `libportaudio2` and `portaudio19-dev`
+
+<a id="appendix-a-manual-install-fallback"></a>
+
+### Manual install fallback
+
+If you do not want to use the bootstrap script, you can install manually:
+
+```bash
+sudo apt update
+sudo apt install -y python3-picamera2 python3-libcamera python3-venv
+cd ~/NinjaClawBot
+rm -rf .venv
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+
+# Set .python-version to match the system Python so uv uses it.
+/usr/bin/python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" > .python-version
+
+uv sync --active --extra dev
+
+# Inject Raspberry Pi system dist-packages path into the venv so
+# picamera2 and libcamera are importable regardless of interpreter.
+SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
+echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
+
+uv run pi5camera doctor
+```
+
+With the optional wake-word listener, replace `uv sync --active --extra dev`
+with:
+
+```bash
+uv sync --active --extra dev --extra voiceinput
+```
 
 ### Alternative commands
 
