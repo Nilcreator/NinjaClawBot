@@ -2,6 +2,63 @@
 
 ## 2026-03-27
 
+### `pi5camera` Targeted System Import Finder And Lightweight CLI Startup
+
+Summary:
+
+- audited a new Raspberry Pi standalone failure where `uv run pi5camera --help`
+  crashed in `PIL`, while `uv run python -c "import libcamera, picamera2, face_recognition"`
+  still failed with `No module named 'libcamera._libcamera'`
+- identified that the previous startup hook was too broad because it pushed the
+  full Raspberry Pi system package path ahead of the venv, which let unrelated
+  system packages shadow healthy venv packages
+- identified that `pi5camera.__init__` and the CLI entry point were still too
+  eager, so even `--help` imported capture, storage, and Pillow before the CLI
+  was usable
+- replaced the broad sys.path override with a targeted system-module finder for
+  Raspberry Pi packages such as `libcamera`, `picamera2`, `face_recognition`,
+  `face_recognition_models`, and `dlib`
+- updated the generated startup hook and `sitecustomize.py` fallback to install
+  that targeted finder instead of prepending the whole system package tree
+- made the public package exports lazy and switched the Click entry point to a
+  lazy command loader with static short-help text, so `uv run pi5camera --help`
+  no longer depends on Pillow or camera/recognition backends at startup
+- added regression coverage for lightweight startup and the new targeted finder
+
+Files changed:
+
+- [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+- [pi5camera/src/sitecustomize.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/sitecustomize.py)
+- [pi5camera/src/pi5camera/__init__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/__init__.py)
+- [pi5camera/src/pi5camera/__main__.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/__main__.py)
+- [pi5camera/src/pi5camera/driver.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/driver.py)
+- [pi5camera/tests/test_cli_startup.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_cli_startup.py)
+- [pi5camera/tests/test_environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_environment.py)
+- [pi5camera/tests/test_sitecustomize.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_sitecustomize.py)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- copied standalone installs need the Raspberry Pi system camera stack, but
+  they should not globally replace unrelated venv packages
+- `--help`, `status`, and other low-risk commands should be able to start even
+  when the camera or image stack is partially broken
+- the targeted finder model is safer than broad sys.path reordering because it
+  only intercepts the Raspberry Pi modules that need to come from system Python
+
+Lint and test results:
+
+- `cd pi5camera && uv run --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --extra dev ruff check src tests`
+- `cd pi5camera && uv run --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --extra dev pytest -q tests -c pyproject.toml`
+- `cd pi5camera && uv run --extra dev pi5camera --help`
+- result: `18 passed`
+
 ### `pi5camera` Copied-Standalone Startup Hook Fix For `uv run` Imports
 
 Summary:

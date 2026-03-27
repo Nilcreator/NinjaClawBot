@@ -296,8 +296,8 @@ What the bootstrap installer does:
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
 - installs the `pi5camera` startup hook inside `.venv` so plain `uv run python`
-  and `uv run pi5camera ...` commands can see the Raspberry Pi system camera
-  stack before user imports
+  and `uv run pi5camera ...` commands resolve selected Raspberry Pi camera and
+  recognition modules from the system Python before user imports
 - prefers the Raspberry Pi system recognition stack on ARM boards and only
   falls back to a Python package install when those system packages are not
   available

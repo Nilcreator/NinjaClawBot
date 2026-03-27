@@ -10,6 +10,7 @@ from pi5camera.core.camera_backend import _import_picamera2_module
 from pi5camera.environment import (
     _PTH_FILE_NAME,
     _STARTUP_HELPER_FILE_NAME,
+    _SYSTEM_IMPORT_FINDER_MARKER,
     describe_face_recognition_environment,
     describe_picamera2_environment,
     inject_system_site_packages,
@@ -146,8 +147,7 @@ def test_inject_system_site_packages_adds_paths_and_writes_pth(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
-    """When injection is called with fake system paths, sys.path is extended
-    and a .pth file is written for persistence."""
+    """When injection runs, it installs the targeted finder and startup hook."""
     fake_dist = str(tmp_path / "fake-dist-packages")
     monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
     monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
@@ -181,9 +181,14 @@ def test_inject_system_site_packages_adds_paths_and_writes_pth(
     result = inject_system_site_packages(system_python=fake_system_python)
 
     assert result is True
-    assert sys.path.index(fake_dist) <= 1
-    while fake_dist in sys.path:
-        sys.path.remove(fake_dist)
+    assert any(
+        getattr(finder, "marker", None) == _SYSTEM_IMPORT_FINDER_MARKER for finder in sys.meta_path
+    )
+    sys.meta_path[:] = [
+        finder
+        for finder in sys.meta_path
+        if getattr(finder, "marker", None) != _SYSTEM_IMPORT_FINDER_MARKER
+    ]
 
     pth_file = site_packages / _PTH_FILE_NAME
     assert pth_file.exists()

@@ -229,8 +229,9 @@ What this does:
   `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
 - installs a venv-local startup hook so plain `uv run python` and
-  `uv run pi5camera ...` commands can see the Raspberry Pi system camera
-  packages before any user imports happen
+  `uv run pi5camera ...` commands resolve selected Raspberry Pi camera and
+  recognition modules from the system Python before user imports happen,
+  without overriding unrelated venv packages such as `Pillow`
 - prefers the Raspberry Pi system recognition stack on ARM boards and only
   falls back to a Python package install if those system packages are not
   available
@@ -797,9 +798,10 @@ This usually means one of two things:
 2. `python3-picamera2` is installed in `/usr/bin/python3`, but your local
    `.venv` was created without system site packages
 
-`pi5camera` includes a runtime auto-fix that detects this mismatch and injects
-the system dist-packages paths automatically. If `pi5camera doctor` shows
-`picamera2 (ready)`, the auto-fix is working and no manual action is needed.
+`pi5camera` includes a runtime auto-fix that detects this mismatch and installs
+a targeted import finder for Raspberry Pi camera modules. If `pi5camera doctor`
+shows `picamera2 (ready)`, the auto-fix is working and no manual action is
+needed.
 
 If doctor still shows `picamera2 (system-only)` or `picamera2 (missing)`,
 first install the Raspberry Pi camera stack:

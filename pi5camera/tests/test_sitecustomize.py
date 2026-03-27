@@ -5,34 +5,39 @@ import sys
 import sitecustomize
 
 
-def test_prepend_system_paths_moves_paths_ahead_of_existing_entries() -> None:
-    fake_path = "/tmp/fake-dist-packages"
-    sys.path.append(fake_path)
-
-    sitecustomize._prepend_system_paths([fake_path])
-
-    assert sys.path.index(fake_path) <= 1
-    while fake_path in sys.path:
-        sys.path.remove(fake_path)
+def test_matches_target_detects_supported_modules() -> None:
+    assert sitecustomize._matches_target("libcamera") is True
+    assert sitecustomize._matches_target("libcamera._libcamera") is True
+    assert sitecustomize._matches_target("PIL") is False
 
 
-def test_needs_system_paths_detects_broken_module_import(monkeypatch) -> None:
+def test_ensure_rpi_system_packages_visible_installs_targeted_finder(monkeypatch) -> None:
     monkeypatch.setattr(sitecustomize.platform, "system", lambda: "Linux")
     monkeypatch.setattr(sitecustomize, "_is_virtual_environment", lambda: True)
+    monkeypatch.setattr(
+        sitecustomize,
+        "_get_system_site_packages",
+        lambda system_python=sitecustomize.SYSTEM_PYTHON: ["/usr/lib/python3/dist-packages"],
+    )
+    sys.meta_path[:] = [
+        finder
+        for finder in sys.meta_path
+        if getattr(finder, "marker", None) != sitecustomize.SYSTEM_FINDER_MARKER
+    ]
 
-    def fake_import_module(name: str):
-        if name == "picamera2":
-            raise ModuleNotFoundError("No module named 'libcamera._libcamera'")
-        return object()
+    sitecustomize.ensure_rpi_system_packages_visible()
 
-    monkeypatch.setattr(sitecustomize.importlib, "import_module", fake_import_module)
+    assert any(
+        getattr(finder, "marker", None) == sitecustomize.SYSTEM_FINDER_MARKER
+        for finder in sys.meta_path
+    )
+    sys.meta_path[:] = [
+        finder
+        for finder in sys.meta_path
+        if getattr(finder, "marker", None) != sitecustomize.SYSTEM_FINDER_MARKER
+    ]
 
-    assert sitecustomize._needs_system_paths(("picamera2",)) is True
 
-
-def test_needs_system_paths_returns_false_when_modules_import(monkeypatch) -> None:
-    monkeypatch.setattr(sitecustomize.platform, "system", lambda: "Linux")
-    monkeypatch.setattr(sitecustomize, "_is_virtual_environment", lambda: True)
-    monkeypatch.setattr(sitecustomize.importlib, "import_module", lambda name: object())
-
-    assert sitecustomize._needs_system_paths(("libcamera", "picamera2")) is False
+def test_system_finder_ignores_unrelated_modules() -> None:
+    finder = sitecustomize._Pi5CameraSystemFinder(["/usr/lib/python3/dist-packages"])
+    assert finder.find_spec("PIL") is None

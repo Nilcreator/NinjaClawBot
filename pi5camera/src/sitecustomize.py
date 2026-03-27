@@ -2,20 +2,29 @@
 
 This module is imported automatically by Python's ``site`` machinery when it is
 present on ``sys.path``. For copied standalone ``pi5camera`` installs, that lets
-plain ``uv run python`` invocations see Raspberry Pi system packages such as
-``libcamera`` and ``picamera2`` before any ``pi5camera`` code is imported.
+plain ``uv run python`` invocations resolve Raspberry Pi system packages such as
+``libcamera`` and ``picamera2`` without globally overriding unrelated venv
+packages like ``Pillow``.
 """
 
 from __future__ import annotations
 
-import importlib
+import importlib.abc
+import importlib.machinery
 import platform
 import subprocess
 import sys
 from pathlib import Path
 
 SYSTEM_PYTHON = Path("/usr/bin/python3")
-SYSTEM_MODULES = ("libcamera", "picamera2", "face_recognition")
+SYSTEM_MODULES = (
+    "libcamera",
+    "picamera2",
+    "face_recognition",
+    "face_recognition_models",
+    "dlib",
+)
+SYSTEM_FINDER_MARKER = "pi5camera-rpi-system-finder"
 
 
 def _is_virtual_environment() -> bool:
@@ -42,34 +51,33 @@ def _get_system_site_packages(system_python: Path = SYSTEM_PYTHON) -> list[str]:
     return [path.strip() for path in result.stdout.splitlines() if path.strip()]
 
 
-def _needs_system_paths(module_names: tuple[str, ...] = SYSTEM_MODULES) -> bool:
-    if platform.system() != "Linux" or not _is_virtual_environment():
-        return False
-    for module_name in module_names:
-        try:
-            importlib.import_module(module_name)
-        except Exception:
-            sys.modules.pop(module_name, None)
-            return True
-    return False
+def _matches_target(fullname: str, module_names: tuple[str, ...] = SYSTEM_MODULES) -> bool:
+    return any(fullname == name or fullname.startswith(f"{name}.") for name in module_names)
 
 
-def _prepend_system_paths(paths: list[str]) -> None:
-    if not paths:
-        return
-    insertion_index = 1 if sys.path else 0
-    for path in reversed(paths):
-        if not path:
-            continue
-        if path in sys.path:
-            sys.path.remove(path)
-        sys.path.insert(insertion_index, path)
+class _Pi5CameraSystemFinder(importlib.abc.MetaPathFinder):
+    marker = SYSTEM_FINDER_MARKER
+
+    def __init__(self, system_paths: list[str]) -> None:
+        self.system_paths = tuple(dict.fromkeys(path for path in system_paths if path))
+
+    def find_spec(self, fullname, path=None, target=None):  # type: ignore[override]
+        if not _matches_target(fullname):
+            return None
+        search_path = path if path is not None else list(self.system_paths)
+        return importlib.machinery.PathFinder.find_spec(fullname, search_path)
 
 
 def ensure_rpi_system_packages_visible() -> None:
-    if not _needs_system_paths():
+    if platform.system() != "Linux" or not _is_virtual_environment():
         return
-    _prepend_system_paths(_get_system_site_packages())
+    if any(getattr(finder, "marker", None) == SYSTEM_FINDER_MARKER for finder in sys.meta_path):
+        return
+
+    system_paths = _get_system_site_packages()
+    if not system_paths:
+        return
+    sys.meta_path.insert(0, _Pi5CameraSystemFinder(system_paths))
 
 
 ensure_rpi_system_packages_visible()

@@ -582,6 +582,10 @@ environment. Common causes are:
 - the active `.venv` can import a stale or partial camera package before it
   reaches the healthy Raspberry Pi system copy
 
+The current fix path uses a targeted import finder for Raspberry Pi camera and
+recognition modules, so unrelated venv packages such as `Pillow` stay in the
+virtual environment.
+
 Fastest recovery for the full workspace:
 
 ```bash
