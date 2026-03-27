@@ -1,5 +1,85 @@
 # Development Log
 
+## 2026-03-27
+
+### `pi5camera` Recognition Environment Hardening On Raspberry Pi
+
+Summary:
+
+- audited the standalone `pi5camera` recognition flow after real Raspberry Pi
+  testing showed that capture worked but `recognize` failed with
+  `face_recognition` import errors
+- identified three root issues:
+  - the recognition backend collapsed all import failures into the misleading
+    message that `face_recognition` was not installed
+  - the live recognition flow captured a photo before verifying that the
+    recognition backend was actually ready
+  - the Raspberry Pi bootstrap scripts only verified `picamera2`, not the full
+    recognition stack
+- added recognition-environment diagnostics in
+  [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+  so `doctor`, `status`, and runtime failures can now distinguish between
+  `missing`, `broken`, `system-only`, and `ready`
+- updated the recognition backend to surface the real import cause, including
+  missing dependencies such as `dlib`
+- changed live recognition to fail fast before camera capture when the
+  recognition backend is unavailable
+- hardened both Raspberry Pi bootstrap scripts to:
+  - install optional recognition-related apt packages when available
+  - verify `face_recognition` inside `.venv`
+  - attempt an in-place repair with `uv sync --reinstall-package ...`
+  - finish with import checks for `picamera2` and `face_recognition`
+- updated the relevant install and troubleshooting docs to reflect the new
+  recovery path
+
+Files changed:
+
+- [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+- [pi5camera/src/pi5camera/cli/_common.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/_common.py)
+- [pi5camera/src/pi5camera/cli/doctor.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/doctor.py)
+- [pi5camera/src/pi5camera/cli/status.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/cli/status.py)
+- [pi5camera/src/pi5camera/core/recognition.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/core/recognition.py)
+- [pi5camera/src/pi5camera/recognition/face_recognition_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/recognition/face_recognition_backend.py)
+- [pi5camera/scripts/bootstrap-rpi-standalone.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/scripts/bootstrap-rpi-standalone.sh)
+- [scripts/bootstrap-rpi-workspace.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/scripts/bootstrap-rpi-workspace.sh)
+- [pi5camera/tests/test_environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_environment.py)
+- [pi5camera/tests/test_recognition_flow.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_recognition_flow.py)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- real Raspberry Pi validation exposed a gap between successful camera setup and
+  successful recognition setup
+- the earlier bootstrap path could declare success while the recognition stack
+  was still unusable
+- the earlier runtime error text obscured the real dependency that had failed,
+  making Raspberry Pi debugging much harder than necessary
+
+Lint and test results:
+
+- `bash -n pi5camera/scripts/bootstrap-rpi-standalone.sh scripts/bootstrap-rpi-workspace.sh`
+- `cd pi5camera && uv run --project pi5camera --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev ruff check src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev pytest -q tests -c pyproject.toml`
+- result: `11 passed`
+
+Raspberry Pi validation status:
+
+- local code, lint, and test validation passed
+- Raspberry Pi follow-up required after validation:
+  - run `./scripts/bootstrap-rpi-standalone.sh` in `~/pi5camera`
+  - confirm `uv run python -c "import picamera2, face_recognition; print('imports-ok')"`
+  - run `uv run pi5camera doctor`
+  - run `uv run pi5camera recognize --image-file <absolute-photo-path>`
+  - run `uv run pi5camera recognize`
+  - confirm a missing recognition backend fails before a live capture starts
+  - confirm successful recognition still stores pending unknown faces normally
+
 ## 2026-03-24
 
 ### Raspberry Pi Bootstrap Installers For Workspace And Standalone `pi5camera`

@@ -49,6 +49,7 @@ def recognize_faces(
     store = FaceStore(config)
     store.ensure_layout()
     store.purge_expired_pending()
+    backend = build_recognition_backend(config)
 
     photo_metadata: dict[str, Any] = {}
     if image_path is None:
@@ -58,7 +59,6 @@ def recognize_faces(
     else:
         source_photo = image_path.expanduser().resolve()
 
-    backend = build_recognition_backend(config)
     detected = backend.detect_and_encode(source_photo)
     tolerance = float(config.get("recognition", {}).get("tolerance", 0.6))
     known_entries = store.load_known_entries()

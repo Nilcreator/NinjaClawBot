@@ -7,6 +7,7 @@ from PIL import Image
 from pi5camera.config.config_manager import CameraConfigManager
 from pi5camera.core.enrollment import enroll_pending_face
 from pi5camera.core.recognition import recognize_faces
+from pi5camera.errors import RecognitionError
 from pi5camera.models import EncodedFace, FaceBoundingBox
 from pi5camera.storage.face_store import FaceStore
 
@@ -128,3 +129,26 @@ def test_enroll_pending_face_saves_name_and_clears_record(
     store = FaceStore(config)
     assert store.list_known_faces() == ["Bob"]
     assert not (store.pending_dir / recognition_result["recognition_id"]).exists()
+
+
+def test_recognize_faces_fails_before_capture_when_backend_is_unavailable(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    config = _make_config(tmp_path)
+
+    monkeypatch.setattr(
+        "pi5camera.core.recognition.build_recognition_backend",
+        lambda config: (_ for _ in ()).throw(RecognitionError("backend unavailable")),
+    )
+    monkeypatch.setattr(
+        "pi5camera.core.recognition.capture_photo",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("capture should not run")),
+    )
+
+    try:
+        recognize_faces(config)
+    except RecognitionError as exc:
+        assert "backend unavailable" in str(exc)
+    else:  # pragma: no cover - defensive
+        raise AssertionError("recognize_faces should have raised RecognitionError")

@@ -1,6 +1,6 @@
 ---
 name: ninjaclawbot-implementation
-description: Use for substantial NinjaClawBot driver-library work on pi5buzzer, pi5servo, pi5disp, and pi5vl53l0x. Covers standalone-first Pi 5 migration, required repository audit, phased planning with approval before coding, backend selection, mandatory quality gates, Raspberry Pi 5 manual validation after each library, and required documentation updates.
+description: Use for substantial NinjaClawBot driver-library work on pi5buzzer, pi5servo, pi5disp, pi5vl53l0x, pi5camera and pi5mic. Covers standalone-first Pi 5 migration, required repository audit, phased planning with approval before coding, backend selection, mandatory quality gates, Raspberry Pi 5 manual validation after each library, and required documentation updates.
 ---
 
 # NinjaClawBot Pi 5 Library Workflow

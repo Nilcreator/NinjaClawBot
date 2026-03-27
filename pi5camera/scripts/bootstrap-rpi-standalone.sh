@@ -18,6 +18,13 @@ APT_PACKAGES=(
   liblapack-dev
 )
 
+OPTIONAL_RECOGNITION_APT_PACKAGES=(
+  python3-scipy
+  python3-dlib
+  python3-face-recognition
+  python3-face-recognition-models
+)
+
 usage() {
   cat <<'EOF'
 Usage: ./scripts/bootstrap-rpi-standalone.sh [--skip-apt]
@@ -79,6 +86,20 @@ venv_can_import_picamera2() {
   "${VENV_DIR}/bin/python" -c "import picamera2" >/dev/null 2>&1
 }
 
+venv_can_import_face_recognition() {
+  [[ -x "${VENV_DIR}/bin/python" ]] || return 1
+  "${VENV_DIR}/bin/python" -c "import face_recognition" >/dev/null 2>&1
+}
+
+list_available_optional_apt_packages() {
+  local package
+  for package in "${OPTIONAL_RECOGNITION_APT_PACKAGES[@]}"; do
+    if apt-cache show "${package}" >/dev/null 2>&1; then
+      printf '%s\n' "${package}"
+    fi
+  done
+}
+
 ensure_venv() {
   local recreate=0
 
@@ -119,9 +140,18 @@ install_system_packages() {
 
   require_command sudo
   require_command apt
+  require_command apt-cache
   log "Installing required Raspberry Pi camera packages."
   sudo apt update
-  sudo apt install -y "${APT_PACKAGES[@]}"
+
+  local packages=("${APT_PACKAGES[@]}")
+  local optional_package
+  while IFS= read -r optional_package; do
+    [[ -n "${optional_package}" ]] || continue
+    packages+=("${optional_package}")
+  done < <(list_available_optional_apt_packages)
+
+  sudo apt install -y "${packages[@]}"
 }
 
 run_sync() {
@@ -160,12 +190,42 @@ ensure_system_site_packages() {
   fi
 }
 
+ensure_face_recognition_stack() {
+  if venv_can_import_face_recognition; then
+    log "face_recognition is importable in .venv."
+    return
+  fi
+
+  log "Repairing the face-recognition stack in .venv."
+  (
+    cd "${PROJECT_ROOT}"
+    source "${VENV_DIR}/bin/activate"
+    uv sync \
+      --active \
+      --extra dev \
+      --reinstall-package dlib \
+      --reinstall-package face-recognition \
+      --reinstall-package face-recognition-models
+  )
+
+  ensure_system_site_packages
+
+  if venv_can_import_face_recognition; then
+    log "face_recognition import repaired."
+    return
+  fi
+
+  local import_output
+  import_output=$("${VENV_DIR}/bin/python" -c "import face_recognition" 2>&1 || true)
+  fail "face_recognition is still not importable inside ${VENV_DIR}. ${import_output}"
+}
+
 run_health_checks() {
   log "Running standalone camera readiness checks."
   (
     cd "${PROJECT_ROOT}"
     "${VENV_DIR}/bin/python" -m pi5camera doctor
-    "${VENV_DIR}/bin/python" -c "import pi5camera, picamera2; print('imports-ok')"
+    "${VENV_DIR}/bin/python" -c "import pi5camera, picamera2, face_recognition; print('imports-ok')"
   )
 }
 
@@ -198,6 +258,7 @@ main() {
   ensure_venv
   run_sync
   ensure_system_site_packages
+  ensure_face_recognition_stack
   run_health_checks
 
   log "Standalone pi5camera bootstrap completed."

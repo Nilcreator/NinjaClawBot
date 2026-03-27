@@ -603,6 +603,48 @@ uv sync --active --extra dev
 uv run pi5camera doctor
 ```
 
+### `pi5camera` says `face_recognition` is not importable
+
+This means the recognition backend is not usable in the active environment. The
+most common Raspberry Pi causes are:
+
+- `uv sync` completed, but the recognition packages are still missing from the
+  active `.venv`
+- `face_recognition` is present, but one of its dependencies such as `dlib`
+  failed to import cleanly
+
+Fastest recovery for the full workspace:
+
+```bash
+cd ~/NinjaClawBot
+./scripts/bootstrap-rpi-workspace.sh
+```
+
+Standalone `pi5camera` recovery:
+
+```bash
+cd ~/pi5camera
+./scripts/bootstrap-rpi-standalone.sh
+```
+
+Manual fallback if you need to repair the current environment in place:
+
+```bash
+source .venv/bin/activate
+uv sync --active --extra dev \
+  --reinstall-package dlib \
+  --reinstall-package face-recognition \
+  --reinstall-package face-recognition-models
+uv run python -c "import face_recognition; print('face-recognition-ok')"
+uv run pi5camera doctor
+```
+
+Note:
+
+- `pi5camera recognize` now checks the recognition backend before it takes a
+  live photo, so a broken recognition environment should fail fast instead of
+  capturing a new image first.
+
 ### `pi5mic` says `PortAudio library not found`
 
 Install the Raspberry Pi system packages first:

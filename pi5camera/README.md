@@ -220,17 +220,23 @@ cd ~/pi5camera
 What this does:
 
 - installs the Raspberry Pi camera and build packages needed by `pi5camera`
+- installs optional recognition-related apt packages such as `python3-scipy`
+  and `python3-dlib` when they are available on the host image
 - creates the local `.venv` environment with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
 - ensures system-site-packages access is preserved by patching `pyvenv.cfg`
   and writing a `.pth` file into the venv
-- runs `pi5camera doctor` and a final import check
+- repairs the `face_recognition` stack if it is still missing after `uv sync`
+- runs `pi5camera doctor` and a final import check for `picamera2` and
+  `face_recognition`
 
 What you should expect:
 
 - the command finishes successfully
 - `uv run pi5camera --help` works afterward
 - `uv run python -c "import picamera2; print('picamera2-ok')"` works afterward
+- `uv run python -c "import face_recognition; print('face-recognition-ok')"`
+  works afterward
 
 Manual fallback if you want to install the Raspberry Pi system packages
 yourself first:
@@ -244,6 +250,7 @@ sudo apt install -y \
   python3-venv \
   python3-dev \
   python3-picamera2 \
+  python3-scipy \
   libopenblas-dev \
   liblapack-dev
 ```
@@ -799,14 +806,18 @@ uv run python -c "import sys, importlib.util; print(sys.executable); print(impor
 
 #### `face_recognition` is not importable
 
-This usually means the Linux build dependencies for `dlib` were missing during
-installation.
+This means the recognition backend is not usable in the current environment.
+There are two common causes:
+
+- the `face_recognition` package was never installed into the active `.venv`
+- `face_recognition` is installed, but one of its dependencies such as `dlib`
+  failed to import
 
 Install the recommended build packages:
 
 ```bash
 sudo apt update
-sudo apt install -y build-essential cmake pkg-config python3-dev libopenblas-dev liblapack-dev
+sudo apt install -y build-essential cmake pkg-config python3-dev python3-scipy libopenblas-dev liblapack-dev
 ```
 
 Then reinstall:
@@ -815,6 +826,19 @@ Then reinstall:
 cd ~/pi5camera
 ./scripts/bootstrap-rpi-standalone.sh
 ```
+
+If you want to check the environment directly after reinstalling:
+
+```bash
+cd ~/pi5camera
+uv run python -c "import face_recognition; print('face-recognition-ok')"
+uv run pi5camera doctor
+```
+
+If `recognize` fails before taking a new photo, that is expected when the
+recognition backend is missing. `pi5camera` now checks the recognition stack
+before starting a live capture so failed imports do not create unnecessary
+photos.
 
 #### `No faces were found`
 

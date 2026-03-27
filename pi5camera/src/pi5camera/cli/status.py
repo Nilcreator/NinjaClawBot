@@ -34,9 +34,9 @@ def status(ctx: click.Context) -> None:
         )
     click.echo(f"Camera:      {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
-        "Recognition: "
-        f"{summary['recognition_backend']} "
-        f"({'ready' if summary['recognition_backend_available'] else 'missing'})"
+        f"Recognition: {summary['recognition_backend']} ({summary['recognition_backend_state']})"
     )
     if summary["camera_backend_help_text"] is not None:
         click.echo(f"Camera fix:  {summary['camera_backend_help_text']}")
+    if summary["recognition_backend_help_text"] is not None:
+        click.echo(f"Recogn fix:  {summary['recognition_backend_help_text']}")

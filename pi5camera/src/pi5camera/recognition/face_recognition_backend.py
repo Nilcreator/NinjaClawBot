@@ -6,6 +6,10 @@ import importlib
 from pathlib import Path
 from typing import Any
 
+from pi5camera.environment import (
+    describe_face_recognition_environment,
+    inject_system_site_packages,
+)
 from pi5camera.errors import RecognitionError
 from pi5camera.models import EncodedFace, FaceBoundingBox
 
@@ -14,9 +18,20 @@ def _import_face_recognition() -> Any:
     try:
         return importlib.import_module("face_recognition")
     except ImportError as exc:  # pragma: no cover - depends on host environment
-        raise RecognitionError(
+        if inject_system_site_packages("face_recognition"):
+            try:
+                return importlib.import_module("face_recognition")
+            except ImportError:
+                pass
+
+        summary = describe_face_recognition_environment()
+        detail = summary.get("diagnostic")
+        message = summary.get("help_text") or (
             "The face_recognition Python package is not installed in this environment."
-        ) from exc
+        )
+        if detail:
+            message = f"{message} Import detail: {detail}."
+        raise RecognitionError(message) from exc
 
 
 class FaceRecognitionBackend:

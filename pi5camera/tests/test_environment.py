@@ -9,6 +9,7 @@ import pytest
 from pi5camera.core.camera_backend import _import_picamera2_module
 from pi5camera.environment import (
     _PTH_FILE_NAME,
+    describe_face_recognition_environment,
     describe_picamera2_environment,
     inject_system_site_packages,
     is_module_available,
@@ -138,3 +139,38 @@ def test_inject_system_site_packages_adds_paths_and_writes_pth(
     pth_file = site_packages / _PTH_FILE_NAME
     assert pth_file.exists()
     assert fake_dist in pth_file.read_text(encoding="utf-8")
+
+
+def test_describe_face_recognition_environment_reports_missing_dependency(monkeypatch) -> None:
+    monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
+    monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
+    monkeypatch.setattr(
+        "pi5camera.environment.inject_system_site_packages",
+        lambda module_name="face_recognition", system_python=Path("/usr/bin/python3"): False,
+    )
+
+    def fake_probe(python_executable: Path, module_name: str) -> dict[str, object]:
+        if str(python_executable) == str(Path(sys.executable)):
+            return {
+                "available": False,
+                "spec_found": True,
+                "error_type": "ModuleNotFoundError",
+                "error_message": "No module named 'dlib'",
+                "missing_module": "dlib",
+            }
+        return {
+            "available": False,
+            "spec_found": False,
+            "error_type": None,
+            "error_message": None,
+            "missing_module": None,
+        }
+
+    monkeypatch.setattr("pi5camera.environment._probe_module_import", fake_probe)
+
+    result = describe_face_recognition_environment()
+
+    assert result["state"] == "broken"
+    assert result["available"] is False
+    assert "`dlib`" in result["help_text"]
+    assert "uv sync --active --extra dev --reinstall-package dlib" in result["help_text"]

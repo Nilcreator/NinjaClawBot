@@ -42,7 +42,8 @@ def doctor(ctx: click.Context) -> None:
         warnings.append(summary["camera_backend_help_text"])
     if not summary["recognition_backend_available"]:
         warnings.append(
-            "The face_recognition Python package is not importable in this environment."
+            summary["recognition_backend_help_text"]
+            or "The face_recognition Python package is not importable in this environment."
         )
 
     click.echo("pi5camera doctor")
@@ -59,7 +60,7 @@ def doctor(ctx: click.Context) -> None:
     click.echo(f"Camera backend: {summary['camera_backend']} ({summary['camera_backend_state']})")
     click.echo(
         f"Recognition backend: {summary['recognition_backend']} "
-        f"({'ok' if summary['recognition_backend_available'] else 'missing'})"
+        f"({summary['recognition_backend_state']})"
     )
 
     if warnings:

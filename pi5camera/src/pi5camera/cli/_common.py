@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any
 
 from pi5camera.config.config_manager import CameraConfigManager
-from pi5camera.environment import describe_picamera2_environment, is_module_available
+from pi5camera.environment import (
+    describe_face_recognition_environment,
+    describe_picamera2_environment,
+)
 from pi5camera.errors import ConfigError
 
 
@@ -31,6 +34,7 @@ def describe_camera_stack(config: dict[str, Any]) -> dict[str, Any]:
 
     recognition_backend = str(recognition_config.get("backend", "face_recognition"))
     picamera2_environment = describe_picamera2_environment()
+    recognition_environment = describe_face_recognition_environment()
     return {
         "photo_dir": str(paths["photo_dir"]),
         "data_dir": str(paths["data_dir"]),
@@ -42,11 +46,9 @@ def describe_camera_stack(config: dict[str, Any]) -> dict[str, Any]:
         "system_python": picamera2_environment["system_python"],
         "system_python_available": picamera2_environment["system_python_available"],
         "recognition_backend": recognition_backend,
-        "recognition_backend_available": (
-            is_module_available("face_recognition")
-            if recognition_backend == "face_recognition"
-            else False
-        ),
+        "recognition_backend_available": recognition_environment["available"],
+        "recognition_backend_state": recognition_environment["state"],
+        "recognition_backend_help_text": recognition_environment["help_text"],
         "resolution": {
             "width": int(camera_config.get("width", 1280)),
             "height": int(camera_config.get("height", 720)),
