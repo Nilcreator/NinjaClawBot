@@ -37,7 +37,10 @@ Usage: ./scripts/bootstrap-rpi-workspace.sh [--skip-apt] [--voiceinput]
 Prepare the NinjaClawBot workspace on Raspberry Pi OS by:
 1. Installing the required system packages with apt
 2. Creating .venv with /usr/bin/python3 -m venv --system-site-packages
-3. Running uv sync --active --extra dev (with system Python preference)
+3. Running uv sync --active --extra dev
+4. Injecting the Raspberry Pi system dist-packages path into .venv so
+   picamera2 and libcamera remain importable even if uv replaces the
+   venv interpreter
 
 Options:
   --skip-apt    Skip the apt install step
@@ -75,9 +78,9 @@ if not ((3, 11) <= sys.version_info[:2] < (3, 14)):
 PY
 }
 
-venv_can_import_picamera2() {
+venv_can_import() {
   [[ -x "${VENV_DIR}/bin/python" ]] || return 1
-  "${VENV_DIR}/bin/python" -c "import libcamera, picamera2" >/dev/null 2>&1
+  "${VENV_DIR}/bin/python" -c "$1" >/dev/null 2>&1
 }
 
 list_available_optional_packages() {
@@ -119,13 +122,16 @@ ensure_venv() {
     cd "${PROJECT_ROOT}"
     "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
   )
-  if ! venv_can_import_picamera2; then
+
+  # Confirm picamera2 is importable immediately after venv creation.
+  if ! venv_can_import "import libcamera, picamera2"; then
     local venv_output
     local system_output
     venv_output=$("${VENV_DIR}/bin/python" -c "import libcamera, picamera2" 2>&1 || true)
     system_output=$("${PYTHON_BIN}" -c "import libcamera, picamera2" 2>&1 || true)
-    fail "Picamera2 is still not importable inside ${VENV_DIR}. .venv import output: ${venv_output}. /usr/bin/python3 import output: ${system_output}"
+    fail "Picamera2 is not importable right after venv creation. .venv: ${venv_output}. system: ${system_output}"
   fi
+  log "Venv created. picamera2 importable: OK"
 }
 
 run_sync() {
@@ -134,19 +140,26 @@ run_sync() {
     sync_args+=(--extra voiceinput)
   fi
 
-  log "Syncing the NinjaClawBot workspace (using system Python)."
+  log "Syncing the NinjaClawBot workspace."
   (
     cd "${PROJECT_ROOT}"
     source "${VENV_DIR}/bin/activate"
-    # Force uv to use the system Python interpreter so the venv retains
-    # access to system site-packages (python3-picamera2, python3-libcamera).
-    UV_PYTHON_PREFERENCE=system uv sync "${sync_args[@]}"
+    UV_PYTHON_PREFERENCE=only-system uv sync "${sync_args[@]}"
   )
 }
 
-ensure_system_site_packages() {
-  log "Verifying system site-packages access in .venv."
+inject_system_dist_packages() {
+  # After uv sync, the venv interpreter may have been replaced by uv-managed
+  # Python.  When that happens, include-system-site-packages=true resolves to
+  # the managed Python's system paths, NOT /usr/lib/python3/dist-packages
+  # where picamera2 and libcamera live.
+  #
+  # Fix: unconditionally place a .pth file in the venv's site-packages that
+  # adds the Raspberry Pi system dist-packages to sys.path.
 
+  log "Ensuring Raspberry Pi system dist-packages are on the venv path."
+
+  # 1. Ensure pyvenv.cfg has include-system-site-packages = true.
   local CFG="${VENV_DIR}/pyvenv.cfg"
   if [[ -f "${CFG}" ]]; then
     if grep -q 'include-system-site-packages = false' "${CFG}" 2>/dev/null; then
@@ -156,6 +169,48 @@ ensure_system_site_packages() {
       echo 'include-system-site-packages = true' >> "${CFG}"
       log "Added include-system-site-packages to pyvenv.cfg."
     fi
+  fi
+
+  # 2. Discover where the system Python keeps its dist-packages.
+  local system_dist_paths
+  system_dist_paths=$("${PYTHON_BIN}" -c "
+import site, os
+paths = []
+for p in site.getsitepackages():
+    if os.path.isdir(p):
+        paths.append(p)
+# Also include the Debian-standard path even if site doesn't list it.
+debian_path = '/usr/lib/python3/dist-packages'
+if os.path.isdir(debian_path) and debian_path not in paths:
+    paths.append(debian_path)
+print('\\n'.join(paths))
+" 2>/dev/null || true)
+
+  if [[ -z "${system_dist_paths}" ]]; then
+    log "WARNING: Could not discover system dist-packages paths."
+    return
+  fi
+
+  # 3. Get the venv's own site-packages directory.
+  local venv_site_dir
+  venv_site_dir=$("${VENV_DIR}/bin/python" -c "import site; print(site.getsitepackages()[0])" 2>/dev/null || true)
+  if [[ -z "${venv_site_dir}" ]] || [[ ! -d "${venv_site_dir}" ]]; then
+    log "WARNING: Could not find venv site-packages directory."
+    return
+  fi
+
+  # 4. Write a .pth file that adds each system path.
+  local pth_file="${venv_site_dir}/raspberry-pi-system-packages.pth"
+  echo "${system_dist_paths}" > "${pth_file}"
+  log "Created ${pth_file}"
+
+  # 5. Verify picamera2 is now importable.
+  if venv_can_import "import libcamera, picamera2"; then
+    log "picamera2 is importable after path injection: OK"
+  else
+    local import_output
+    import_output=$("${VENV_DIR}/bin/python" -c "import libcamera, picamera2" 2>&1 || true)
+    fail "picamera2 still not importable after path injection. ${import_output}"
   fi
 }
 
@@ -199,7 +254,7 @@ main() {
   install_system_packages
   ensure_venv
   run_sync
-  ensure_system_site_packages
+  inject_system_dist_packages
   run_health_checks
 
   log "Workspace bootstrap completed."

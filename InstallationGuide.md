@@ -294,9 +294,10 @@ What the bootstrap installer does:
 - installs the Raspberry Pi camera stack (`python3-picamera2`, `python3-libcamera`)
   for `pi5camera`
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
-- runs `uv sync --active --extra dev` with `UV_PYTHON_PREFERENCE=system` so
-  `uv` uses the system Python interpreter and preserves access to system
-  site-packages (`picamera2`, `libcamera`)
+- runs `uv sync --active --extra dev`
+- injects a `.pth` file into the venv that adds `/usr/lib/python3/dist-packages`
+  to `sys.path`, ensuring `picamera2` and `libcamera` are always importable even
+  if `uv` replaces the venv interpreter with its own managed Python
 - runs `uv run pi5camera doctor` and a final
   `uv run python -c "import libcamera, picamera2, cv2; print('imports-ok')"`
   check inside the verified environment
@@ -310,7 +311,13 @@ cd ~/NinjaClawBot
 rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-UV_PYTHON_PREFERENCE=system uv sync --active --extra dev
+UV_PYTHON_PREFERENCE=only-system uv sync --active --extra dev
+
+# Inject Raspberry Pi system dist-packages path into the venv so
+# picamera2 and libcamera are importable regardless of interpreter.
+SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
+echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
+
 uv run pi5camera doctor
 ```
 
@@ -323,7 +330,12 @@ cd ~/NinjaClawBot
 rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-UV_PYTHON_PREFERENCE=system uv sync --active --extra dev --extra voiceinput
+UV_PYTHON_PREFERENCE=only-system uv sync --active --extra dev --extra voiceinput
+
+# Inject Raspberry Pi system dist-packages path.
+SITE_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")
+echo "/usr/lib/python3/dist-packages" > "${SITE_DIR}/raspberry-pi-system-packages.pth"
+
 uv run pi5camera doctor
 ```
 
@@ -332,9 +344,9 @@ Why the bootstrap installer is recommended:
 - it installs the normal development workspace
 - it also installs the optional `openWakeWord` dependency used by the always-on
   `pi5mic` listener when `--voiceinput` is used
-- it uses `UV_PYTHON_PREFERENCE=system` to keep the system Python interpreter,
-  ensuring `picamera2` and `libcamera` from Raspberry Pi system packages remain
-  importable inside `.venv`
+- it automatically injects the Raspberry Pi system dist-packages path into
+  `.venv`, ensuring `picamera2` and `libcamera` remain importable regardless
+  of which Python interpreter `uv` uses for the venv
 
 ### 5.3 Verify the workspace install
 
