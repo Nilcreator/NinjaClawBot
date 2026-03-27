@@ -2,6 +2,89 @@
 
 ## 2026-03-27
 
+### `pi5camera` Raspberry Pi Bootstrap Rework For Camera And Recognition Reliability
+
+Summary:
+
+- audited a new real-device failure where `doctor` reported `picamera2 (ready)`
+  but live capture failed with `No module named 'libcamera._libcamera'`
+- identified that the previous Picamera2 readiness check only verified module
+  discovery, not a full import, so `doctor` and `status` could report a false
+  healthy state
+- identified that Raspberry Pi standalone installs were still vulnerable to
+  stale `.venv` binaries shadowing working system packages, especially for
+  `dlib` and `face_recognition`
+- changed the environment probes to use real import diagnostics for Picamera2
+  so `doctor` and `status` can now report `broken` when the camera stack is
+  partially importable but not actually usable
+- updated the Raspberry Pi bootstrap scripts to:
+  - rebuild `.venv` from scratch on each run
+  - verify `libcamera` together with `picamera2`
+  - prefer the system recognition stack on ARM boards
+  - fall back to a Python `face_recognition` install only if the image does not
+    provide the system recognition packages
+- changed `pi5camera` package metadata so `uv sync` on ARM Linux no longer
+  installs the PyPI `face-recognition` stack by default, reducing the chance of
+  broken `dlib` binaries shadowing the system copy
+- updated the Raspberry Pi installation and testing instructions to match the
+  new bootstrap behavior and troubleshooting flow
+
+Files changed:
+
+- [pi5camera/pyproject.toml](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/pyproject.toml)
+- [pi5camera/uv.lock](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/uv.lock)
+- [uv.lock](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/uv.lock)
+- [pi5camera/src/pi5camera/environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/environment.py)
+- [pi5camera/src/pi5camera/core/camera_backend.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/src/pi5camera/core/camera_backend.py)
+- [pi5camera/scripts/bootstrap-rpi-standalone.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/scripts/bootstrap-rpi-standalone.sh)
+- [scripts/bootstrap-rpi-workspace.sh](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/scripts/bootstrap-rpi-workspace.sh)
+- [pi5camera/tests/test_environment.py](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/tests/test_environment.py)
+- [pi5camera/README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/pi5camera/README.md)
+- [README.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/README.md)
+- [InstallationGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/InstallationGuide.md)
+- [DevelopmentGuide.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/DevelopmentGuide.md)
+- [backup/DevelopmentLog.md](/Users/nilcreator/Desktop/0_Projects/Nilcreation/NinjaRobot/Code%20library/NinjaClawbot/backup/DevelopmentLog.md)
+
+Why:
+
+- the earlier install contract was still too optimistic for Raspberry Pi
+  because it treated successful module discovery as equivalent to a working
+  camera stack
+- real-device validation showed that a corrupted or stale `.venv` could make
+  both camera and recognition fail even when the system packages were healthy
+- ARM Raspberry Pi installs are more reliable when camera and recognition are
+  taken from the system Python where possible, instead of rebuilding the full
+  recognition stack inside `.venv`
+
+Lint and test results:
+
+- `uv lock` in `pi5camera`
+- `uv lock` in the workspace root
+- `bash -n pi5camera/scripts/bootstrap-rpi-standalone.sh scripts/bootstrap-rpi-workspace.sh`
+- `cd pi5camera && uv run --project pi5camera --extra dev python -m compileall src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev ruff check src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev ruff format --check src tests`
+- `cd pi5camera && uv run --project pi5camera --extra dev pytest -q tests -c pyproject.toml`
+- result: `12 passed`
+
+Raspberry Pi validation status:
+
+- local code, lint, and test validation passed
+- Raspberry Pi follow-up required after validation:
+  - run `./scripts/bootstrap-rpi-standalone.sh` in `~/pi5camera`
+  - confirm `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
+  - run `uv run pi5camera doctor`
+  - run `uv run pi5camera status`
+  - run `uv run pi5camera capture`
+  - run `uv run pi5camera recognize --image-file <absolute-photo-path>`
+  - run `uv run pi5camera recognize`
+  - confirm that `doctor` never reports `picamera2 (ready)` unless live camera
+    imports actually work
+  - confirm that a broken recognition binary is fixed by rebuilding `.venv`
+    through the bootstrap installer
+
+## 2026-03-27
+
 ### `pi5camera` Recognition Environment Hardening On Raspberry Pi
 
 Summary:

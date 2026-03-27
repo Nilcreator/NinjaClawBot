@@ -220,22 +220,25 @@ cd ~/pi5camera
 What this does:
 
 - installs the Raspberry Pi camera and build packages needed by `pi5camera`
-- installs optional recognition-related apt packages such as `python3-scipy`
-  and `python3-dlib` when they are available on the host image
-- creates the local `.venv` environment with `/usr/bin/python3 -m venv --system-site-packages`
+- installs optional Raspberry Pi camera and recognition packages such as
+  `python3-libcamera`, `python3-scipy`, `python3-dlib`, and
+  `python3-face-recognition` when they are available on the host image
+- recreates the local `.venv` environment from scratch with
+  `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
 - ensures system-site-packages access is preserved by patching `pyvenv.cfg`
   and writing a `.pth` file into the venv
-- repairs the `face_recognition` stack if it is still missing after `uv sync`
-- runs `pi5camera doctor` and a final import check for `picamera2` and
-  `face_recognition`
+- prefers the Raspberry Pi system recognition stack on ARM boards and only
+  falls back to a Python package install if those system packages are not
+  available
+- runs `pi5camera doctor` and a final import check for `libcamera`,
+  `picamera2`, and `face_recognition`
 
 What you should expect:
 
 - the command finishes successfully
 - `uv run pi5camera --help` works afterward
-- `uv run python -c "import picamera2; print('picamera2-ok')"` works afterward
-- `uv run python -c "import face_recognition; print('face-recognition-ok')"`
+- `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
   works afterward
 
 If you need the manual install path or the `--skip-apt` shortcut, see
@@ -739,18 +742,36 @@ sudo apt install -y \
   python3-venv \
   python3-dev \
   python3-picamera2 \
+  python3-libcamera \
   python3-scipy \
   libopenblas-dev \
   liblapack-dev
+```
+
+If your Raspberry Pi OS image also provides the recognition packages directly,
+install them too:
+
+```bash
+sudo apt install -y python3-dlib python3-face-recognition python3-face-recognition-models
 ```
 
 Then create the environment manually:
 
 ```bash
 cd ~/pi5camera
+rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
+```
+
+If your image does not provide `python3-face-recognition`, install the Python
+fallback after `uv sync`:
+
+```bash
+cd ~/pi5camera
+source .venv/bin/activate
+uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
 ```
 
 If you already installed the required apt packages and only want to recreate the
@@ -780,7 +801,7 @@ first install the Raspberry Pi camera stack:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-picamera2
+sudo apt install -y python3-picamera2 python3-libcamera
 ```
 
 Then rerun the standalone bootstrap installer:
@@ -810,18 +831,20 @@ uv sync --active --extra dev
 If you want to confirm the mismatch directly, compare these two commands:
 
 ```bash
-python3 -c "import sys, picamera2; print(sys.executable); print(picamera2.__file__)"
-uv run python -c "import sys, importlib.util; print(sys.executable); print(importlib.util.find_spec('picamera2'))"
+python3 -c "import sys, libcamera, picamera2; print(sys.executable); print(picamera2.__file__)"
+uv run python -c "import sys, libcamera, picamera2; print(sys.executable); print(picamera2.__file__)"
 ```
 
 #### `face_recognition` is not importable
 
 This means the recognition backend is not usable in the current environment.
-There are two common causes:
+On Raspberry Pi, `pi5camera` now prefers the system recognition packages when
+they are available, so the most common causes are:
 
-- the `face_recognition` package was never installed into the active `.venv`
-- `face_recognition` is installed, but one of its dependencies such as `dlib`
-  failed to import
+- the Raspberry Pi recognition packages were not available on the image and the
+  Python fallback has not been installed yet
+- the active `.venv` contains a broken compiled extension such as `dlib`
+  shadowing the system copy
 
 Install the recommended build packages:
 
@@ -844,6 +867,20 @@ cd ~/pi5camera
 uv run python -c "import face_recognition; print('face-recognition-ok')"
 uv run pi5camera doctor
 ```
+
+If the Raspberry Pi OS image does not provide `python3-face-recognition`, use
+the Python fallback manually:
+
+```bash
+cd ~/pi5camera
+source .venv/bin/activate
+uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
+uv run pi5camera doctor
+```
+
+If doctor shows an error like `file too short` for `_dlib_pybind11`, that
+usually means a stale or corrupted compiled extension is sitting inside
+`.venv`. Rerun the bootstrap installer so it rebuilds `.venv` from scratch.
 
 If `recognize` fails before taking a new photo, that is expected when the
 recognition backend is missing. `pi5camera` now checks the recognition stack

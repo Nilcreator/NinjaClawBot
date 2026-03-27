@@ -34,8 +34,8 @@ def _import_picamera2_module() -> Any:
         raise CaptureError(environment["help_text"]) from last_error
     raise CaptureError(
         f"Picamera2 could not be imported: {last_error}. "
-        "Check that python3-picamera2 is installed and the virtual environment "
-        "uses the same Python version as the system."
+        "Check that python3-picamera2 and python3-libcamera are installed and the "
+        "virtual environment uses the same Python version as the system."
     ) from last_error
 
 

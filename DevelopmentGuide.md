@@ -574,8 +574,11 @@ Use these four buckets whenever hardware-facing behavior changes.
 
 ### `pi5camera` says `Picamera2 is not importable`
 
-This usually means `python3-picamera2` is installed for the Raspberry Pi system
-Python, but the current `uv` environment cannot see it.
+This usually means the Raspberry Pi camera stack is incomplete in the active
+environment. Common causes are:
+
+- `python3-picamera2` or `python3-libcamera` is missing in the system Python
+- the current `.venv` is stale and no longer reflects the system camera stack
 
 Fastest recovery for the full workspace:
 
@@ -596,7 +599,8 @@ Manual fallback if you need to do it step by step:
 ```bash
 cd ~/NinjaClawBot
 sudo apt update
-sudo apt install -y python3-picamera2 python3-venv
+sudo apt install -y python3-picamera2 python3-libcamera python3-venv
+rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
@@ -608,10 +612,10 @@ uv run pi5camera doctor
 This means the recognition backend is not usable in the active environment. The
 most common Raspberry Pi causes are:
 
-- `uv sync` completed, but the recognition packages are still missing from the
-  active `.venv`
-- `face_recognition` is present, but one of its dependencies such as `dlib`
-  failed to import cleanly
+- the Raspberry Pi image does not provide the recognition packages and the
+  Python fallback has not been installed yet
+- the active `.venv` contains a stale or corrupted compiled extension such as
+  `dlib`, which shadows the system package
 
 Fastest recovery for the full workspace:
 
@@ -627,14 +631,15 @@ cd ~/pi5camera
 ./scripts/bootstrap-rpi-standalone.sh
 ```
 
-Manual fallback if you need to repair the current environment in place:
+Manual fallback if your Raspberry Pi image does not provide
+`python3-face-recognition`:
 
 ```bash
+rm -rf .venv
+/usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
-uv sync --active --extra dev \
-  --reinstall-package dlib \
-  --reinstall-package face-recognition \
-  --reinstall-package face-recognition-models
+uv sync --active --extra dev
+uv pip install --python .venv/bin/python --reinstall "face-recognition>=1.3"
 uv run python -c "import face_recognition; print('face-recognition-ok')"
 uv run pi5camera doctor
 ```
@@ -644,6 +649,9 @@ Note:
 - `pi5camera recognize` now checks the recognition backend before it takes a
   live photo, so a broken recognition environment should fail fast instead of
   capturing a new image first.
+- if doctor reports `_dlib_pybind11 ... file too short`, treat it as a stale or
+  corrupted `.venv` binary and recreate `.venv` from scratch with the bootstrap
+  installer
 
 ### `pi5mic` says `PortAudio library not found`
 

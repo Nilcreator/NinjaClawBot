@@ -11,14 +11,12 @@ from pathlib import Path
 from typing import Any
 
 SYSTEM_PYTHON = Path("/usr/bin/python3")
-PICAMERA2_APT_COMMAND = "sudo apt install -y python3-picamera2"
+PICAMERA2_APT_COMMAND = "sudo apt install -y python3-picamera2 python3-libcamera"
 PICAMERA2_VENV_COMMAND = "rm -rf .venv && /usr/bin/python3 -m venv --system-site-packages .venv"
 PICAMERA2_SYNC_COMMAND = "source .venv/bin/activate && uv sync --active --extra dev"
 RECOGNITION_REPAIR_COMMAND = (
-    "source .venv/bin/activate && uv sync --active --extra dev "
-    "--reinstall-package dlib "
-    "--reinstall-package face-recognition "
-    "--reinstall-package face-recognition-models"
+    "source .venv/bin/activate && uv pip install --python .venv/bin/python "
+    "--reinstall 'face-recognition>=1.3'"
 )
 BOOTSTRAP_STANDALONE_COMMAND = "./scripts/bootstrap-rpi-standalone.sh"
 BOOTSTRAP_WORKSPACE_COMMAND = "./scripts/bootstrap-rpi-workspace.sh"
@@ -233,19 +231,28 @@ def _format_import_diagnostic(probe: dict[str, Any]) -> str | None:
 
 def describe_picamera2_environment(system_python: Path = SYSTEM_PYTHON) -> dict[str, Any]:
     """Summarize whether Picamera2 is available in the current and system Python environments."""
-    current_available = is_module_available("picamera2")
+    current_probe = _probe_module_import(Path(sys.executable), "picamera2")
+    current_available = bool(current_probe["available"])
     on_linux = platform.system() == "Linux"
 
     # ── Auto-fix: inject system dist-packages when picamera2 is missing ──
     if not current_available and on_linux and _is_virtual_environment():
-        if inject_system_site_packages(system_python=system_python):
-            current_available = True
+        if inject_system_site_packages("picamera2", system_python=system_python):
+            current_probe = _probe_module_import(Path(sys.executable), "picamera2")
+            current_available = bool(current_probe["available"])
 
-    system_python_available = (
-        _python_can_import_module(system_python, "picamera2")
-        if on_linux and not current_available
-        else False
+    system_probe = (
+        _probe_module_import(system_python, "picamera2")
+        if on_linux and system_python.exists()
+        else {
+            "available": False,
+            "spec_found": False,
+            "error_type": None,
+            "error_message": None,
+            "missing_module": None,
+        }
     )
+    system_python_available = bool(system_probe["available"])
     environment_mismatch = (
         not current_available and system_python_available and _is_virtual_environment()
     )
@@ -253,6 +260,32 @@ def describe_picamera2_environment(system_python: Path = SYSTEM_PYTHON) -> dict[
     help_text: str | None = None
     if current_available:
         state = "ready"
+    elif current_probe.get("spec_found"):
+        state = "broken"
+        missing_module = current_probe.get("missing_module")
+        detail = _format_import_diagnostic(current_probe)
+        if system_python_available:
+            help_text = (
+                "The current virtual environment has a broken Picamera2 import, while "
+                "`/usr/bin/python3` can still import the Raspberry Pi camera stack. "
+                f"{_bootstrap_help_text()} This rebuilds `.venv` from scratch so stale camera "
+                "packages inside the virtual environment cannot shadow the system copy."
+            )
+        elif missing_module and missing_module != "picamera2":
+            help_text = (
+                "Picamera2 is installed, but a dependency failed to import "
+                f"(`{missing_module}`). {_bootstrap_help_text()} If the environment already exists, "
+                f"recreate it manually with `{PICAMERA2_VENV_COMMAND}`, then "
+                f"`{PICAMERA2_SYNC_COMMAND}`."
+            )
+        else:
+            help_text = (
+                "Picamera2 is present but failed to import correctly. "
+                f"{_bootstrap_help_text()} If the environment already exists, recreate it manually "
+                f"with `{PICAMERA2_VENV_COMMAND}`, then `{PICAMERA2_SYNC_COMMAND}`."
+            )
+        if detail:
+            help_text = f"{help_text} Import detail: {detail}."
     elif environment_mismatch:
         state = "system-only"
         help_text = (
@@ -283,6 +316,8 @@ def describe_picamera2_environment(system_python: Path = SYSTEM_PYTHON) -> dict[
         "is_virtualenv": _is_virtual_environment(),
         "system_python": str(system_python) if on_linux and system_python.exists() else None,
         "system_python_available": system_python_available,
+        "diagnostic": _format_import_diagnostic(current_probe),
+        "missing_module": current_probe.get("missing_module"),
     }
 
 
@@ -329,7 +364,14 @@ def describe_face_recognition_environment(
         state = "broken"
         missing_module = current_probe.get("missing_module")
         detail = _format_import_diagnostic(current_probe)
-        if missing_module and missing_module != "face_recognition":
+        if system_probe["available"]:
+            help_text = (
+                "The current virtual environment has a broken face_recognition import, while "
+                "`/usr/bin/python3` can still import the system recognition stack. "
+                f"{_bootstrap_help_text()} This rebuilds `.venv` from scratch so stale "
+                "recognition binaries inside the virtual environment cannot shadow the system copy."
+            )
+        elif missing_module and missing_module != "face_recognition":
             help_text = (
                 "face_recognition is installed, but a dependency failed to import "
                 f"(`{missing_module}`). {_bootstrap_help_text()} If the environment already exists, "

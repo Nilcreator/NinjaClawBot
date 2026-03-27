@@ -20,12 +20,19 @@ from pi5camera.errors import CaptureError
 def test_describe_picamera2_environment_detects_virtualenv_mismatch(monkeypatch) -> None:
     """When system python has picamera2 but the venv does NOT and injection
     fails, the environment should report system-only with correct guidance."""
-    monkeypatch.setattr("pi5camera.environment.is_module_available", lambda module_name: False)
     monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
     monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
     monkeypatch.setattr(
-        "pi5camera.environment._python_can_import_module",
-        lambda python_executable, module_name: True,
+        "pi5camera.environment._probe_module_import",
+        lambda python_executable, module_name: {
+            "available": str(python_executable) == "/usr/bin/python3",
+            "spec_found": str(python_executable) == "/usr/bin/python3",
+            "error_type": None if str(python_executable) == "/usr/bin/python3" else "ImportError",
+            "error_message": None
+            if str(python_executable) == "/usr/bin/python3"
+            else "No module named 'picamera2'",
+            "missing_module": None if str(python_executable) == "/usr/bin/python3" else "picamera2",
+        },
     )
     # Prevent actual sys.path injection and .pth writes during tests.
     monkeypatch.setattr(
@@ -42,12 +49,17 @@ def test_describe_picamera2_environment_detects_virtualenv_mismatch(monkeypatch)
 
 
 def test_describe_picamera2_environment_reports_missing_install(monkeypatch) -> None:
-    monkeypatch.setattr("pi5camera.environment.is_module_available", lambda module_name: False)
     monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
     monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
     monkeypatch.setattr(
-        "pi5camera.environment._python_can_import_module",
-        lambda python_executable, module_name: False,
+        "pi5camera.environment._probe_module_import",
+        lambda python_executable, module_name: {
+            "available": False,
+            "spec_found": False,
+            "error_type": "ImportError",
+            "error_message": "No module named 'picamera2'",
+            "missing_module": "picamera2",
+        },
     )
     monkeypatch.setattr(
         "pi5camera.environment._get_system_site_package_paths",
@@ -59,6 +71,44 @@ def test_describe_picamera2_environment_reports_missing_install(monkeypatch) -> 
     assert result["state"] == "missing"
     assert "sudo apt install -y python3-picamera2" in result["help_text"]
     assert "/usr/bin/python3 -m venv --system-site-packages" in result["help_text"]
+
+
+def test_describe_picamera2_environment_reports_broken_dependency(monkeypatch) -> None:
+    monkeypatch.setattr("pi5camera.environment.platform.system", lambda: "Linux")
+    monkeypatch.setattr("pi5camera.environment._is_virtual_environment", lambda: True)
+    monkeypatch.setattr(
+        "pi5camera.environment.inject_system_site_packages",
+        lambda module_name="picamera2", system_python=Path("/usr/bin/python3"): False,
+    )
+
+    def fake_probe(python_executable: Path, module_name: str) -> dict[str, object]:
+        if str(python_executable) == str(Path(sys.executable)):
+            return {
+                "available": False,
+                "spec_found": True,
+                "error_type": "ModuleNotFoundError",
+                "error_message": "No module named 'libcamera._libcamera'",
+                "missing_module": "libcamera._libcamera",
+            }
+        return {
+            "available": True,
+            "spec_found": True,
+            "error_type": None,
+            "error_message": None,
+            "missing_module": None,
+        }
+
+    monkeypatch.setattr("pi5camera.environment._probe_module_import", fake_probe)
+
+    result = describe_picamera2_environment()
+
+    assert result["state"] == "broken"
+    assert result["available"] is False
+    assert "broken Picamera2 import" in result["help_text"]
+    assert (
+        "Import detail: ModuleNotFoundError: No module named 'libcamera._libcamera'"
+        in result["help_text"]
+    )
 
 
 def test_import_picamera2_module_raises_environment_guidance(monkeypatch) -> None:
@@ -173,4 +223,4 @@ def test_describe_face_recognition_environment_reports_missing_dependency(monkey
     assert result["state"] == "broken"
     assert result["available"] is False
     assert "`dlib`" in result["help_text"]
-    assert "uv sync --active --extra dev --reinstall-package dlib" in result["help_text"]
+    assert "uv pip install --python .venv/bin/python" in result["help_text"]

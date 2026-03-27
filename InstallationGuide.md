@@ -291,20 +291,23 @@ cd ~/NinjaClawBot
 What the bootstrap installer does:
 
 - re-checks and installs the required Raspberry Pi system packages
-- installs optional recognition-related apt packages for `pi5camera` when they
-  are available on the Raspberry Pi image
-- recreates `.venv` with `/usr/bin/python3 -m venv --system-site-packages`
+- installs optional camera and recognition apt packages for `pi5camera` when
+  they are available on the Raspberry Pi image
+- recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
-- repairs the `face_recognition` stack if needed
-- runs `pi5camera doctor` and final import checks for `picamera2` and
-  `face_recognition` inside the verified `.venv`
+- prefers the Raspberry Pi system recognition stack on ARM boards and only
+  falls back to a Python package install when those system packages are not
+  available
+- runs `pi5camera doctor` and final import checks for `libcamera`, `picamera2`,
+  and `face_recognition` inside the verified `.venv`
 
 Manual fallback if you do not want to use the script:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-picamera2 python3-venv python3-scipy
+sudo apt install -y python3-picamera2 python3-libcamera python3-venv python3-scipy
 cd ~/NinjaClawBot
+rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev

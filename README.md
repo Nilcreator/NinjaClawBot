@@ -161,13 +161,15 @@ If you already know that you want always-on voice input too, use:
 The bootstrap installer:
 
 - installs the Raspberry Pi system packages needed by `pi5camera` and `pi5mic`
-- installs optional recognition-related apt packages for `pi5camera` when they
-  are available on the Raspberry Pi image
-- recreates `.venv` with `/usr/bin/python3 -m venv --system-site-packages`
+- installs optional camera and recognition apt packages for `pi5camera` when
+  they are available on the Raspberry Pi image
+- recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
-- repairs the `face_recognition` stack if needed
-- finishes with `pi5camera doctor` plus import checks for `picamera2` and
-  `face_recognition`
+- prefers the Raspberry Pi system recognition stack on ARM boards and only
+  falls back to a Python package install when those system packages are not
+  available
+- finishes with `pi5camera doctor` plus import checks for `libcamera`,
+  `picamera2`, and `face_recognition`
 
 On non-Raspberry Pi development machines, if you already know that you want
 always-on voice input, install the optional wake-word dependency too:

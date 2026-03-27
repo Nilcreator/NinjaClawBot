@@ -18,12 +18,18 @@ APT_PACKAGES=(
   liblapack-dev
 )
 
+OPTIONAL_CAMERA_APT_PACKAGES=(
+  python3-libcamera
+)
+
 OPTIONAL_RECOGNITION_APT_PACKAGES=(
   python3-scipy
   python3-dlib
   python3-face-recognition
   python3-face-recognition-models
 )
+
+RECOGNITION_PIP_FALLBACK=0
 
 usage() {
   cat <<'EOF'
@@ -69,21 +75,9 @@ if not ((3, 11) <= sys.version_info[:2] < (3, 13)):
 PY
 }
 
-venv_has_system_site_packages() {
-  [[ -f "${VENV_DIR}/pyvenv.cfg" ]] && grep -Eq '^include-system-site-packages = true$' "${VENV_DIR}/pyvenv.cfg"
-}
-
-venv_uses_system_python() {
-  [[ -x "${VENV_DIR}/bin/python" ]] || return 1
-  "${VENV_DIR}/bin/python" - <<'PY' >/dev/null
-import sys
-raise SystemExit(0 if sys.base_prefix.startswith("/usr") else 1)
-PY
-}
-
 venv_can_import_picamera2() {
   [[ -x "${VENV_DIR}/bin/python" ]] || return 1
-  "${VENV_DIR}/bin/python" -c "import picamera2" >/dev/null 2>&1
+  "${VENV_DIR}/bin/python" -c "import libcamera, picamera2" >/dev/null 2>&1
 }
 
 venv_can_import_face_recognition() {
@@ -91,44 +85,46 @@ venv_can_import_face_recognition() {
   "${VENV_DIR}/bin/python" -c "import face_recognition" >/dev/null 2>&1
 }
 
-list_available_optional_apt_packages() {
+list_available_optional_packages() {
+  local -a packages=("$@")
   local package
-  for package in "${OPTIONAL_RECOGNITION_APT_PACKAGES[@]}"; do
+  for package in "${packages[@]}"; do
     if apt-cache show "${package}" >/dev/null 2>&1; then
       printf '%s\n' "${package}"
     fi
   done
 }
 
+system_python_can_import() {
+  local import_code="$1"
+  "${PYTHON_BIN}" -c "${import_code}" >/dev/null 2>&1
+}
+
+install_fallback_recognition_stack() {
+  log "Installing the Python recognition fallback into .venv."
+  (
+    cd "${PROJECT_ROOT}"
+    source "${VENV_DIR}/bin/activate"
+    uv pip install \
+      --python "${VENV_DIR}/bin/python" \
+      --reinstall \
+      "face-recognition>=1.3"
+  )
+}
+
 ensure_venv() {
-  local recreate=0
-
-  if [[ ! -d "${VENV_DIR}" ]]; then
-    recreate=1
-    log "Creating standalone pi5camera virtual environment."
-  elif ! venv_has_system_site_packages; then
-    recreate=1
-    log "Recreating .venv so it inherits Raspberry Pi system packages."
-  elif ! venv_uses_system_python; then
-    recreate=1
-    log "Recreating .venv so it uses /usr/bin/python3."
-  elif ! venv_can_import_picamera2; then
-    recreate=1
-    log "Recreating .venv because Picamera2 is still not importable inside it."
-  else
-    log "Reusing existing compatible .venv."
-  fi
-
-  if (( recreate )); then
-    rm -rf "${VENV_DIR}"
-    (
-      cd "${PROJECT_ROOT}"
-      "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
-    )
-  fi
-
+  log "Recreating standalone pi5camera virtual environment."
+  rm -rf "${VENV_DIR}"
+  (
+    cd "${PROJECT_ROOT}"
+    "${PYTHON_BIN}" -m venv --system-site-packages "${VENV_DIR}"
+  )
   if ! venv_can_import_picamera2; then
-    fail "Picamera2 is still not importable inside ${VENV_DIR}. Confirm that \`${PYTHON_BIN} -c 'import picamera2'\` works, then rerun this script."
+    local venv_output
+    local system_output
+    venv_output=$("${VENV_DIR}/bin/python" -c "import libcamera, picamera2" 2>&1 || true)
+    system_output=$("${PYTHON_BIN}" -c "import libcamera, picamera2" 2>&1 || true)
+    fail "Picamera2 is still not importable inside ${VENV_DIR}. .venv import output: ${venv_output}. /usr/bin/python3 import output: ${system_output}"
   fi
 }
 
@@ -149,7 +145,11 @@ install_system_packages() {
   while IFS= read -r optional_package; do
     [[ -n "${optional_package}" ]] || continue
     packages+=("${optional_package}")
-  done < <(list_available_optional_apt_packages)
+  done < <(list_available_optional_packages "${OPTIONAL_CAMERA_APT_PACKAGES[@]}")
+  while IFS= read -r optional_package; do
+    [[ -n "${optional_package}" ]] || continue
+    packages+=("${optional_package}")
+  done < <(list_available_optional_packages "${OPTIONAL_RECOGNITION_APT_PACKAGES[@]}")
 
   sudo apt install -y "${packages[@]}"
 }
@@ -191,24 +191,22 @@ ensure_system_site_packages() {
 }
 
 ensure_face_recognition_stack() {
+  ensure_system_site_packages
+
   if venv_can_import_face_recognition; then
     log "face_recognition is importable in .venv."
     return
   fi
 
-  log "Repairing the face-recognition stack in .venv."
-  (
-    cd "${PROJECT_ROOT}"
-    source "${VENV_DIR}/bin/activate"
-    uv sync \
-      --active \
-      --extra dev \
-      --reinstall-package dlib \
-      --reinstall-package face-recognition \
-      --reinstall-package face-recognition-models
-  )
+  if system_python_can_import "import face_recognition"; then
+    local import_output
+    import_output=$("${VENV_DIR}/bin/python" -c "import face_recognition" 2>&1 || true)
+    fail "face_recognition is importable in /usr/bin/python3 but not inside ${VENV_DIR}. ${import_output}"
+  fi
 
-  ensure_system_site_packages
+  log "System recognition packages are not available; using the Python fallback."
+  RECOGNITION_PIP_FALLBACK=1
+  install_fallback_recognition_stack
 
   if venv_can_import_face_recognition; then
     log "face_recognition import repaired."
@@ -225,7 +223,7 @@ run_health_checks() {
   (
     cd "${PROJECT_ROOT}"
     "${VENV_DIR}/bin/python" -m pi5camera doctor
-    "${VENV_DIR}/bin/python" -c "import pi5camera, picamera2, face_recognition; print('imports-ok')"
+    "${VENV_DIR}/bin/python" -c "import pi5camera, libcamera, picamera2, face_recognition; print('imports-ok')"
   )
 }
 
@@ -261,6 +259,9 @@ main() {
   ensure_face_recognition_stack
   run_health_checks
 
+  if (( RECOGNITION_PIP_FALLBACK )); then
+    log "Recognition is using the Python fallback inside .venv because system apt packages were unavailable."
+  fi
   log "Standalone pi5camera bootstrap completed."
 }
 
