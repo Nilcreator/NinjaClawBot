@@ -720,7 +720,24 @@ Expected result:
 - you have a `.onnx` or `.tflite` model saved somewhere you can point to
   during setup
 
-### 8.5 Run the guided `pi5mic` setup
+### 8.5 Optional first always-on test in the foreground
+
+Use this only after `doctor` is clean.
+
+If you have not registered the custom wake-word model yet, do that first:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5mic install openwakeword \
+  --model-path ~/NinjaClawBot/voiceinput/hey_Ninja.onnx \
+  --keyword "hey Ninja"
+```
+
+Need more detail?
+- [pi5mic/README.md](pi5mic/README.md)
+- [Appendix C. `pi5mic` and voice input help](#appendix-c-pi5mic-and-voice-input-help)
+
+### 8.6 Run the guided `pi5mic` setup
 
 Recommended first run:
 
@@ -770,7 +787,7 @@ Expected result:
 - if always-on voice input is enabled, setup reminds you to run
   `uv run pi5mic doctor` before starting the listener manually
 
-### 8.6 Run `doctor`
+### 8.7 Run `doctor`
 
 ```bash
 cd ~/NinjaClawBot
@@ -796,7 +813,7 @@ Expected result:
   - whether the voice-input service is currently running or stopped
 - success ends with `pi5mic doctor passed.` or `pi5mic doctor passed with warnings.`
 
-### 8.7 Run one real capture cycle
+### 8.8 Run one real capture cycle
 
 ```bash
 cd ~/NinjaClawBot
@@ -813,43 +830,6 @@ Expected result:
 - the command records one clip
 - the transcript is printed locally
 
-### 8.8 Optional first always-on test in the foreground
-
-Use this only after `doctor` is clean.
-
-If you have not registered the custom wake-word model yet, do that first:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic install openwakeword \
-  --model-path ~/NinjaClawBot/voiceinput/hey_Ninja.onnx \
-  --keyword "hey Ninja"
-```
-
-Then run:
-
-```bash
-cd ~/NinjaClawBot
-uv run pi5mic voiceinput-tool foreground
-```
-
-Purpose:
-
-- starts the always-on listener in the current terminal
-- lets you watch the listener state directly
-- is the safest first test because you can stop it with `Ctrl+C`
-
-Expected result:
-
-- the tool says it is waiting for the wake word
-- say `hey Ninja`, then a short sentence
-- it records after the wake word
-- it stops recording after 3 seconds of silence or 10 seconds max
-- it prints the recognized transcript in the terminal
-
-Need more detail?
-- [pi5mic/README.md](pi5mic/README.md)
-- [Appendix C. `pi5mic` and voice input help](#appendix-c-pi5mic-and-voice-input-help)
 
 ## 9. Run Quick Local NinjaClawBot Tests
 
