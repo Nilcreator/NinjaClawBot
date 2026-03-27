@@ -117,7 +117,7 @@ class CameraAdapter:
             "config_path": str(config_path),
             "configured": config_path.exists(),
             "camera_backend": "picamera2",
-            "recognition_backend": "face_recognition",
+            "recognition_backend": "mediapipe_opencv",
         }
 
         if importlib.util.find_spec("pi5camera") is None:
@@ -138,7 +138,7 @@ class CameraAdapter:
         photo_dir = Path(str(paths.get("photo_dir", ""))).expanduser().resolve()
         data_dir = Path(str(paths.get("data_dir", ""))).expanduser().resolve()
         camera_backend_available = importlib.util.find_spec("picamera2") is not None
-        recognition_backend_available = importlib.util.find_spec("face_recognition") is not None
+        recognition_backend_available = importlib.util.find_spec("cv2") is not None
         photo_dir_writable = _is_writable_directory(photo_dir)
         data_dir_writable = _is_writable_directory(data_dir)
 

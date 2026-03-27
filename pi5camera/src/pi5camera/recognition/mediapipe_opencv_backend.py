@@ -58,7 +58,7 @@ def _build_haar_cascade(cv2: Any) -> Any | None:
     The Haar cascade XML is shipped inside every ``opencv-python-headless``
     package, so this works on all platforms including ARM64.
     """
-    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_alt2.xml"
     cascade = cv2.CascadeClassifier(cascade_path)
     if cascade.empty():
         return None
@@ -191,9 +191,9 @@ class MediaPipeOpenCVBackend:
         gray = self._cv2.equalizeHist(gray)
         detections = self._haar_cascade.detectMultiScale(
             gray,
-            scaleFactor=1.1,
-            minNeighbors=5,
-            minSize=(30, 30),
+            scaleFactor=1.05,
+            minNeighbors=3,
+            minSize=(80, 80),
         )
         if len(detections) == 0:
             return []

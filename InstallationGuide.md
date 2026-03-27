@@ -291,31 +291,25 @@ cd ~/NinjaClawBot
 What the bootstrap installer does:
 
 - re-checks and installs the required Raspberry Pi system packages
-- installs optional camera and recognition apt packages for `pi5camera` when
-  they are available on the Raspberry Pi image
+- installs the Raspberry Pi camera stack (`python3-picamera2`, `python3-libcamera`)
+  for `pi5camera`
 - recreates `.venv` from scratch with `/usr/bin/python3 -m venv --system-site-packages`
 - runs `uv sync --active --extra dev`
-- installs the `pi5camera` startup hook inside `.venv` so plain `uv run python`
-  and `uv run pi5camera ...` commands resolve selected Raspberry Pi camera and
-  recognition modules from the system Python before user imports
-- prefers the Raspberry Pi system recognition stack on ARM boards and only
-  falls back to a Python package install when those system packages are not
-  available
 - runs `uv run pi5camera doctor` and a final
-  `uv run python -c "import libcamera, picamera2, face_recognition; print('imports-ok')"`
+  `uv run python -c "import libcamera, picamera2, cv2; print('imports-ok')"`
   check inside the verified environment
 
 Manual fallback if you do not want to use the script:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-picamera2 python3-libcamera python3-venv python3-scipy
+sudo apt install -y python3-picamera2 python3-libcamera python3-venv
 cd ~/NinjaClawBot
 rm -rf .venv
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev
-.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
+uv run pi5camera doctor
 ```
 
 Manual fallback with the optional wake-word listener:
@@ -327,7 +321,7 @@ cd ~/NinjaClawBot
 /usr/bin/python3 -m venv --system-site-packages .venv
 source .venv/bin/activate
 uv sync --active --extra dev --extra voiceinput
-.venv/bin/python -c "from pi5camera.environment import install_startup_import_hook; raise SystemExit(0 if install_startup_import_hook() else 1)"
+uv run pi5camera doctor
 ```
 
 Why the bootstrap installer is recommended:
@@ -523,6 +517,66 @@ Expected result:
 - the default photo directory is saved as an absolute path
 - a captured photo is written under `~/NinjaClawBot/photo/`
 - unknown faces can be named and saved for later recognition
+
+#### 7.5.1 Verify face recognition
+
+After camera setup, verify face recognition works end-to-end:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera doctor
+```
+
+Expected output includes:
+
+```text
+Recognition: mediapipe_opencv (ready)
+Detection:   opencv_haar
+```
+
+On Raspberry Pi, face detection uses the OpenCV Haar cascade (MediaPipe is not
+available on ARM64). This is normal and expected.
+
+#### 7.5.2 Capture and recognize a face
+
+Use the interactive camera tool:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera camera-tool
+```
+
+Choose option `5. Recognize faces`:
+
+- the camera takes a photo
+- detected faces are listed with bounding boxes
+- if an unknown face is found, you are prompted to enter a name
+- typing a name saves it to the face database for future recognition
+
+Alternatively, use the CLI directly:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera recognize --prompt-for-names
+```
+
+#### 7.5.3 Managing known faces
+
+List all saved face identities:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera manage-faces list
+```
+
+Remove a saved face:
+
+```bash
+cd ~/NinjaClawBot
+uv run pi5camera manage-faces remove "Alice"
+```
+
+Face data is stored in the `camera_data/` directory under your project root.
 
 Need help later?
 - [Appendix B. Hardware and local test help](#appendix-b-hardware-and-local-test-help)
