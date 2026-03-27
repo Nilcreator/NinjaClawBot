@@ -238,39 +238,9 @@ What you should expect:
 - `uv run python -c "import face_recognition; print('face-recognition-ok')"`
   works afterward
 
-Manual fallback if you want to install the Raspberry Pi system packages
-yourself first:
-
-```bash
-sudo apt update
-sudo apt install -y \
-  build-essential \
-  cmake \
-  pkg-config \
-  python3-venv \
-  python3-dev \
-  python3-picamera2 \
-  python3-scipy \
-  libopenblas-dev \
-  liblapack-dev
-```
-
-Then create the environment manually:
-
-```bash
-cd ~/pi5camera
-/usr/bin/python3 -m venv --system-site-packages .venv
-source .venv/bin/activate
-uv sync --active --extra dev
-```
-
-If you already installed the required apt packages and only want to recreate the
-virtual environment, use:
-
-```bash
-cd ~/pi5camera
-./scripts/bootstrap-rpi-standalone.sh --skip-apt
-```
+If you need the manual install path or the `--skip-apt` shortcut, see
+[Alternative Raspberry Pi Install Methods](#alternative-raspberry-pi-install-methods)
+in the appendix.
 
 ### Step 4. Confirm the command-line tools are available
 
@@ -745,11 +715,51 @@ Purpose:
 
 ### Appendix Contents
 
+- [Alternative Raspberry Pi Install Methods](#alternative-raspberry-pi-install-methods)
 - [Problem Solving](#problem-solving)
 - [Successful Standalone Checklist](#successful-standalone-checklist)
 - [How the Default Save Folders Work](#how-the-default-save-folders-work)
 - [How the Two-Step Unknown-Face Flow Works](#how-the-two-step-unknown-face-flow-works)
 - [Developer Validation Commands](#developer-validation-commands)
+
+### Alternative Raspberry Pi Install Methods
+
+If you do not want to use the recommended bootstrap installer in Step 3, use
+one of these fallback paths instead.
+
+Manual fallback if you want to install the Raspberry Pi system packages
+yourself first:
+
+```bash
+sudo apt update
+sudo apt install -y \
+  build-essential \
+  cmake \
+  pkg-config \
+  python3-venv \
+  python3-dev \
+  python3-picamera2 \
+  python3-scipy \
+  libopenblas-dev \
+  liblapack-dev
+```
+
+Then create the environment manually:
+
+```bash
+cd ~/pi5camera
+/usr/bin/python3 -m venv --system-site-packages .venv
+source .venv/bin/activate
+uv sync --active --extra dev
+```
+
+If you already installed the required apt packages and only want to recreate the
+virtual environment, use:
+
+```bash
+cd ~/pi5camera
+./scripts/bootstrap-rpi-standalone.sh --skip-apt
+```
 
 ### Problem Solving
 
