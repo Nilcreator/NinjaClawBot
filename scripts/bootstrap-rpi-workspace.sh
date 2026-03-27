@@ -24,6 +24,7 @@ APT_PACKAGES=(
   portaudio19-dev
   libopenblas-dev
   liblapack-dev
+  liblgpio-dev
 )
 
 OPTIONAL_CAMERA_APT_PACKAGES=(

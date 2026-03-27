@@ -19,6 +19,7 @@ wakeword = [
 ]
 voiceinput = [
     "openwakeword>=0.6,<1",
+    "onnxruntime>=1.16; python_version >= '3.12'",
 ]
 dev = [
     "pytest>=7.0",

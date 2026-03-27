@@ -43,6 +43,15 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/ninjaclawbot_workspace"]
 
+[tool.uv]
+# tflite-runtime only publishes cp311 wheels on PyPI, which makes it
+# uninstallable on Python ≥3.12.  openWakeWord (the only consumer) also
+# supports onnxruntime, so we gate tflite-runtime on Python <3.12 and add
+# onnxruntime as the fallback engine for newer Pythons.
+override-dependencies = [
+    "tflite-runtime>=2.14; python_version < '3.12'",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
